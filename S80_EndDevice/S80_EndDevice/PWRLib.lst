@@ -1,0 +1,1198 @@
+ANSI-C/cC++ Compiler for HC08 V-5.0.45 Build 14019, Jan 20 2014
+
+    1:  /******************************************************************************
+    2:  * Functions to handle the different power states.
+    3:  *
+    4:  *
+    5:  * (c) Copyright 2006, Freescale, Inc. All rights reserved.
+    6:  *
+    7:  *
+    8:  * No part of this document must be reproduced in any form - including copied,
+    9:  * transcribed, printed or by any electronic means - without specific written
+   10:  * permission from Freescale Semiconductor.
+   11:  *******************************************************************************/
+   12:  
+   13:  
+   14:  /******************************************************************************
+   15:  *******************************************************************************
+   16:  * Includes
+   17:  *******************************************************************************
+   18:  *******************************************************************************/
+   19:  #include "EmbeddedTypes.h"
+   20:  #include "PublicConst.h"
+   21:  #include "PortConfig.h"  
+   22:  #include "AppAspInterface.h"
+   23:  #include "MsgSystem.h"
+   24:  #include "IoConfig.h"
+   25:  #ifndef PROCESSOR_MC1323X
+   26:   #include "Mc1319xDrv.h"           /* For RADIO spi driver */
+   27:   #include "Mc1319xReg.h"           /* For RADIO registers */
+   28:  #endif
+   29:  #include "NV_Data.h"              /* For RADIO trim value */
+   30:  //#include "hwdrv_hcs08.h"        /* For RADIO register init */
+   31:  #include "PWR_Configuration.h" 
+   32:  #include "PWRLib.h"
+   33:  #include "IrqControlLib.h"
+   34:  #include "Keyboard.h"
+   35:  /******************************************************************************
+   36:  *******************************************************************************
+   37:  * external declarations
+   38:  *******************************************************************************
+   39:  *******************************************************************************/
+   40:  
+   41:  extern void FLib_MemCpyReverseOrder
+   42:    (
+   43:    void *pDst, /* Destination buffer */
+   44:    void *pSrc, /* Source buffer  */
+   45:    uint8_t n   /* Byte count */
+   46:    );
+   47:  
+   48:  /******************************************************************************
+   49:  *******************************************************************************
+   50:  * Private memory declarations
+   51:  *******************************************************************************
+   52:  *******************************************************************************/
+   53:  
+   54:  #if (cPWR_UsePowerDownMode)
+   55:    /*--- Variables for saving the port settings  --- */
+   56:    #if (cPWR_SetupIOWhenInPD >= 1)
+   57:      static uint8_t            SavedPTAD ;
+   58:      static uint8_t            SavedPTBD ;
+   59:      static uint8_t            SavedPTCD ;
+   60:      static uint8_t            SavedPTDD ;
+   61:     #ifndef PROCESSOR_MC1323X  
+   62:      static uint8_t            SavedPTED ;
+   63:      static uint8_t            SavedPTFD ;
+   64:      static uint8_t            SavedPTGD ;
+   65:     #endif 
+   66:    #endif   /* (cPWR_SetupIOWhenInPD >= 1) */
+   67:    #if (cPWR_SetupIOWhenInPD == 1)
+   68:      static uint8_t            SavedPTADD;
+   69:      static uint8_t            SavedPTBDD;
+   70:      static uint8_t            SavedPTCDD;
+   71:      static uint8_t            SavedPTDDD;
+   72:     #ifndef PROCESSOR_MC1323X  
+   73:      static uint8_t            SavedPTEDD;
+   74:      static uint8_t            SavedPTFDD;
+   75:      static uint8_t            SavedPTGDD;
+   76:     #endif 
+   77:      static uint8_t            SavedPTAPE;
+   78:      static uint8_t            SavedPTBPE;
+   79:      static uint8_t            SavedPTCPE;
+   80:      static uint8_t            SavedPTDPE;
+   81:     #ifndef PROCESSOR_MC1323X  
+   82:      static uint8_t            SavedPTEPE;
+   83:      static uint8_t            SavedPTFPE;
+   84:      static uint8_t            SavedPTGPE;
+   85:     #endif  
+   86:    #endif   /* (cPWR_SetupIOWhenInPD == 1) */
+   87:  
+   88:    #if (cPWR_UseDebugOutputs)
+   89:      static uint8_t            SavedDebugPTBD;
+   90:      static uint8_t            SavedDebugPTCD;
+   91:      static uint8_t            SavedDebugPTDD;
+   92:    #endif  /* #if (cPWR_UseDebugOutputs) */
+   93:  
+   94:  
+   95:    /*--- Variables for saving clock mode ---*/
+   96:    static PWRLib_ICGMode_t         PWRLib_ICGMode;
+   97:  
+   98:    /*--- RTI variables ---*/
+   99:    static uint32_t                 PWRLib_RTIRemainingTicks;
+  100:    
+  101:    
+  102:  #endif /* #if (cPWR_UsePowerDownMode) */
+  103:  
+  104:    /*--- For Reset function ---*/
+  105:    static const uint16_t     illegal_opcode = 0x9e62;                /* An HCS08 illegal instruction. Used to force an illegal */
+  106:                                                                      /* instruction reset */
+  107:    const uint16_t * const    illegal_opcode_ptr = &illegal_opcode;   /* A pointer to the address of illegal opcode */
+  108:  
+  109:  
+  110:  /*--- For LVD function ---*/ 
+  111:  #if ((cPWR_LVD_Enable == 1) || (cPWR_LVD_Enable == 2))
+  112:    #if (cPWR_LVD_Enable == 2)
+  113:      uint16_t                   PWRLib_LVD_CollectCounter;
+  114:    #endif  /* #if (cPWR_LVD_Enable == 2) */
+  115:    uint16_t                     PWRLib_LVD_L2Counter;
+  116:    PWRLib_LVD_VoltageLevel_t    PWRLib_LVD_SavedLevel;
+  117:  #endif /* #if ((cPWR_LVD_Enable == 1) || (cPWR_LVD_Enable == 2)) */
+  118:  
+  119:  /******************************************************************************
+  120:  *******************************************************************************
+  121:  * Public memory declarations
+  122:  *******************************************************************************
+  123:  *******************************************************************************/
+  124:    /*--- Chip status ---*/
+  125:    #if (cPWR_UseMCUStatus)
+  126:      PWRLib_MCUStatus_t            PWRLib_MCUStatus;
+  127:    #endif  /* #if (cPWR_UseMCUStatus) */
+  128:  
+  129:    #if (cPWR_UseRADIOStatus)
+  130:      PWRLib_RADIOStatus_t          PWRLib_RADIOStatus;
+  131:    #endif  /* #if (cPWR_UseRADIOStatus) */
+  132:  
+  133:    /*--- Zigbee STACK status ---*/ 
+  134:    PWRLib_StackPS_t                PWRLib_StackPS;
+  135:  
+  136:    volatile PWRLib_WakeupReason_t       PWRLib_MCU_WakeupReason   cPlaceInZeroPageSegment;
+  137:  
+  138:  
+  139:  /*---------------------------------------------------------------------------*/
+  140:  /*--- Only include the rest if needed / enabled                           ---*/
+  141:  #if (cPWR_UsePowerDownMode==1)
+  142:  
+  143:  
+  144:  /******************************************************************************
+  145:  *******************************************************************************
+  146:  * Private definitions
+  147:  *******************************************************************************
+  148:  *******************************************************************************/
+  149:  #ifndef PROCESSOR_MC1323X
+  150:    /* SCM filter values for ~2 MHz bus clock (lowest possible value) */
+  151:    #define cICGFLTH_VALUE_2MHZ             0x00
+  152:    #define cICGFLTL_VALUE_2MHZ             0x11 /* 0x10 */
+  153:    #define mSCM_2MHZ_DEFAULT_ICG_FILTER    ICGFLTL = cICGFLTL_VALUE_2MHZ; \
+  154:                                            ICGFLTH = cICGFLTH_VALUE_2MHZ;
+  155:  
+  156:    /* SCM filter values for ~4 MHz bus clock */
+  157:    #define cICGFLTH_VALUE_DEFAULT          0x00
+  158:    #define cICGFLTL_VALUE_DEFAULT          0xC0
+  159:    #define mSCM_DEFAULT_ICG_FILTER         ICGFLTL = cICGFLTL_VALUE_DEFAULT; \
+  160:                                            ICGFLTH = cICGFLTH_VALUE_DEFAULT;
+  161:  
+  162:    /* SCM filter values for ~8 MHz bus clock */
+  163:    #define cICGFLTH_VALUE_8MHZ             0x02
+  164:    #define cICGFLTL_VALUE_8MHZ             0x40
+  165:    #define mSCM_8MHZ_DEFAULT_ICG_FILTER    ICGFLTL = cICGFLTL_VALUE_8MHZ; \
+  166:                                            ICGFLTH = cICGFLTH_VALUE_8MHZ;
+  167:  
+  168:    /* SCM filter values for ~16 MHz bus clock */
+  169:    #define cICGFLTH_VALUE_16MHZ            0x06
+  170:    #define cICGFLTL_VALUE_16MHZ            0x40
+  171:    #define mSCM_16MHZ_DEFAULT_ICG_FILTER   ICGFLTL = cICGFLTL_VALUE_16MHZ; \
+  172:                                            ICGFLTH = cICGFLTH_VALUE_16MHZ;
+  173:  
+  174:    /* SCM filter values for ~20 MHz bus clock */
+  175:    #define cICGFLTH_VALUE_20MHZ            0x08
+  176:    #define cICGFLTL_VALUE_20MHZ            0x40
+  177:    #define mSCM_20MHZ_DEFAULT_ICG_FILTER   ICGFLTL = cICGFLTL_VALUE_20MHZ; \
+  178:                                            ICGFLTH = cICGFLTH_VALUE_20MHZ;
+  179:  
+  180:    /* Some ICG module bit positions */
+  181:    #define cICG_IRQ_PENDING                0x01
+  182:    #define cICG_FLL_LOCKED                 0x08
+  183:  #endif /* PROCESSOR_MC1323X */
+  184:  
+  185:  /******************************************************************************
+  186:  *******************************************************************************
+  187:  * Private functions
+  188:  *******************************************************************************
+  189:  *******************************************************************************/
+  190:  
+  191:  /******************************************************************************
+  192:  * Description : Used for waiting 6-7 clock periods
+  193:  * Inputs      : None
+  194:  * Output      : None
+  195:  * Errors      : Not handled
+  196:  ******************************************************************************/
+  197:  #ifndef PROCESSOR_MC1323X
+  198:  void WAIT_6_NOPS( void)  {
+  199:    __asm nop;
+  200:    __asm nop;
+  201:    __asm nop;
+  202:    __asm nop;
+  203:    __asm nop;
+  204:  }
+  205:  #endif
+  206:  
+  207:  /******************************************************************************
+  208:  *******************************************************************************
+  209:  * Public functions
+  210:  *******************************************************************************
+  211:  *******************************************************************************/
+  212:  
+  213:  //------------------------------------------------------------------------------ 
+  214:  //------------------------------------------------------------------------------
+  215:  // MCU interface functions
+  216:  //------------------------------------------------------------------------------
+  217:  //------------------------------------------------------------------------------
+  218:  
+  219:  
+  220:  
+  221:  /*******************************************************************************/
+  222:  /* Please see in PWRLib.h for description                                    */
+  223:  void PWRLib_SaveDebugIOState(void) {
+  224:    #if (cPWR_UseDebugOutputs)
+  225:      SavedDebugPTBD = PTBD;
+  226:      SavedDebugPTCD = PTCD;
+  227:      SavedDebugPTDD = PTDD;
+  228:    #endif  /*#if (cPWR_UseDebugOutputs) */
+  229:  }  /* PWRLib_SaveDebugIOState ===*/
+  0000 8d       [7]             RTC   
+  230:  
+  231:  
+  232:  /*******************************************************************************/
+  233:  /* Please see in PWRLib.h for description                                    */
+  234:  void PWRLib_RestoreDebugIOState(void) {
+  235:    #if (cPWR_UseDebugOutputs)
+  236:      PTBD = (PTBD & (~mPWRLib_DEBUG_MASK_PTBD)) | (SavedDebugPTBD & mPWRLib_DEBUG_MASK_PTBD);
+  237:      PTCD = (PTCD & (~mPWRLib_DEBUG_MASK_PTCD)) | (SavedDebugPTCD & mPWRLib_DEBUG_MASK_PTCD);
+  238:      PTDD = (PTDD & (~mPWRLib_DEBUG_MASK_PTDD)) | (SavedDebugPTDD & mPWRLib_DEBUG_MASK_PTDD);
+  239:    #endif  /*#if (cPWR_UseDebugOutputs) */
+  240:  }  /* PWRLib_RestoreDebugIOState =====*/
+  0000 8d       [7]             RTC   
+  241:  
+  242:  
+  243:  /*******************************************************************************/
+  244:  /* Please see in PWRLib.h for description                                    */
+  245:  void PWRLib_SetMCUIOForPowerSavingMode(void) {
+  246:    #if (cPWR_SetupIOWhenInPD > 0)
+  247:      PWRLib_SaveDebugIOState();
+  248:      #if (cPWR_SetupIOWhenInPD >= 1)
+  249:        SavedPTAD  = PTAD ;
+  250:        SavedPTBD  = PTBD ;
+  251:        SavedPTCD  = PTCD ;
+  252:        SavedPTDD  = PTDD ;
+  253:       #ifndef PROCESSOR_MC1323X 
+  254:        SavedPTED  = PTED ;
+  255:        SavedPTFD  = PTFD ;
+  256:        SavedPTGD  = PTGD ;
+  257:       #endif 
+  258:      #endif
+  259:      #if (cPWR_SetupIOWhenInPD == 1)
+  260:        SavedPTADD = PTADD;
+  261:        SavedPTBDD = PTBDD;
+  262:        SavedPTCDD = PTCDD;
+  263:        SavedPTDDD = PTDDD;
+  264:       #ifndef PROCESSOR_MC1323X 
+  265:        SavedPTEDD = PTEDD;
+  266:        SavedPTFDD = PTFDD;
+  267:        SavedPTGDD = PTGDD;
+  268:       #endif 
+  269:        SavedPTAPE = PTAPE;
+  270:        SavedPTBPE = PTBPE;
+  271:        SavedPTCPE = PTCPE;
+  272:        SavedPTDPE = PTDPE;
+  273:       #ifndef PROCESSOR_MC1323X 
+  274:        SavedPTEPE = PTEPE;
+  275:        SavedPTFPE = PTFPE;
+  276:        SavedPTGPE = PTGPE;
+  277:       #endif 
+  278:      #endif
+  279:      mPWRLib_SETUP_PORT_A;
+  280:      mPWRLib_SETUP_PORT_B;
+  281:      mPWRLib_SETUP_PORT_C;
+  282:      mPWRLib_SETUP_PORT_D;
+  283:     #ifndef PROCESSOR_MC1323X 
+  284:      mPWRLib_SETUP_PORT_E;
+  285:      mPWRLib_SETUP_PORT_F;
+  286:      mPWRLib_SETUP_PORT_G;
+  287:     #endif 
+  288:      PWRLib_RestoreDebugIOState();
+  289:      mPWRLib_SPIPowerSaveMode;
+  290:    #endif  /* #if (cPWR_SetupIOWhenInPD) */
+  291:  }   /* PWRLib_SetMCUIOForPowerSavingMode =====*/
+  0000 8d       [7]             RTC   
+  292:  
+  293:  
+  294:  /******************************************************************************/
+  295:  /* Please see in PWRLib.h for description */
+  296:  void PWRLib_ResetMCUIOAfterPowerSavingMode(void) {
+  297:    #if (cPWR_SetupIOWhenInPD > 0)
+  298:      PWRLib_SaveDebugIOState();
+  299:      #if (cPWR_SetupIOWhenInPD >= 1)
+  300:        PTAD  = SavedPTAD ;
+  301:        PTBD  = SavedPTBD ;
+  302:        PTCD  = SavedPTCD ;
+  303:        PTDD  = SavedPTDD ;
+  304:       #ifndef PROCESSOR_MC1323X  
+  305:        PTED  = SavedPTED ;
+  306:        PTFD  = SavedPTFD ;
+  307:        PTGD  = SavedPTGD ;
+  308:       #endif 
+  309:      #endif
+  310:      #if (cPWR_SetupIOWhenInPD == 1)
+  311:        PTAPE = SavedPTAPE;
+  312:        PTBPE = SavedPTBPE;
+  313:        PTCPE = SavedPTCPE;
+  314:        PTDPE = SavedPTDPE;
+  315:       #ifndef PROCESSOR_MC1323X  
+  316:        PTEPE = SavedPTEPE;
+  317:        PTFPE = SavedPTFPE;
+  318:        PTGPE = SavedPTGPE;
+  319:       #endif 
+  320:        PTADD = SavedPTADD;
+  321:        PTBDD = SavedPTBDD;
+  322:        PTCDD = SavedPTCDD;
+  323:        PTDDD = SavedPTDDD;
+  324:       #ifndef PROCESSOR_MC1323X  
+  325:        PTEDD = SavedPTEDD;
+  326:        PTFDD = SavedPTFDD;
+  327:        PTGDD = SavedPTGDD;
+  328:       #endif 
+  329:      #endif
+  330:      mPWRLib_RESTORE_PORT_A;
+  331:      mPWRLib_RESTORE_PORT_B;
+  332:      mPWRLib_RESTORE_PORT_C;
+  333:      mPWRLib_RESTORE_PORT_D;
+  334:     #ifndef PROCESSOR_MC1323X  
+  335:      mPWRLib_RESTORE_PORT_E;
+  336:      mPWRLib_RESTORE_PORT_F;
+  337:      mPWRLib_RESTORE_PORT_G;
+  338:     #endif 
+  339:      PWRLib_RestoreDebugIOState();
+  340:      mPWRLib_SPINormalMode;
+  341:    #endif  /* #if (cPWR_SetupIOWhenInPD > 0) */
+  342:  }   /* PWRLib_ResetMCUIOAfterPowerSavingMode ====*/
+  0000 8d       [7]             RTC   
+  343:  
+  344:  
+  345:  /*****************************************************************************/
+  346:  /* Please see in PWRLib.h for description */
+  347:  void PWRLib_MCUWait(void) {
+  348:    mMCU_SetStatus( MCU_Wait);
+  349:    mSETPIN_WAIT_MODE;
+  350:    __asm  WAIT;
+  0000 8f       [2]             WAIT  
+  351:    mRESETPIN_WAIT_MODE;
+  352:  }   /* PWRLib_MCUWait =====*/
+  0001 8d       [7]             RTC   
+  353:  
+  354:  
+  355:  /*****************************************************************************/
+  356:  /* Please see in PWRLib.h for description */
+  357:  void PWRLib_MCUStop3(void) {
+  358:    mMCU_SetStatus( MCU_Stop3);
+  359:    mSETPIN_STOP3_MODE;
+  360:  #if defined(PROCESSOR_QE128) || defined(PROCESSOR_MC1323X)
+  361:    SPMSC2 &=  0xFE;      /* Clear the PDC bit for Stop3 mode */  
+  0000 451809   [3]             LDHX  #6153
+  0003 f6       [3]             LDA   ,X
+  0004 a4fe     [2]             AND   #-2
+  0006 f7       [2]             STA   ,X
+  362:  #endif /* PROCESSOR_QE128 */  
+  363:    __asm STOP;
+  0007 8e       [2]             STOP  
+  364:    mRESETPIN_STOP3_MODE;
+  365:  }   /* PWRLib_MCUStop3 ===== */
+  0008 8d       [7]             RTC   
+  366:  
+  367:  
+  368:  /*****************************************************************************/
+  369:  /* Please see in PWRLib.h for description  */
+  370:  void PWRLib_MCUStop2(void) {
+  371:    mMCU_SetStatus( MCU_Stop2);
+  372:    mSETPIN_STOP2_MODE;
+  373:  #ifdef PROCESSOR_HCS08  
+  374:    SPMSC2 |=  0x03;      /* Sets PDC and PPDC bits for Stop2 mode */
+  375:  #else
+  376:    SPMSC2 |=  0x01;      /* Sets the PDC bit for Stop2 mode */
+  0000 451809   [3]             LDHX  #6153
+  0003 f6       [3]             LDA   ,X
+  0004 aa01     [2]             ORA   #1
+  0006 f7       [2]             STA   ,X
+  377:  #endif  /* PROCESSOR_QE128 */
+  378:    __asm STOP;
+  0007 8e       [2]             STOP  
+  379:  /*  mRESETPIN_STOP2_MODE; This can't be called. Reset occurs instead */
+  380:  }   /* PWRLib_MCUStop2 =====*/
+  0008 8d       [7]             RTC   
+  381:  
+  382:  
+  383:  /*****************************************************************************/
+  384:  /* Please see in PWRLib.h for description */
+  385:  void PWRLib_MCUStop1(void) {
+  386:    mMCU_SetStatus( MCU_Stop1);
+  387:  #ifdef PROCESSOR_HCS08
+  388:    SPMSC2 |=  0x02;      /* Sets PDC bit for Stop1 mode */
+  389:  #else
+  390:    /* Stop1 is not available on QE128 or MC1323X. Use the Stop2 instead */
+  391:    SPMSC2 |=  0x01;      /* Sets the PDC bit for Stop2 mode */  
+  0000 451809   [3]             LDHX  #6153
+  0003 f6       [3]             LDA   ,X
+  0004 aa01     [2]             ORA   #1
+  0006 f7       [2]             STA   ,X
+  392:  #endif  /* PROCESSOR_QE128 */
+  393:    __asm STOP;
+  0007 8e       [2]             STOP  
+  394:  }   /* PWRLib_MCUStop1 =====*/
+  0008 8d       [7]             RTC   
+  395:  
+  396:  
+  397:  /*****************************************************************************/
+  398:  
+  399:  #ifdef PROCESSOR_HCS08
+  400:  /* Please see in PWRLib.h for description  */
+  401:  void PWRLib_ICG_Mode(PWRLib_ICGMode_t Mode, PWRLib_ICGClockType_t Clock) {
+  402:      PWRLib_ICGMode = Mode; /* Store in global variable */
+  403:      ICGC1 = ((Clock<<6) | (0<<5) | (Mode<<3) | (0<<2));
+  404:      if( Mode == SCM)
+  405:          /* Select only one below */
+  406:          /*mSCM_2MHZ_DEFAULT_ICG_FILTER  */
+  407:          mSCM_DEFAULT_ICG_FILTER /* 4 MHz bus frequency. 8MHz CPU. */
+  408:          /*mSCM_8MHZ_DEFAULT_ICG_FILTER */
+  409:          /*mSCM_16MHZ_DEFAULT_ICG_FILTER */
+  410:          /*mSCM_20MHZ_DEFAULT_ICG_FILTER */
+  411:  } /* PWRLib_ICG_Mode =====*/
+  412:  #endif /* PROCESSOR_HCS08 */ 
+  413:  
+  414:  /*****************************************************************************/
+  415:  /* Please see in PWRLib.h for description  */
+  416:  bool_t PWRLib_ICG_Wait_Clock_Lock(void) {
+  417:      if((PWRLib_ICGMode == FEI) || (PWRLib_ICGMode == FEE)) {
+  0000 c60000   [4]             LDA   PWRLib_ICGMode
+  0003 410104   [4]             CBEQA #1,LA ;abs = 000a
+  0006 a103     [2]             CMP   #3
+  0008 2603     [3]             BNE   LD ;abs = 000d
+  000a          LA:     
+  418:          return(TRUE);
+  000a a601     [2]             LDA   #1
+  000c 8d       [7]             RTC   
+  000d          LD:     
+  419:      } else {
+  420:          return(FALSE);
+  000d 4f       [1]             CLRA  
+  421:      }
+  422:  }  /* PWRLib_ICG_Wait_Clock_Lock =====*/
+  000e 8d       [7]             RTC   
+  423:  
+  424:  
+  425:  /*****************************************************************************/
+  426:  /* Please see in PWRLib.h for description   */
+  427:  #ifdef PROCESSOR_HCS08
+  428:  void PWRLib_ICG_Divider_Setup(PWRLib_ICGMultiplier_t N, PWRLib_ICGDivider_t R) {
+  429:      ICGC2 = ((0<<7) | (N<<4) | (0<<3) | (R<<0));
+  430:  } /* PWRLib_ICG_Divider_Setup ====*/
+  431:  #endif /* PROCESSOR_HCS08 */ 
+  432:  
+  433:  /*****************************************************************************/
+  434:  #ifndef PROCESSOR_MC1323X
+  435:  /* Please see in PWRLib.h for description   */
+  436:  void PWRLib_ClockSetup(PWRLib_ICGClkMode_t ClkMode) {
+  437:      uint8_t CCR;    
+  438:  /*    uint16_t i = 1550; */
+  439:      uint16_t i = 800;
+  440:      uint16_t reg = 0;
+  441:      IrqControlLib_BackupIrqStatus(CCR)
+  442:      IrqControlLib_DisableAllIrqs();
+  443:  				
+  444:  #ifdef PROCESSOR_HCS08
+  445:      /* Set LOW_CLOCK to insure FLL LOCK certain modes.   */
+  446:      PWRLib_ICG_Mode( SCM, LOW_CLOCK);
+  447:      while(i) { i--;WAIT_6_NOPS();}
+  448:      
+  449:      if ( ClkMode == Normal_16MHz) {
+  450:        /*--- Setup RADIO CLKO ---*/
+  451:        do {
+  452:            MC1319xDrv_WriteSpi(ABEL_regA, (gHardwareParameters.Abel_Clock_Out_Setting & 0xfff8) | RADIO_CLKO_62_50KHZ);
+  453:            WAIT_6_NOPS();
+  454:            MC1319xDrv_ReadSpiAsync(ABEL_regA, &reg);  		  
+  455:        }while(reg != ((gHardwareParameters.Abel_Clock_Out_Setting & 0xfff8) | RADIO_CLKO_62_50KHZ));    	
+  456:        /*--- Setup the ICG module ---*/
+  457:        PWRLib_ICG_Divider_Setup( N8, R1);
+  458:        PWRLib_ICG_Mode( FEE, LOW_CLOCK);    
+  459:      }
+  460:      else if ( ClkMode == Precice_1MHz) {
+  461:        /*--- Setup RADIO CLKO ---*/
+  462:        do { 	
+  463:            MC1319xDrv_WriteSpi(ABEL_regA, (gHardwareParameters.Abel_Clock_Out_Setting & 0xfff8) | RADIO_CLKO_62_50KHZ);
+  464:            WAIT_6_NOPS();
+  465:            MC1319xDrv_ReadSpiAsync(ABEL_regA, &reg);	  
+  466:        }while(reg != ((gHardwareParameters.Abel_Clock_Out_Setting & 0xfff8) | RADIO_CLKO_62_50KHZ));
+  467:             
+  468:        /*--- Setup the ICG module ---*/
+  469:        PWRLib_ICG_Divider_Setup( N4, R8);
+  470:        PWRLib_ICG_Mode( FEE, LOW_CLOCK);
+  471:      }
+  472:      else if ( ClkMode == SelfClk_2MHz) {
+  473:        PWRLib_ICG_Divider_Setup( N8, R2);
+  474:        PWRLib_ICG_Mode( SCM, LOW_CLOCK);
+  475:      }
+  476:      else if ( ClkMode == SelfClk_1MHz) {
+  477:        PWRLib_ICG_Divider_Setup( N8, R4);
+  478:        PWRLib_ICG_Mode( SCM, LOW_CLOCK);
+  479:      }
+  480:      else if ( ClkMode == SelfClk_125kHz) {
+  481:        PWRLib_ICG_Divider_Setup( N8, R32);
+  482:        PWRLib_ICG_Mode( SCM, LOW_CLOCK);
+  483:      }
+  484:      /* Wait for clock to lock in some ICG modes */
+  485:      WAIT_6_NOPS();
+  486:      if(PWRLib_ICG_Wait_Clock_Lock() == TRUE)
+  487:          while((ICGS1 & cICG_FLL_LOCKED) != cICG_FLL_LOCKED);
+  488:  #endif    
+  489:  #ifdef PROCESSOR_QE128
+  490:      /* PROCESSOR is QE128 (PROCESSOR_QE128) */
+  491:      {
+  492:        uint8_t icssc_temp;
+  493:        uint16_t reg = 0;
+  494:  
+  495:        /* Set LOW_CLOCK to insure FLL LOCK certain modes.   */
+  496:        PWRLib_ICGMode = SCM;    
+  497:      
+  498:        /*       BDIV1   BDIV0    RANGE     HGO       LP     EREFS   ERCLKEN  EREFSTEN */
+  499:        ICSC2 = (0<<7) | (0<<6) | (0<<5) | (0<<4) | (0<<3) | (0<<2) | (0<<1) | (0<<0);
+  500:        /*       CLKS1   CLKS0    RDIV2    RDIV1    RDIV0    IREFS   IRCLKEN  IREFSTEN */
+  501:        ICSC1 = (0<<7) | (0<<6) | (0<<5) | (0<<4) | (0<<3) | (1<<2) | (0<<1) | (0<<0);
+  502:        /*            DRS1     DRS0    DMX32    IREFST   CLKST1   CLKST0   OSCINIT  FTRIM */
+  503:        icssc_temp = (0<<7) | (1<<6) | (0<<5) | (1<<4) | (0<<3) | (0<<2) | (0<<1) | (0<<0);  
+  504:        ICSSC = icssc_temp;
+  505:        while(!(ICSSC == icssc_temp));   /* Wait for the FLL to lock on the internal clock source */       
+  506:        
+  507:        switch(ClkMode) 
+  508:        {
+  509:          case  Normal_16MHz:
+  510:                /*--- Setup RADIO CLKO ---*/ 
+  511:                do 
+  512:                {
+  513:                    MC1319xDrv_WriteSpi(ABEL_regA, (gHardwareParameters.Abel_Clock_Out_Setting & 0xfff8) | RADIO_CLKO_62_50KHZ);                                           
+  514:                    
+  515:                    WAIT_6_NOPS(); 
+  516:                    
+  517:                    MC1319xDrv_ReadSpiAsync(ABEL_regA, &reg);
+  518:                }while(reg != ((gHardwareParameters.Abel_Clock_Out_Setting & 0xfff8) | RADIO_CLKO_62_50KHZ));     
+  519:                    /*--- Setup the ICG module ---*/
+  520:                    /*            BDIV     RANGE    HGO       LP      EREFS   ERCLKEN  EREFSTEN */       
+  521:                    ICSC2      = (0<<6) | (0<<5) | (0<<4) | (0<<3) | (0<<2) | (0<<1) | (0<<0);  /* Don't set the LP bit here */                
+  522:                    /*            CLKS     RDIV     IREFS   IRCLKEN  IREFSTEN */
+  523:                    ICSC1      = (0<<6) | (1<<3) | (0<<2) | (0<<1) | (0<<0);                  
+  524:                    /*            DRST     DMX32    IREFST */
+  525:                    icssc_temp = (1<<6) | (0<<5) | (0<<4);
+  526:                    ICSSC = icssc_temp;
+  527:                    PWRLib_ICGMode = FEE;
+  528:          break;
+  529:          case  Precice_1MHz:  
+  530:                  /*--- Setup RADIO CLKO ---*/
+  531:                do
+  532:                {                  
+  533:                    MC1319xDrv_WriteSpi(ABEL_regA, (gHardwareParameters.Abel_Clock_Out_Setting & 0xfff8) | RADIO_CLKO_62_50KHZ);
+  534:                    
+  535:                    WAIT_6_NOPS(); 
+  536:                    
+  537:                    MC1319xDrv_ReadSpiAsync(ABEL_regA, &reg);
+  538:                    
+  539:                }while(reg != ((gHardwareParameters.Abel_Clock_Out_Setting & 0xfff8) | RADIO_CLKO_62_50KHZ));
+  540:                    /*--- Setup the ICG module ---*/
+  541:                    /*            BDIV     RANGE    HGO       LP      EREFS   ERCLKEN  EREFSTEN */
+  542:                    ICSC2      = (3<<6) | (0<<5) | (0<<4) | (0<<3) | (0<<2) | (0<<1) | (0<<0);  /* Don't set the LP bit here */                
+  543:                    /*            CLKS     RDIV     IREFS   IRCLKEN  IREFSTEN */
+  544:                    ICSC1      = (0<<6) | (1<<3) | (0<<2) | (0<<1) | (0<<0);
+  545:                    /*            DRST     DMX32    IREFST */
+  546:                    icssc_temp = (0<<6) | (0<<5) | (0<<4);
+  547:                    ICSSC = icssc_temp;
+  548:                    PWRLib_ICGMode = FEE;
+  549:          break;
+  550:          case      SelfClk_2MHz:
+  551:                    /*            BDIV     RANGE    HGO       LP      EREFS   ERCLKEN  EREFSTEN */
+  552:                    ICSC2      = (2<<6) | (0<<5) | (0<<4) | (0<<3) | (0<<2) | (0<<1) | (0<<0);  /* Don't set the LP bit here */                
+  553:                    /*            CLKS     RDIV     IREFS   IRCLKEN  IREFSTEN */
+  554:                    ICSC1      = (0<<6) | (0<<3) | (1<<2) | (0<<1) | (0<<0);
+  555:                    /*            DRST     DMX32    IREFST */
+  556:                    icssc_temp = (0<<6) | (0<<5) | (1<<4);
+  557:                    ICSSC = icssc_temp;
+  558:          break;
+  559:          case      SelfClk_1MHz:
+  560:                    /*            BDIV     RANGE    HGO       LP      EREFS   ERCLKEN  EREFSTEN */
+  561:                    ICSC2      = (3<<6) | (0<<5) | (0<<4) | (0<<3) | (0<<2) | (0<<1) | (0<<0);  /* Don't set the LP bit here */                
+  562:                    /*            CLKS     RDIV     IREFS   IRCLKEN  IREFSTEN */
+  563:                    ICSC1      = (0<<6) | (0<<3) | (1<<2) | (0<<1) | (0<<0);
+  564:                    /*            DRST     DMX32    IREFST */
+  565:                    icssc_temp = (0<<6) | (0<<5) | (1<<4);
+  566:                    ICSSC = icssc_temp;
+  567:          break;
+  568:        }
+  569:        
+  570:        while(!(ICSSC == icssc_temp));   /* Wait for the FLL to lock */  
+  571:        
+  572:      }
+  573:  #endif /* PROCESSOR_QE128 */     
+  574:      IrqControlLib_RestoreIrqStatus(CCR)
+  575:      
+  576:  } /* PWRLib_ClockSetup =====*/
+  577:  #endif /*PROCESSOR_MC1323X*/
+  578:  
+  579:  /*****************************************************************************/
+  580:  /* Please see in PWRLib.h for description  */
+  581:  void PWRLib_RTIClockStart(uint8_t ClkMode, uint32_t Ticks) {
+  0000 8b       [2]             PSHH  
+  582:    uint8_t CCR;
+  583:    IrqControlLib_BackupIrqStatus(CCR)
+  0001 85       [1]             TPA   
+  0002 95       [2]             TSX   
+  0003 f7       [2]             STA   ,X
+  584:    IrqControlLib_DisableAllIrqs();
+  0004 9b       [1]             SEI   
+  585:    mSETPIN_RTISTARTED_MODE;
+  586:    
+  587:   #ifndef PROCESSOR_MC1323X
+  588:    #if (cPWR_RTIFromExternalClock)
+  589:     #ifdef PROCESSOR_HCS08 
+  590:      ICGC1 |= 0x02;      /* Set the OSCSTEN to enable RTI from external clk in stop modes 2 and 3*/
+  591:     #endif
+  592:      SRTISC = cSRTISC_Start | cSRTISC_IntClear | ClkMode | cSRTISC_External;   
+  593:    #else
+  594:      SRTISC = cSRTISC_Start | cSRTISC_IntClear | ClkMode;
+  595:    #endif
+  596:    
+  597:      PWRLib_RTIRemainingTicks = Ticks;	 //  Use specified tick count
+  598:   #else    
+  599:     
+  600:     if(Ticks > 0)   
+  0005 e607     [3]             LDA   7,X
+  0007 ea06     [3]             ORA   6,X
+  0009 ea05     [3]             ORA   5,X
+  000b ea04     [3]             ORA   4,X
+  000d 2708     [3]             BEQ   L17 ;abs = 0017
+  601:     {
+  602:      Ticks -= 1;    // MC1323X RTC issues the interrupt when the counter is reset to 0 after match
+  000f af04     [2]             AIX   #4
+  0011 cd0000   [6]             JSR   _LDEC
+  0014 cd0000   [6]             JSR   _POP32
+  0017          L17:    
+  603:     }
+  604:     
+  605:     RTCMODH = (uint8_t)(Ticks >> 8);
+  0017 95       [2]             TSX   
+  0018 e606     [3]             LDA   6,X
+  001a c7182c   [4]             STA   6188
+  606:     RTCMODL = (uint8_t)Ticks;        
+  001d e607     [3]             LDA   7,X
+  001f c7182a   [4]             STA   6186
+  607:     
+  608:     PWRLib_RTIRemainingTicks = Ticks;	 //  Use specified tick count
+  0022 9efe07   [5]             LDHX  7,SP
+  0025 960002   [5]             STHX  PWRLib_RTIRemainingTicks:2
+  0028 9efe05   [5]             LDHX  5,SP
+  002b 960000   [5]             STHX  PWRLib_RTIRemainingTicks
+  609:     
+  610:     SRTISC = cSRTISC_Start | cSRTISC_IntClear | ClkMode | cPWR_RTIClockSource; 
+  002e 95       [2]             TSX   
+  002f e608     [3]             LDA   8,X
+  0031 aa90     [2]             ORA   #-112
+  0033 c71828   [4]             STA   6184
+  611:   #endif  
+  612:   
+  613:    IrqControlLib_RestoreIrqStatus(CCR)
+  0036 f6       [3]             LDA   ,X
+  0037 84       [1]             TAP   
+  614:  }  /* PWRLib_RTIClockStart ======*/
+  0038 8a       [3]             PULH  
+  0039 8d       [7]             RTC   
+  615:  
+  616:  
+  617:  /*****************************************************************************/
+  618:  /* Please see in PWRLib.h for description  */
+  619:  uint32_t PWRLib_RTIClockCheck(void) {
+  0000 89       [2]             PSHX  
+  0001 8b       [2]             PSHH  
+  0002 a7fe     [2]             AIS   #-2
+  620:  #ifndef PROCESSOR_MC1323X
+  621:    uint32_t  x ;
+  622:    uint8_t CCR;
+  623:    IrqControlLib_BackupIrqStatus(CCR)
+  624:    IrqControlLib_DisableAllIrqs();
+  625:    x = PWRLib_RTIRemainingTicks;
+  626:     IrqControlLib_RestoreIrqStatus(CCR)
+  627:    return x;
+  628:  #else
+  629:    uint16_t x;
+  630:    x = RTCCNTL;
+  0004 c61829   [4]             LDA   6185
+  0007 8c       [1]             CLRH  
+  0008 97       [1]             TAX   
+  0009 9eff01   [5]             STHX  1,SP
+  631:    x |= (uint16_t)(RTCCNTH << 8);
+  000c c6182b   [4]             LDA   6187
+  000f 87       [2]             PSHA  
+  0010 4f       [1]             CLRA  
+  0011 95       [2]             TSX   
+  0012 ea02     [3]             ORA   2,X
+  0014 e702     [3]             STA   2,X
+  0016 86       [3]             PULA  
+  0017 ea01     [3]             ORA   1,X
+  0019 e701     [3]             STA   1,X
+  632:    return (PWRLib_RTIRemainingTicks - x);
+  001b 9efe01   [5]             LDHX  1,SP
+  001e 4f       [1]             CLRA  
+  001f 89       [2]             PSHX  
+  0020 8b       [2]             PSHH  
+  0021 87       [2]             PSHA  
+  0022 87       [2]             PSHA  
+  0023 95       [2]             TSX   
+  0024 89       [2]             PSHX  
+  0025 8b       [2]             PSHH  
+  0026 450000   [3]             LDHX  @PWRLib_RTIRemainingTicks
+  0029 cd0000   [6]             JSR   _LSUB
+  002c 9efe0b   [5]             LDHX  11,SP
+  002f cd0000   [6]             JSR   _POP32
+  633:  #endif     
+  634:  }  /* PWRLib_RTIClockCheck ======*/
+  0032 a708     [2]             AIS   #8
+  0034 8d       [7]             RTC   
+  635:  
+  636:  /*****************************************************************************/
+  637:  /* Please see in PWRLib.h for description                                    */
+  638:  void PWRLib_ResetTicks(void)
+  639:  {
+  0000 8b       [2]             PSHH  
+  640:      uint8_t CCR;
+  641:    IrqControlLib_BackupIrqStatus(CCR)
+  0001 85       [1]             TPA   
+  0002 95       [2]             TSX   
+  0003 f7       [2]             STA   ,X
+  642:    IrqControlLib_DisableAllIrqs();
+  0004 9b       [1]             SEI   
+  643:  	PWRLib_RTIRemainingTicks = 0;
+  0005 5f       [1]             CLRX  
+  0006 8c       [1]             CLRH  
+  0007 960002   [5]             STHX  PWRLib_RTIRemainingTicks:2
+  000a 960000   [5]             STHX  PWRLib_RTIRemainingTicks
+  644:     IrqControlLib_RestoreIrqStatus(CCR)
+  000d 95       [2]             TSX   
+  000e f6       [3]             LDA   ,X
+  000f 84       [1]             TAP   
+  645:  }
+  0010 8a       [3]             PULH  
+  0011 8d       [7]             RTC   
+  646:  /*****************************************************************************/
+  647:  /* Please see in PWRLib.h for description  */
+  648:  void PWRLib_RTIClockStop(void) {
+  0000 a7fd     [2]             AIS   #-3
+  649:      uint8_t CCR;
+  650:    IrqControlLib_BackupIrqStatus(CCR)
+  0002 85       [1]             TPA   
+  0003 95       [2]             TSX   
+  0004 e702     [3]             STA   2,X
+  651:    IrqControlLib_DisableAllIrqs();
+  0006 9b       [1]             SEI   
+  652:    mRESETPIN_RTISTARTED_MODE;
+  653:    #ifdef PROCESSOR_MC1323X
+  654:      if(SRTISC != 0)
+  0007 c61828   [4]             LDA   6184
+  000a 272d     [3]             BEQ   L39 ;abs = 0039
+  655:      {
+  656:       uint16_t x;
+  657:       /* RTI is still running */ 
+  658:       x = RTCCNTL;
+  000c c61829   [4]             LDA   6185
+  000f 8c       [1]             CLRH  
+  0010 97       [1]             TAX   
+  0011 9eff01   [5]             STHX  1,SP
+  659:       x |= (uint16_t)(RTCCNTH << 8);
+  0014 c6182b   [4]             LDA   6187
+  0017 87       [2]             PSHA  
+  0018 4f       [1]             CLRA  
+  0019 95       [2]             TSX   
+  001a ea02     [3]             ORA   2,X
+  001c e702     [3]             STA   2,X
+  001e 86       [3]             PULA  
+  001f ea01     [3]             ORA   1,X
+  0021 e701     [3]             STA   1,X
+  660:       PWRLib_RTIRemainingTicks -= x;
+  0023 9efe01   [5]             LDHX  1,SP
+  0026 4f       [1]             CLRA  
+  0027 89       [2]             PSHX  
+  0028 8b       [2]             PSHH  
+  0029 87       [2]             PSHA  
+  002a 87       [2]             PSHA  
+  002b 95       [2]             TSX   
+  002c 89       [2]             PSHX  
+  002d 8b       [2]             PSHH  
+  002e 450000   [3]             LDHX  @PWRLib_RTIRemainingTicks
+  0031 cd0000   [6]             JSR   _LSUB
+  0034 cd0000   [6]             JSR   _POP32
+  0037 a704     [2]             AIS   #4
+  0039          L39:    
+  661:      }
+  662:    #endif
+  663:    SRTISC = cSRTISC_Stop;
+  0039 4f       [1]             CLRA  
+  003a c71828   [4]             STA   6184
+  664:     IrqControlLib_RestoreIrqStatus(CCR)
+  003d 95       [2]             TSX   
+  003e e602     [3]             LDA   2,X
+  0040 84       [1]             TAP   
+  665:  }  /* PWRLib_RTIClockStop ======*/
+  0041 a703     [2]             AIS   #3
+  0043 8d       [7]             RTC   
+  666:  
+  667:  #endif  /* #if (cPWR_UsePowerDownMode==1) */
+  668:  
+  669:  /*******************************************************************************/
+  670:  /* Please see in PWRLib.h for description     */
+  671:  void PWRLib_Reset(void) {
+  672:    IrqControlLib_DisableAllIrqs();
+  0000 9b       [1]             SEI   
+  673:    mEXECUTE_ILLEGAL_INSTRUCTION
+  0001 320000   [5]             LDHX  illegal_opcode_ptr
+  0004 fc       [3]             JMP   ,X
+  674:    //mEXECUTE_JMP_TO_START
+  675:  }  /* PWRLib_Reset */
+  676:  
+  677:  /*****************************************************************************/
+  678:  /* Place it in NON_BANKED memory */
+  679:  #ifdef MEMORY_MODEL_BANKED
+  680:  #pragma CODE_SEG __NEAR_SEG NON_BANKED
+  681:  #else
+  682:  #pragma CODE_SEG DEFAULT
+  683:  #endif /* MEMORY_MODEL_BANKED */
+  684:  /* Please see WARNINGS in PWRLib.h                                           */
+  685:  INTERRUPT_KEYWORD void PWRLib_RTIClock_ISR(void) {
+  0000 8b       [2]             PSHH  
+  686:   #ifdef PROCESSOR_MC1323X
+  687:    SRTISC = cSRTISC_IntClear | cSRTISC_Stop;
+  0001 a680     [2]             LDA   #-128
+  0003 c71828   [4]             STA   6184
+  688:   #else  
+  689:    SRTISC |= cSRTISC_IntClear;
+  690:   #endif  
+  691:   
+  692:    PWRLib_MCU_WakeupReason.Bits.FromRTI = 1;
+  0006 1600     [5]             BSET  3,PWRLib_MCU_WakeupReason
+  693:    
+  694:    #if (cPWR_UsePowerDownMode)    
+  695:     #ifndef PROCESSOR_MC1323X
+  696:      if ( PWRLib_RTIRemainingTicks > 0) {
+  697:        PWRLib_RTIRemainingTicks--;
+  698:      }
+  699:     #else 
+  700:      PWRLib_RTIRemainingTicks = 0;
+  0008 5f       [1]             CLRX  
+  0009 8c       [1]             CLRH  
+  000a 960002   [5]             STHX  PWRLib_RTIRemainingTicks:2
+  000d 960000   [5]             STHX  PWRLib_RTIRemainingTicks
+  701:     #endif /* PROCESSOR_MC1323X */ 
+  702:      /*--- Low Voltage Check */
+  703:      #if (cPWR_LVD_Enable==2)
+  704:        if ( --PWRLib_LVD_CollectCounter == 0) {
+  705:          PWRLib_MCU_WakeupReason.Bits.LVD_Updated = 1;
+  706:          PWRLib_LVD_CollectCounter = cPWR_LVD_Ticks;
+  707:          PWRLib_LVD_SavedLevel = PWRLib_LVD_CollectLevel();
+  708:        }
+  709:      #endif  /* #if (cPWR_LVD_Enable==2) */         
+  710:    #endif  /* #if (cPWR_UsePowerDownMode==1) */
+  711:  }  /* PWRLib_RTIClock_ISR ======*/
+  0010 8a       [3]             PULH  
+  0011 80       [9]             RTI   
+  712:  
+  713:  
+  714:  /*****************************************************************************/
+  715:  /* Please see in PWRLib.h for description       */
+  716:  #if (cPWR_KBIInitAndVectorEnable)
+  717:  INTERRUPT_KEYWORD void PWRLib_KBI_ISR(void) {
+  718:   #ifdef PROCESSOR_QE128
+  719:    KBI2SC =  cKBI1SC | cKBI1SC_Ack;
+  720:   #else
+  721:    KBI1SC =  cKBI1SC | cKBI1SC_Ack;
+  722:   #endif    
+  723:    PWRLib_MCU_WakeupReason.Bits.FromKBI = 1;
+  724:  }  /* PWRLib_KBI_ISR ====== */
+  725:  #endif
+  726:  #pragma CODE_SEG DEFAULT
+  727:  
+  728:  /*****************************************************************************/
+  729:  /* Please see in PWRLib.h for description                                    */
+  730:  PWRLib_LVD_VoltageLevel_t PWRLib_LVD_CollectLevel(void) {
+  731:  #if ((cPWR_LVD_Enable == 1) || (cPWR_LVD_Enable == 2))
+  732:    /*--- Check low detect voltage ~1.8V */
+  733:    if (SPMSC1 & cSPMSC1_LVDFlag)  {
+  734:      /* Low detect voltage reached */
+  735:      SPMSC1 = cSPMSC2_ClearWarning; /* Clear flag */
+  736:      return(PWR_NODEPOWER_LEVEL_CRITICAL);
+  737:    }
+  738:  
+  739:    /*--- Check low trip voltage ~2.1V */
+  740:    #ifdef PROCESSOR_HCS08
+  741:    SPMSC2 = (cSPMSC2_ClearWarning | cSPMSC2_LowTripVoltage); /* Set low trip voltage and clear warning flag */
+  742:    if (SPMSC2 & cSPMSC2_LVWFlag) {
+  743:      /* Low trip voltage reached */
+  744:      SPMSC2 = cSPMSC2_ClearWarning; /* Clear flag (and set low trip voltage) */
+  745:      return(PWR_NODEPOWER_LEVEL_33);
+  746:    }
+  747:    #endif // PROCESSOR_HCS08
+  748:    
+  749:    #if defined(PROCESSOR_QE128) || defined(PROCESSOR_MC1323X)
+  750:      SPMSC3 = (cSPMSC3_ClearWarning | cSPMSC3_LowTripVoltage); /* Set low trip voltage and clear warning flag */
+  751:    if (SPMSC3 & cSPMSC3_LVWFlag) {
+  752:      /* Low trip voltage reached */
+  753:      SPMSC3 = cSPMSC3_ClearWarning; /* Clear flag (and set low trip voltage) */
+  754:      return(PWR_NODEPOWER_LEVEL_33);
+  755:    }
+  756:    #endif /* PROCESSOR_QE128 */
+  757:    
+  758:    /*--- Check high trip voltage ~2.4V and below 2.4V */
+  759:    
+  760:    #ifdef PROCESSOR_HCS08
+  761:    SPMSC2 = (cSPMSC2_ClearWarning | cSPMSC2_HighTripVoltage); /* Set high trip voltage and clear warning flag */
+  762:    if(SPMSC2 & cSPMSC2_LVWFlag) {
+  763:        /* High trip voltage reached */
+  764:        SPMSC2 = cSPMSC2_ClearWarning; /* Clear flag (and set low trip voltage) */
+  765:    #endif//PROCESSOR_HCS08 
+  766:       
+  767:    #if defined(PROCESSOR_QE128) || defined(PROCESSOR_MC1323X)
+  768:    SPMSC3 = (cSPMSC3_ClearWarning | cSPMSC3_HighTripVoltage); /* Set high trip voltage and clear warning flag */
+  769:    if(SPMSC3 & cSPMSC3_LVWFlag) {
+  770:        /* High trip voltage reached */
+  771:        SPMSC3 = cSPMSC3_ClearWarning; /* Clear flag (and set low trip voltage) */
+  772:  
+  773:    #endif /* PROCESSOR_QE128 */    
+  774:        if(PWRLib_LVD_L2Counter == 0) {
+  775:            return(PWR_NODEPOWER_LEVEL_50); /* Timer controlled level */
+  776:        } else {
+  777:          PWRLib_LVD_L2Counter--;
+  778:          return(PWR_NODEPOWER_LEVEL_66); /* Voltage below 2.4V */
+  779:        }
+  780:    } else {
+  781:      PWRLib_LVD_L2Counter = cPWR_LVD_LEVEL_50_Ticks; /* Reset counter */
+  782:    }
+  783:  #endif  /* #if ((cPWR_LVD_Enable == 1) || (cPWR_LVD_Enable == 2)) */
+  784:    /*--- Voltage level is okay > 2.4V */
+  785:    return(PWR_NODEPOWER_LEVEL_100);
+  0000 a60c     [2]             LDA   #12
+  786:  }  /* PWRLib_LVD_CollectLevel ======= */
+  0002 8d       [7]             RTC   
+  787:  
+  788:  
+  789:  #if (cPWR_UsePowerDownMode==1)
+  790:  
+  791:  //-----------------------------------------------------------------------------
+  792:  //-----------------------------------------------------------------------------
+  793:  // RADIO interface functions
+  794:  //-----------------------------------------------------------------------------
+  795:  //-----------------------------------------------------------------------------
+  796:  #ifndef PROCESSOR_MC1323X
+  797:  /*****************************************************************************/
+  798:  /* Please see in PWRLib.h for description   */
+  799:  uint8_t PWRLib_RadioWakeReq(void) {
+  800:    uint8_t res;
+  801:  
+  802:    Asp_WakeReq(); /* No retun value */
+  803:    res = gSuccess_c;
+  804:  
+  805:    mRADIO_SetStatus( RADIO_Idle);
+  806:    return(res);
+  807:  } /* PWRLib_RadioWakeReq ======*/
+  808:  
+  809:  
+  810:  /*****************************************************************************/
+  811:  /* Please see in PWRLib.h for description   */
+  812:  uint8_t PWRLib_RadioDozeReq(zbClock24_t DozeDuration, bool_t ClkOutEnabled) {
+  813:    zbClock24_t   actualDozeTime;
+  814:    uint8_t       *pTmpTime;
+  815:  
+  816:    if (gSuccess_c == Asp_DozeReq(&DozeDuration, ClkOutEnabled)) {    
+  817:      pTmpTime = (uint8_t *)&DozeDuration;
+  818:      FLib_MemCpy( &actualDozeTime, pTmpTime, sizeof(zbClock24_t));
+  819:      actualDozeTime &= 0xffffff;                             /* Only 3 bytes internally */
+  820:      if( DozeDuration == actualDozeTime ) {
+  821:        mRADIO_SetStatus( RADIO_Doze);
+  822:         MC1319xDrv_AttEnable();                                            /* Set att. pin high so we do not waste any power..*/
+  823:        return(TRUE);
+  824:      } else {
+  825:        mRADIO_SetStatus( RADIO_Idle);
+  826:        return(FALSE);
+  827:      }
+  828:    }
+  829:    mRADIO_SetStatus( RADIO_Idle);
+  830:      return(FALSE);
+  831:  } /* PWRLib_RadioDozeReq ======*/
+  832:  
+  833:  
+  834:  /*****************************************************************************/
+  835:  /* Please see in PWRLib.h for description      */
+  836:  uint8_t PWRLib_RadioAcomaDozeReq(bool_t ClkOutEnabled) {
+  837:  
+  838:      if (gSuccess_c == Asp_AcomaReq(ClkOutEnabled)) {      
+  839:        mRADIO_SetStatus( RADIO_AcomaDoze);
+  840:          MC1319xDrv_AttEnable();/* Set att. pin high so we do not waste any power..*/
+  841:        return(TRUE);
+  842:      } else {
+  843:        mRADIO_SetStatus( RADIO_Idle);
+  844:        return(FALSE);
+  845:      }
+  846:  } /* PWRLib_RadioAcomaDozeReq ======*/
+  847:  
+  848:  
+  849:  /*****************************************************************************/
+  850:  /* Please see in PWRLib.h for description     */
+  851:  uint8_t PWRLib_RadioHibernateReq(void) {
+  852:  
+  853:    if (gSuccess_c == Asp_HibernateReq()) {    
+  854:      mRADIO_SetStatus( RADIO_Hibernate);
+  855:       MC1319xDrv_AttEnable(); /* Set att. pin high so we do not waste any power.*/
+  856:      return(TRUE);
+  857:    } else {
+  858:      mRADIO_SetStatus( RADIO_Idle);
+  859:      return(FALSE);
+  860:    }
+  861:  } /* PWRLib_RadioHibernateReq ======*/
+  862:  
+  863:  
+  864:  /*****************************************************************************/
+  865:  /* Please see in PWRLib.h for description     */
+  866:  void PWRLib_RadioOffReq(void) {
+  867:      MC1319xDrv_AssertReset(); 			 /* Reset RADIO */
+  868:      mPWRLib_SETUPFOR_RADIORESET;  
+  869:    mRADIO_SetStatus( RADIO_Off);
+  870:  } /* PWRLib_RadioOffReq ======*/
+  871:  
+  872:  
+  873:  /*****************************************************************************/
+  874:  /* Please see in PWRLib.h for description     */
+  875:  void PWRLib_RadioOnReq(void) {
+  876:      mPWRLib_SETUPAFTER_RADIORESET;
+  877:      MC1319xDrv_DeassertReset();
+  878:  	MC1319xDrv_AttDisable(); 
+  879:    mRADIO_SetStatus( RADIO_Idle);
+  880:  } /* PWRLib_RadioOnReq ======*/
+  881:  
+  882:  #endif /*PROCESSOR_MC1323X*/
+  883:  
+  884:  /*****************************************************************************/
+  885:  /* Please see in PWRLib.h for description        */
+  886:  uint8_t PWRLib_GetMacStateReq() {
+  887:      return Asp_GetMacStateReq();
+  0000 ac000000 [8]             CALL  Asp_GetMacStateReq
+  888:  }  /* PWRLib_GetMacStateReq() =====*/
+  0004 8d       [7]             RTC   
+  889:  
+  890:  
+  891:  //----------------------------------------------------------------------------
+  892:  //----------------------------------------------------------------------------
+  893:  // Zigbee stack interface functions
+  894:  //----------------------------------------------------------------------------
+  895:  //----------------------------------------------------------------------------
+  896:  /*#define PWRLib_GetCurrentZigbeeStackPowerState     PWRLib_StackPS;*/
+  897:  /*#define PWRLib_SetCurrentZigbeeStackPowerState( x) PWRLib_StackPS = x;*/
+  898:  
+  899:  
+  900:  //----------------------------------------------------------------------------
+  901:  //----------------------------------------------------------------------------
+  902:  // Common init function
+  903:  //----------------------------------------------------------------------------
+  904:  //----------------------------------------------------------------------------
+  905:  
+  906:  #endif  /*#if (cPWR_UsePowerDownMode==1) */
+  907:  /*****************************************************************************/
+  908:  /* Please see in PWRLib.h for description     */
+  909:  void PWRLib_Init(void) {
+  910:    #if (cPWR_UsePowerDownMode)
+  911:      PWRLib_ICGMode              = FEE;
+  0000 a603     [2]             LDA   #3
+  0002 c70000   [4]             STA   PWRLib_ICGMode
+  912:      mMCU_SetStatus( MCU_Running);
+  913:      mRADIO_SetStatus( RADIO_Idle);
+  914:          
+  915:      #if (cPWR_SetupIOWhenInPD >= 1)
+  916:        SavedPTAD             = PTAD ;
+  917:        SavedPTBD             = PTBD ;
+  918:        SavedPTCD             = PTCD ;
+  919:        SavedPTDD             = PTDD ;
+  920:       #ifndef PROCESSOR_MC1323X
+  921:        SavedPTED             = PTED ;
+  922:        SavedPTFD             = PTFD ;
+  923:        SavedPTGD             = PTGD ;
+  924:       #endif 
+  925:      #endif  /* (cPWR_SetupIOWhenInPD >= 1) */
+  926:      #if (cPWR_SetupIOWhenInPD == 1)
+  927:        SavedPTADD            = PTADD;
+  928:        SavedPTBDD            = PTBDD;
+  929:        SavedPTCDD            = PTCDD;
+  930:        SavedPTDDD            = PTDDD;
+  931:       #ifndef PROCESSOR_MC1323X 
+  932:        SavedPTEDD            = PTEDD;
+  933:        SavedPTFDD            = PTFDD;
+  934:        SavedPTGDD            = PTGDD;
+  935:       #endif 
+  936:        SavedPTAPE            = PTAPE;
+  937:        SavedPTBPE            = PTBPE;
+  938:        SavedPTCPE            = PTCPE;
+  939:        SavedPTDPE            = PTDPE;
+  940:       #ifndef PROCESSOR_MC1323X 
+  941:        SavedPTEPE            = PTEPE;
+  942:        SavedPTFPE            = PTFPE;
+  943:        SavedPTGPE            = PTGPE;
+  944:       #endif 
+  945:      #endif  /* #if (cPWR_SetupIOWhenInPD == 1) */
+  946:      mRESETPIN_STOP2_MODE;
+  947:      #if (cPWR_KBIInitAndVectorEnable)
+  948:        #if (cPWR_KBIWakeupEnable)
+  949:         #if defined(PROCESSOR_QE128) 
+  950:          KBI2PE = cKBI1PE;                                         /* KBI setup */
+  951:          KBI2SC = cKBI1SC | cKBI1SC_Ack;  
+  952:         #elif defined(PROCESSOR_MC1323X)        
+  953:          KBIPE  =  gMC1323xKBIPinEnableMask_d; /* KBI pin enable controls initialized*/
+  954:          KBIES  = ~gMC1323xKBIPinEnableMask_d; /* KBI interrupt edge select*/
+  955:          KBISC = cKBI1SC | cKBI1SC_Ack; 
+  956:         #else
+  957:         //PROCESSOR_HCS08
+  958:          KBI1PE = cKBI1PE;                                         /* KBI setup */
+  959:          KBI1SC = cKBI1SC | cKBI1SC_Ack;
+  960:         #endif             
+  961:        #endif
+  962:      #endif
+  963:      PWRLib_MCU_WakeupReason.AllBits = 0;
+  0005 3f00     [5]             CLR   PWRLib_MCU_WakeupReason
+  964:      if ( SPMSC2 & 0x08) {
+  0007 c61809   [4]             LDA   6153
+  000a a508     [2]             BIT   #8
+  000c 2703     [3]             BEQ   L11 ;abs = 0011
+  965:  #if defined(PROCESSOR_MC1323X)
+  966:  	  PWRLib_MCU_WakeupReason.Bits.FromSCI = 1;                     /* Wakeup from SCI */
+  000e 1200     [5]             BSET  1,PWRLib_MCU_WakeupReason
+  967:  #else
+  968:        PWRLib_MCU_WakeupReason.Bits.FromStop2 = 1;                     /* Wakeup from STOP2 mode */
+  969:  #endif	  
+  970:      } else {
+  0010 65       [3]             SKIP2 L13 ;abs = 0013
+  0011          L11:    
+  971:        PWRLib_MCU_WakeupReason.Bits.FromReset = 1;                     /* Ordinary reset */
+  0011 1000     [5]             BSET  0,PWRLib_MCU_WakeupReason
+  0013          L13:    
+  972:      }
+  973:      PWRLib_SetCurrentZigbeeStackPowerState( StackPS_DeepSleep);
+  0013 a67c     [2]             LDA   #124
+  0015 c70000   [4]             STA   PWRLib_StackPS
+  974:      // LVD_Init_Start
+  975:      #if (cPWR_LVD_Enable == 0)
+  976:         SPMSC1 = cSPMSC1Init_LVD_Disable; /* Write once (SRTISC). Done here to conserve power */
+  977:      #elif ((cPWR_LVD_Enable == 1) || (cPWR_LVD_Enable == 2))
+  978:         SPMSC1 = cSPMSC1Init_LVD_Enable;  /* Write once (SRTISC). Done here enable power level */  
+  979:      #elif (cPWR_LVD_Enable==3)
+  980:         SPMSC1 = cSPMSC1Init_LVD_Enable | cSPMSC1Init_LVDR_Enable;  /* Write once (SRTISC). Done here enable power level */  
+  0018 a614     [2]             LDA   #20
+  001a 451808   [3]             LDHX  #6152
+  001d f7       [2]             STA   ,X
+  981:         #ifdef PROCESSOR_HCS08
+  982:         SPMSC2 |= cSPMSC2_LVD_V_High;
+  983:         #endif
+  984:         #ifdef PROCESSOR_QE128
+  985:         SPMSC3 |= cSPMSC3_LVD_V_High;
+  986:         #endif
+  987:         #ifdef PROCESSOR_MC1323X
+  988:         SPMSC3 |= cSPMSC3_LVD_V_High;
+  001e e603     [3]             LDA   3,X
+  0020 aa20     [2]             ORA   #32
+  0022 e703     [3]             STA   3,X
+  989:         #endif
+  990:         
+  991:      #endif /* #if (cPWR_LVD_Enable) */
+  992:    
+  993:      #if ((cPWR_LVD_Enable == 1) || (cPWR_LVD_Enable == 2))
+  994:        PWRLib_LVD_SavedLevel = PWR_NODEPOWER_LEVEL_100;
+  995:        PWRLib_LVD_L2Counter  = cPWR_LVD_LEVEL_50_Ticks;
+  996:      #endif  /* #if ((cPWR_LVD_Enable == 1) || (cPWR_LVD_Enable == 2)) */
+  997:      #if (cPWR_LVD_Enable == 2)
+  998:        PWRLib_LVD_CollectCounter = cPWR_LVD_Ticks;
+  999:      #endif  /* #if (cPWR_LVD_Enable==2) */
+ 1000:      // LVD_Init_End
+ 1001:      SPMSC2 |=  0x04;      /* Sets PPDACK bit to restore output drivers after Stop2 mode */
+  0024 e601     [3]             LDA   1,X
+  0026 aa04     [2]             ORA   #4
+  0028 e701     [3]             STA   1,X
+ 1002:    #endif  /*#if (cPWR_UsePowerDownMode) */
+ 1003:  
+ 1004:  } /*PWR_Init =====*/
+  002a 8d       [7]             RTC   
+ 1005:    

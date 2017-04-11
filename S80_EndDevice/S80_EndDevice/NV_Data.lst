@@ -1,0 +1,347 @@
+ANSI-C/cC++ Compiler for HC08 V-5.0.45 Build 14019, Jan 20 2014
+
+    1:  /*****************************************************************************
+    2:  * Data definitions for the application client of the NV storage module.
+    3:  *
+    4:  * c) Copyright 2006, Freescale, Inc. All rights reserved.
+    5:  *
+    6:  *
+    7:  * No part of this document must be reproduced in any form - including copied,
+    8:  * transcribed, printed or by any electronic means - without specific written
+    9:  * permission from Freescale Semiconductor.
+   10:  *
+   11:  *****************************************************************************/
+   12:  
+   13:  #include "EmbeddedTypes.h"
+   14:  #include "AppToPlatformConfig.h"
+   15:  #include "NVM_Interface.h"
+   16:  #include "portconfig.h"
+   17:  #include "NV_Data.h"
+   18:  #include "FunctionLib.h"
+   19:  #include "Platforminit.h"
+   20:  
+   21:  
+   22:  #ifndef gMacStandAlone_d
+   23:  #define gMacStandAlone_d  0
+   24:  #endif
+   25:  
+   26:  
+   27:  /*****************************************************************************
+   28:  ******************************************************************************
+   29:  * Private macros
+   30:  ******************************************************************************
+   31:  *****************************************************************************/
+   32:  #if defined(PROCESSOR_QE128)
+   33:   #define SYSTEM_CLOCK_16MHZ    /* System Clock for QE 128 */
+   34:  #elif defined(PROCESSOR_MC1323X)
+   35:   #define SYSTEM_CLOCK_16MHZ    /* System Clock for MC1323X */
+   36:  #else
+   37:  // PROCESSOR_HCS08
+   38:   #define SYSTEM_CLOCK_16MHZ    /* System Clock for HCS08 */
+   39:  #endif
+   40:  /*****************************************************************************
+   41:  ******************************************************************************
+   42:  * Public memory declarations
+   43:  ******************************************************************************
+   44:  *****************************************************************************/
+   45:  
+   46:  /* The linker command file places this structure in a fixed location, to
+   47:   * make it easy to find it during manufacturing.
+   48:   * WARNING: The size of the FREESCALE_VERSION_STRINGS section in the linker
+   49:   * command file must be manually coordinated with the size of the
+   50:   * gFreescaleVersionStrings struct.
+   51:   */
+   52:  #pragma CONST_SEG FREESCALE_PROD_DATA
+   53:  /*NOTE: DO NOT CHANGE ORDER OF THESE 2 structures*/
+   54:  FreescaleVersionStrings_t const gFreescaleVersionStrings = {
+   55:    0x0006,                               /* uint16_t NV_RAM_Version; */
+   56:  
+   57:    /* uint8_t MAC_Version[4]; */
+   58:    0x01,0xFF,0xFF,0xFF,
+   59:    /* uint8_t PHY_Version[4]; */
+   60:    0x02,0xFF,0xFF,0xFF,
+   61:    /* uint8_t STACK_Version[4]; */
+   62:    0x03,0xFF,0xFF,0xFF,
+   63:  
+   64:    /* uint8_t APP_Version[4]; */
+   65:    0x04,0xFF,0xFF,0xFF,
+   66:  
+   67:    /* uint8_t HWName_Revision[4]; */
+   68:    0x05,0xFF,0xFF,0xFF,
+   69:    /* uint8_t SerialNumber[4]; */
+   70:    0x06,0x02,0x03,0x04,
+   71:  
+   72:    0x020F,                               /* uint16_t ProductionSite; */
+   73:    0x01,                                 /* uint8_t CountryCode; */
+   74:    0x04,                                 /* uint8_t ProductionWeekCode; */
+   75:    0x04,                                 /* uint8_t ProductionYearCode; */
+   76:    0x00,                                 /* uint8_t MCU_Manufacture; */
+   77:    0x02,                                 /* uint8_t MCU_Version; */
+   78:    0x00                                  /*padding*/
+   79:  };
+   80:  
+   81:  #if defined(PROCESSOR_QE128)
+   82:  
+   83:  /* Used to initialize gNvMacDataSet if no NV storage copy is found. */
+   84:  HardwareParameters_t const gHardwareParameters = {
+   85:    gaHardwareParametersDelimiterString_c,    /* initialString */
+   86:  
+   87:    #ifdef SYSTEM_CLOCK_8MHZ
+   88:      0x08, /* 8 MHz */
+   89:      /* uint16_t Abel_Clock_Out_Setting; */
+   90:        CLOCK_OUT_SETTING,
+   91:      /* uint16_t Abel_HF_Calibration; */
+   92:        HF_CALIBRATION,
+   93:      /* ICG clock  */
+   94:        0x08,                                 /* uint8_t NV_ICSC1; */
+   95:      /* 0x20 => CPU clk=32 MHz, Buc clk = 16 MHz */
+   96:        0x00,                                 /* uint8_t NV_ICSC2; */
+   97:      /* ICS TRIM */
+   98:        0x9F,                                 /* uint8_t NV_ICSTRM; */
+   99:      /* ICSSC */    
+  100:        0x00,                                 /* uint8_t NV_ICSSC; */
+  101:    #endif SYSTEM_CLOCK_8MHZ
+  102:  
+  103:    #ifdef SYSTEM_CLOCK_16MHZ
+  104:      0x10, /* 16 MHz */
+  105:      /* uint16_t Abel_Clock_Out_Setting; */
+  106:        CLOCK_OUT_SETTING,
+  107:      /* uint16_t Abel_HF_Calibration; */
+  108:        HF_CALIBRATION,
+  109:      /* ICG clock  */
+  110:        0x08,                                 /* uint8_t NV_ICSC1; */
+  111:        //0x00,                                 /* uint8_t NV_ICSC1; */
+  112:      /* 0x20 => CPU clk=32 MHz, Buc clk = 16 MHz */
+  113:        0x00,                                 /* uint8_t NV_ICSC2; */
+  114:      /* ICS TRIM */
+  115:        0x9F,                                 /* uint8_t NV_ICSTRM; */
+  116:      /* ICSSC */    
+  117:        0x40,                                 /* uint8_t NV_ICSSC; */
+  118:    #endif SYSTEM_CLOCK_16MHZ
+  119:  
+  120:    #ifdef SYSTEM_CLOCK_16780MHZ
+  121:      0x10, /* 16 MHz */
+  122:      /* uint16_t Abel_Clock_Out_Setting; */
+  123:        CLOCK_OUT_SETTING,
+  124:      /* uint16_t Abel_HF_Calibration; */
+  125:        HF_CALIBRATION,
+  126:      /* ICG clock  */
+  127:      0x04,                                 /* uint8_t NV_ICSC1; */
+  128:      /* 0x20 => CPU clk=32 MHz, Buc clk = 16 MHz */
+  129:      0x00,                                 /* uint8_t NV_ICSC2; */
+  130:  
+  131:      /* ICS TRIM */
+  132:      0xB0,                                 /* uint8_t NV_ICSTRM; */
+  133:      /* ICSSC */    
+  134:      0x50,                                 /* uint8_t NV_ICSSC; */
+  135:    #endif SYSTEM_CLOCK_16780MHZ
+  136:  
+  137:      /* uint8_t MAC_Address[8]; */
+  138:      0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
+  139:  
+  140:      0xBC,                                 /* uint8_t defaultPowerLevel; */
+  141:  
+  142:    #ifdef TARGET_TOROWEAP
+  143:      #if (gTargetQE128EVB_d == 1) 
+  144:       FALSE,
+  145:      #else      
+  146:       TRUE,                                 /* uint8_t useDualAntenna; */
+  147:      #endif 
+  148:    #elif gTarget_UserDefined_d  
+  149:      gUseExternalAntennaSwitch_c, 
+  150:    #else
+  151:       FALSE,                                /* uint8_t useDualAntenna; */
+  152:    #endif /* TARGET_TOROWEAP */
+  153:  
+  154:      CHANNEL_PA,
+  155:      gaHardwareParametersDelimiterString_c,    /* terminalString */
+  156:    };
+  157:  
+  158:  
+  159:  #elif defined(PROCESSOR_MC1323X) 
+  160:  //tbd
+  161:  /* Used to initialize gNvMacDataSet if no NV storage copy is found. */
+  162:  HardwareParameters_t const gHardwareParameters = {
+  163:    gaHardwareParametersDelimiterString_c,    /* initialString */
+  164:  
+  165:    #ifdef SYSTEM_CLOCK_8MHZ
+  166:      0x08, /* 8 MHz Bus_Frequency_In_MHz */
+  167:    #elif defined SYSTEM_CLOCK_16MHZ
+  168:      0x10, /* 16 MHz Bus_Frequency_In_MHz */
+  169:    #else
+  170:      #error "ERROR! Must define a system clock value!"
+  171:    #endif
+  172:  
+  173:      /* SOMC1 register should be set by application */
+  174:      //0x2C, // SOMC1_value (RDIV = 1;XTAL0EN = 0;1KHZ_EN =1; XTAL1EN = 1;TAL1_TST_OUT = 0;CLKS_TST_OUT = 0)
+  175:  
+  176:      // Xtal_Trim, SOMC2 value
+  177:      #if defined (PROCESSOR_MC13233C)
+  178:        0x5A,
+  179:      #elif defined (PROCESSOR_MC13234C)
+  180:        0x6E,
+  181:      #elif defined (PROCESSOR_MC13237C)
+  182:        0x76,
+  183:      #else
+  184:        0x9E, //fallback
+  185:      #endif
+  186:  
+  187:  
+  188:      0xff,//SCGC1
+  189:      0xff,//SCGC2
+  190:     /* uint8_t MAC_Address[8]; */
+  191:      0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
+  192:      0xB,                                 /* uint8_t defaultPowerLevel; */
+  193:      FALSE,/* uint8_t useDualAntenna; */
+  194:      gaMC1323x_CCA_Threshold_c, /* ccaThreshold */
+  195:      gaMC1323x_CCA_Offset_c,   /* ccaOffset */
+  196:      CHANNEL_PA,
+  197:      gaHardwareParametersDelimiterString_c,    /* terminalString */
+  198:    };
+  199:  
+  200:  
+  201:  #else
+  202:  // PROCESSOR_HCS08
+  203:  
+  204:  /* The MAC data set is special. Some of the data in it is used to initialize
+  205:   * the CPU and other hardware, before the C main() program begins, and is
+  206:   * also used later by the main C code.
+  207:   * The C initialized data section in memory has not been initialized yet,
+  208:   * so we can't depend on anything in RAM. The .bss (zero'ed memory) and
+  209:   * initialized data section will be initialized later, so we can't store
+  210:   * anything there for the main C code to use.
+  211:   * This structure is in RAM, in it's own linker section, which is marked to
+  212:   * not be initialized at all by the usual C runtime .bss and initialzed data
+  213:   * procedures. Code in the C runtime startup (crt0.c) handles initializing
+  214:   * it in a non-standard way.
+  215:   *
+  216:   * WARNING: The size of the HARDWARE_INIT_PARAMETERS section in the linker
+  217:   * command file must be manually coordinated with the size of the
+  218:   * HardwareInitParameters_t struct.
+  219:   */
+  220:   
+  221:  HardwareParameters_t const gHardwareParameters = {
+  222:    gaHardwareParametersDelimiterString_c,    /* initialString */
+  223:  
+  224:  #ifdef SYSTEM_CLOCK_8MHZ
+  225:    /* 8 MHz  */
+  226:    0x08,                                 /* uint8_t Bus_Frequency_In_MHz; */
+  227:    /* uint16_t Abel_Clock_Out_Setting; */
+  228:      CLOCK_OUT_SETTING,
+  229:    /* uint16_t Abel_HF_Calibration; */
+  230:      HF_CALIBRATION,
+  231:    /* ICG  */
+  232:    0x18,                                 /* uint8_t NV_ICGC1; */
+  233:    /* 0x00 => CPU clk=16 MHz, Buc clk = 8 MHz  */
+  234:    0x00,                                 /* uint8_t NV_ICGC2; */
+  235:  
+  236:    /* ICG Filter */
+  237:    0x02,                                 /* uint8_t NV_ICGFLTU; */
+  238:    0x40,                                 /* uint8_t NV_ICGFLTL; */
+  239:  #endif SYSTEM_CLOCK_8MHZ
+  240:  
+  241:  #ifdef SYSTEM_CLOCK_12MHZ
+  242:    /* 12 MHz */
+  243:    0x0C,                                 /* uint8_t Bus_Frequency_In_MHz; */
+  244:    /* uint16_t Abel_Clock_Out_Setting; */
+  245:      CLOCK_OUT_SETTING,
+  246:    /* uint16_t Abel_HF_Calibration; */
+  247:      HF_CALIBRATION,
+  248:    /* ICG clock  */
+  249:    0x18,                                 /* uint8_t NV_ICGC1; */
+  250:    /* 0x41 => CPU clk=24 MHz, Buc clk = 12 MHz  */
+  251:    0x41,                                 /* uint8_t NV_ICGC2; */
+  252:  
+  253:    /* ICG Filter */
+  254:    0x02,                                 /* uint8_t NV_ICGFLTU; */
+  255:    0x40,                                 /* uint8_t NV_ICGFLTL; */
+  256:  #endif SYSTEM_CLOCK_12MHZ
+  257:  
+  258:  #ifdef SYSTEM_CLOCK_16MHZ
+  259:    0x10, /* 16 MHz */
+  260:    /* uint16_t Abel_Clock_Out_Setting; */
+  261:      CLOCK_OUT_SETTING,
+  262:    /* uint16_t Abel_HF_Calibration; */
+  263:      HF_CALIBRATION,
+  264:    /* ICG clock  */
+  265:    0x18,                                 /* uint8_t NV_ICGC1; */
+  266:    /* 0x20 => CPU clk=32 MHz, Buc clk = 16 MHz */
+  267:    0x20,                                 /* uint8_t NV_ICGC2; */
+  268:  
+  269:    /* ICG Filter */
+  270:    0x02,                                 /* uint8_t NV_ICGFLTU; */
+  271:    0x40,                                 /* uint8_t NV_ICGFLTL; */
+  272:  #endif SYSTEM_CLOCK_16MHZ
+  273:  
+  274:  #ifdef SYSTEM_CLOCK_16780MHZ
+  275:    /* 16 MHz -> ~16,78 MHz */
+  276:    0x10,
+  277:    /* uint16_t Abel_Clock_Out_Setting; */
+  278:      CLOCK_OUT_SETTING,
+  279:    /* uint16_t Abel_HF_Calibration; */
+  280:      HF_CALIBRATION,
+  281:    /* ICG clock  */
+  282:    0x18,                                 /* uint8_t NV_ICGC1; */
+  283:    /* 0x60 => CPU clk=32,78 MHz, Buc clk = 16,39 MHz */
+  284:    0x60,                                 /* uint8_t NV_ICGC2; */
+  285:  
+  286:    /* ICG Filter */
+  287:    0x02,                                 /* uint8_t NV_ICGFLTU; */
+  288:    0x40,                                 /* uint8_t NV_ICGFLTL; */
+  289:  #endif SYSTEM_CLOCK_16780MHZ
+  290:  
+  291:    /* uint8_t MAC_Address[8]; */
+  292:    0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
+  293:  
+  294:    0xBC,                                 /* uint8_t defaultPowerLevel; */
+  295:  
+  296:  #ifdef TARGET_TOROWEAP
+  297:    TRUE,                                 /* uint8_t useDualAntenna; */                                
+  298:  #elif gTarget_UserDefined_d  
+  299:    gUseExternalAntennaSwitch_c, 
+  300:  #else
+  301:    FALSE,                                /* uint8_t useDualAntenna; */
+  302:  #endif /* TARGET_TOROWEAP */
+  303:  
+  304:    CHANNEL_PA,
+  305:    gaHardwareParametersDelimiterString_c,    /* terminalString */
+  306:  };
+  307:  
+  308:  #endif /* PROCESSOR_QE128 */
+  309:  
+  310:  
+  311:  #pragma CONST_SEG DEFAULT
+  312:  
+  313:  
+  314:  
+  315:  /*****************************************************************************
+  316:  ******************************************************************************
+  317:  * Public memory declarations
+  318:  ******************************************************************************
+  319:  *****************************************************************************/
+  320:  /* Define the NV storage data sets. Each table must end with "{NULL, 0}". */
+  321:  
+  322:  /* If the NV storage module's self test flag is on, the NV code will use */
+  323:  /* it's own internal data. */
+  324:  #if !gNvSelfTest_d
+  325:  
+  326:  #if gMacStandAlone_d
+  327:  /* This data set contains MAC layer variables to be preserved across resets */
+  328:  NvDataItemDescription_t const gaNvNwkDataSet[] = {
+  329:    {NULL, 0}       /* Required end-of-table marker. */
+  330:  };
+  331:  #endif
+  332:  
+  333:  /* different for each application */
+  334:  extern NvDataItemDescription_t const gaNvAppDataSet[];
+  335:  
+  336:  /* Table of data sets. Required by the NV storage module. */
+  337:  /* There must be gNvNumberOfDataSets_c entries in this table. If the */
+  338:  /* number of entries changes, gNvNumberOfDataSets_c must be changed. */
+  339:  NvDataSetDescription_t const NvDataSetTable[gNvNumberOfDataSets_c] = {
+  340:    {gNvDataSet_Nwk_ID_c, gaNvNwkDataSet},
+  341:    {gNvDataSet_App_ID_c, gaNvAppDataSet}
+  342:  };
+  343:  #endif                                  /* #if !gNvSelfTest_d */
+  344:  
+  345:  

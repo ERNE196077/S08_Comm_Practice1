@@ -1,0 +1,512 @@
+ANSI-C/cC++ Compiler for HC08 V-5.0.45 Build 14019, Jan 20 2014
+
+    1:  /************************************************************************************
+    2:  * This module contains the IRQ vector table
+    3:  *
+    4:  *
+    5:  * (c) Copyright 2010, Freescale, Inc. All rights reserved.
+    6:  *
+    7:  *
+    8:  * No part of this document must be reproduced in any form - including copied,
+    9:  * transcribed, printed or by any electronic means - without specific written
+   10:  * permission from Freescale Semiconductor.
+   11:  ************************************************************************************/
+   12:  
+   13:  #include "EmbeddedTypes.h"
+   14:  #if defined(PROCESSOR_MC1323X)
+   15:  #include "Mc1323xHandler.h"
+   16:  #else
+   17:  #include "Mc1319xHandler.h"
+   18:  #endif
+   19:  #include "TMR_Interface.h"
+   20:  #include "Uart_Interface.h"
+   21:  #include "IIC_Interface.h"
+   22:  #if defined(PROCESSOR_MC1323X)
+   23:      #include "Cmt_Interface.h"
+   24:      #include "SPI_Interface.h"
+   25:      #include "ACC_Interface.h"
+   26:      #include "Touchpad_Interface.h"
+   27:  #endif
+   28:  
+   29:  #if defined(PROCESSOR_MC13238C)
+   30:  #include "Usb_Interface.h"
+   31:  #endif
+   32:  #include "ApplicationConf.h"
+   33:  #include "keyboard.h"
+   34:  #if defined(PROCESSOR_MC13237C)  ||  defined(PROCESSOR_QE128)
+   35:  #include "ADC_Interface.h"
+   36:  #endif
+   37:  #include "IrqControlLib.h"
+   38:  #include "PwrLib.h"
+   39:  #include "crt0.h"
+   40:  
+   41:  
+   42:  /******************************************************************************
+   43:  *******************************************************************************
+   44:  * Private Macros
+   45:  *******************************************************************************
+   46:  ******************************************************************************/
+   47:  
+   48:  
+   49:  /******************************************************************************
+   50:  *******************************************************************************
+   51:  * Private type definitions
+   52:  *******************************************************************************
+   53:  ******************************************************************************/
+   54:  #ifdef MEMORY_MODEL_BANKED
+   55:  typedef void __near(* __near ISR_func_t)(void);
+   56:  #else
+   57:  typedef void(* __near ISR_func_t)(void);
+   58:  #endif
+   59:  
+   60:  
+   61:  /******************************************************************************
+   62:  *******************************************************************************
+   63:  * Private Prototypes
+   64:  *******************************************************************************
+   65:  ******************************************************************************/
+   66:  
+   67:  #ifdef gUseBootloader_d
+   68:    /* When bootloader is used, on QE128 and MC1323x, the interrupt vectors must be redirected 
+   69:    from software */  
+   70:    #if defined(PROCESSOR_QE128) || defined(PROCESSOR_MC1323X)
+   71:      #pragma CODE_SEG IRQ_VECTOR_SECTION_DEFAULT
+   72:      
+   73:      void __interrupt near JumpFunctionISR31(void);
+   74:      void __interrupt near JumpFunctionISR30(void);
+   75:      void __interrupt near JumpFunctionISR29(void);
+   76:      void __interrupt near JumpFunctionISR28(void);
+   77:      void __interrupt near JumpFunctionISR27(void);
+   78:      void __interrupt near JumpFunctionISR26(void);
+   79:      void __interrupt near JumpFunctionISR25(void);
+   80:      void __interrupt near JumpFunctionISR24(void);
+   81:      void __interrupt near JumpFunctionISR23(void);
+   82:      void __interrupt near JumpFunctionISR22(void);
+   83:      void __interrupt near JumpFunctionISR21(void);
+   84:      void __interrupt near JumpFunctionISR20(void);
+   85:      void __interrupt near JumpFunctionISR19(void);
+   86:      void __interrupt near JumpFunctionISR18(void);
+   87:      void __interrupt near JumpFunctionISR17(void);
+   88:      void __interrupt near JumpFunctionISR16(void);
+   89:      void __interrupt near JumpFunctionISR15(void);
+   90:      void __interrupt near JumpFunctionISR14(void);
+   91:      void __interrupt near JumpFunctionISR13(void);
+   92:      void __interrupt near JumpFunctionISR12(void);
+   93:      void __interrupt near JumpFunctionISR11(void);
+   94:      void __interrupt near JumpFunctionISR10(void);
+   95:      void __interrupt near JumpFunctionISR09(void);
+   96:      void __interrupt near JumpFunctionISR08(void);
+   97:      void __interrupt near JumpFunctionISR07(void);
+   98:      void __interrupt near JumpFunctionISR06(void);
+   99:      void __interrupt near JumpFunctionISR05(void);
+  100:      void __interrupt near JumpFunctionISR04(void);
+  101:      void __interrupt near JumpFunctionISR03(void);
+  102:      void __interrupt near JumpFunctionISR02(void);
+  103:      void __interrupt near JumpFunctionISR01(void);
+  104:      
+  105:      #pragma CODE_SEG DEFAULT
+  106:    #endif /* defined(PROCESSOR_QE128) || defined(PROCESSOR_MC1323X) */
+  107:  #endif /* defined(gUseBootloader_d) */
+  108:  
+  109:  /******************************************************************************
+  110:  *******************************************************************************
+  111:  * Private Memory Declarations
+  112:  *******************************************************************************
+  113:  ******************************************************************************/
+  114:  
+  115:  /* Reset vector  */
+  116:  #pragma CONST_SEG RESET_VECTOR_SECTION
+  117:  
+  118:  const ISR_func_t Reset_vector[] = 
+  119:  
+  120:  #ifdef gUseBootloader_d
+  121:    {_BootEntryPoint};    // Vector 0    Reset vector
+  122:  #else
+  123:    {_Startup};           // Vector 0    Reset vector
+  124:  #endif
+  125:  
+  126:  #pragma CONST_SEG DEFAULT
+  127:  
+  128:  
+  129:  /* Interrupt vector table */
+  130:  #pragma CONST_SEG IRQ_VECTOR_SECTION
+  131:  
+  132:  #if defined(gUseBootloader_d)&&( defined(PROCESSOR_QE128)|| defined(PROCESSOR_MC1323X))
+  133:  
+  134:  const ISR_func_t ISR_vectors[] =
+  135:  /* When bootloader is used, on QE128 and MC1323x, the interrupt vectors must be redirected 
+  136:      from software */  
+  137:      
+  138:  {
+  139:        JumpFunctionISR31,
+  140:        JumpFunctionISR30,
+  141:        JumpFunctionISR29,
+  142:        JumpFunctionISR28,
+  143:        JumpFunctionISR27,
+  144:        JumpFunctionISR26,
+  145:        JumpFunctionISR25,
+  146:        JumpFunctionISR24,
+  147:        JumpFunctionISR23,
+  148:        JumpFunctionISR22,
+  149:        JumpFunctionISR21,
+  150:        JumpFunctionISR20,
+  151:        JumpFunctionISR19,
+  152:        JumpFunctionISR18,
+  153:        JumpFunctionISR17,
+  154:        JumpFunctionISR16,
+  155:        JumpFunctionISR15,
+  156:        JumpFunctionISR14,
+  157:        JumpFunctionISR13,
+  158:        JumpFunctionISR12,
+  159:        JumpFunctionISR11,
+  160:        JumpFunctionISR10,
+  161:        JumpFunctionISR09,
+  162:        JumpFunctionISR08,
+  163:        JumpFunctionISR07,
+  164:        JumpFunctionISR06,
+  165:        JumpFunctionISR05,
+  166:        JumpFunctionISR04,
+  167:        JumpFunctionISR03,
+  168:        JumpFunctionISR02,
+  169:        JumpFunctionISR01,
+  170:  };
+  171:  
+  172:  #elif defined(PROCESSOR_QE128)
+  173:  
+  174:  /* ISR Vectors definition for HCS08QE128 */
+  175:  const ISR_func_t ISR_vectors[] =
+  176:  {
+  177:          // Interrupt table
+  178:          Default_Dummy_ISR,       // vector 31   - TPM3 overflow
+  179:          Default_Dummy_ISR,       // vector 30   - TPM3 channel 5
+  180:          Default_Dummy_ISR,       // vector 29   - TPM3 channel 4
+  181:          Default_Dummy_ISR,       // vector 28   - TPM3 channel 3
+  182:          Default_Dummy_ISR,       // vector 27   - TPM3 channel 2
+  183:          Default_Dummy_ISR,       // vector 26   - TPM3 channel 1
+  184:          Default_Dummy_ISR,       // vector 25   - TPM3 channel 0
+  185:  #if (gLpmIncluded_d == 1)
+  186:          PWRLib_RTIClock_ISR,     // vector 24   - Real time interrupt
+  187:  #else
+  188:          Default_Dummy_ISR,       // vector 24   - Real time interrupt
+  189:  #endif
+  190:          gUart2_TxIsr_c   ,       // vector 23   - SCI2 transmit
+  191:          gUart2_RxIsr_c   ,       // vector 22   - SCI2 receive
+  192:          gUart2_ErrorIsr_c,       // vector 21   - SCI2 error
+  193:          Default_Dummy_ISR,       // vector 20   - Analog comparator x
+  194:  #if (gADC_Enabled_d == 1)	
+  195:          ADC_ISR,                 // vector 19   - ADC
+  196:  #else
+  197:  	    Default_Dummy_ISR,		 // vector 19   - ADC
+  198:  #endif
+  199:          
+  200:          Switch_Press_ISR,        // vector 18   - Keyboard x pins
+  201:  #if (gIIC_Enabled_d == 1)
+  202:          IIC_Isr,                 // vector 17   - IICx control        
+  203:  #else
+  204:          Default_Dummy_ISR,       // vector 17   - IICx control
+  205:  #endif
+  206:  
+  207:          gUart1_TxIsr_c,          // vector 16   - SCI1 transmit
+  208:          gUart1_RxIsr_c,          // vector 15   - SCI1 receive
+  209:          gUart1_ErrorIsr_c,       // vector 14   - SCI1 error
+  210:  
+  211:          Default_Dummy_ISR,       // vector 13   - SPI1
+  212:          Default_Dummy_ISR,       // vector 12   - SPI2
+  213:  
+  214:          Default_Dummy_ISR,       // vector 11   - TPM2 overflow
+  215:          Default_Dummy_ISR,       // vector 10   - TPM2 channel 2
+  216:          Default_Dummy_ISR,       // vector 09   - TPM2 channel 1
+  217:          Default_Dummy_ISR,       // vector 08   - TPM2 channel 0        
+  218:  
+  219:          Default_Dummy_ISR,       // vector 07   - TPM1 overflow
+  220:          Default_Dummy_ISR,       // vector 06   - TPM1 channel 2
+  221:          Default_Dummy_ISR,       // vector 05   - TPM1 channel 1
+  222:          TMR_InterruptHandler,    // vector 04   - TPM1 channel 0
+  223:  
+  224:          Default_Dummy_ISR,       // vector 03   - Low voltage detect, Low voltage warning
+  225:          MC1319xInterrupt,        // vector 02   - External IRQ (MC1319x interrupt)
+  226:          Default_Dummy_ISR,       // vector 01   - Software interrupt (SWI)
+  227:                                   // vector 00   - Reset (Watchdog timer, Low voltage detect, external pin, illegal opcode)
+  228:  };
+  229:  
+  230:  #elif defined(PROCESSOR_MC1323X)
+  231:  /* ISR Vectors definition for MC1323X */
+  232:  const ISR_func_t ISR_vectors[] =
+  233:  {
+  234:          // Interrupt table
+  235:          Default_Dummy_ISR,       // vector 31   - NOT A REAL VECTOR
+  236:          Default_Dummy_ISR,       // vector 30   - NOT A REAL VECTOR
+  237:          Default_Dummy_ISR,       // vector 29   - NOT A REAL VECTOR
+  238:          Default_Dummy_ISR,       // vector 28   - NOT A REAL VECTOR
+  239:          Default_Dummy_ISR,       // vector 27   - NOT A REAL VECTOR
+  240:  #if defined(PROCESSOR_MC13238C)        
+  241:    #if (gUsbIncluded_d == 1)
+  242:          USB_ISR,                 // vector 26   - USB interrupt
+  243:    #else
+  244:          Default_Dummy_ISR,       // vector 26   - NOT A REAL VECTOR
+  245:    #endif
+  246:  #elif defined(PROCESSOR_MC13237C)  
+  247:    #if (gADC_Enabled_d == 1)
+  248:          ADC_ISR,                 // vector 26   - ADC interrupt
+  249:    #else
+  250:          Default_Dummy_ISR,       // vector 26   - NOT A REAL VECTOR
+  251:    #endif
+  252:  #else
+  253:          Default_Dummy_ISR,       // vector 26   - NOT A REAL VECTOR
+  254:  #endif //defined(PROCESSOR_MC13238C)
+  255:  #if (gLpmIncluded_d == 1)
+  256:          PWRLib_RTIClock_ISR,     // vector 25   - Real time interrupt
+  257:  #else
+  258:          Default_Dummy_ISR,       // vector 25   - Real time interrupt
+  259:  #endif
+  260:          Switch_Press_ISR,        // vector 24   - KBI1
+  261:  
+  262:  #if ((gTouchpadIncluded_d == 1) && (gTP_Mode_c == gTP_KbiIsrMode_c))
+  263:          TP_InterruptHandler,     // vector 23   - KBI2
+  264:  #else       
+  265:          Default_Dummy_ISR,       // vector 23   - KBI2
+  266:  #endif
+  267:  
+  268:  #if (gIIC_Enabled_d == 1)        
+  269:          IIC_Isr,                 // vector 22   - IIC 
+  270:  #else
+  271:          Default_Dummy_ISR,       // vector 22   - IIC
+  272:  #endif
+  273:          
+  274:  #if ( gCmtIncluded_d == 1)       
+  275:          CMT_InterruptHandler,    // vector 21   - CMT
+  276:  #else
+  277:          Default_Dummy_ISR,       // vector 21   - CMT
+  278:  #endif        
+  279:          gUart1_TxIsr_c,          // vector 20   - SCI1 transmit
+  280:          gUart1_RxIsr_c,          // vector 19   - SCI1 receive        
+  281:          gUart1_ErrorIsr_c,       // vector 18   - SCI1 error
+  282:  #if(gSPI_Enabled_d == 1) 
+  283:          SPI_Isr,                 // vector 17   - SPI      
+  284:  #else       
+  285:          Default_Dummy_ISR,       // vector 17   - SPI        
+  286:  #endif 
+  287:  
+  288:          Default_Dummy_ISR,       // vector 16   - TPM4 overflow
+  289:          Default_Dummy_ISR,       // vector 15   - TPM4 channel 0
+  290:          
+  291:          Default_Dummy_ISR,       // vector 14   - TPM3 overflow
+  292:          Default_Dummy_ISR,       // vector 13   - TPM3 channel 0
+  293:          
+  294:          Default_Dummy_ISR,       // vector 12   - TPM2 overflow
+  295:          Default_Dummy_ISR,       // vector 11   - TPM2 channel 0
+  296:          
+  297:          Default_Dummy_ISR,       // vector 10   - TPM1 overflow
+  298:          TMR_InterruptHandler,    // vector 09   - TPM1 channel 0
+  299:          
+  300:          Default_Dummy_ISR,       // vector 08   - AES 128 Cipher      
+  301:  
+  302:          PhyHandlerRxWtrmrk_ISR,  // vector 07   - 802.15.4  Watermark
+  303:          PhyHandlerTmr_ISR,       // vector 06   - 802.15.4  Timers
+  304:          PhyHandlerTx_ISR,        // vector 05   - 802.15.4  Transmit
+  305:          PhyHandlerRx_ISR,        // vector 04   - 802.15.4  Receive
+  306:  
+  307:          Default_Dummy_ISR,       // vector 03   - Low voltage detect, Low voltage warning
+  308:  #if gAccelerometerSupported_d
+  309:          ACC_Isr,                 // vector 02   - External IRQ 
+  310:  #else
+  311:          Default_Dummy_ISR,       // vector 02   - External IRQ 
+  312:   #endif
+  313:          Default_Dummy_ISR,       // vector 01   - Software interrupt (SWI)
+  314:                                   // vector 00   - Reset (Watchdog timer, Low voltage detect, external pin, illegal opcode)
+  315:  };
+  316:  
+  317:  
+  318:  #else
+  319:  /* ISR Vectors definition for HCS08 */
+  320:  const ISR_func_t ISR_vectors[] =
+  321:  {
+  322:          // Interrupt table
+  323:          Default_Dummy_ISR,       // vector 31   - NOT A REAL VECTOR
+  324:          Default_Dummy_ISR,       // vector 30   - NOT A REAL VECTOR
+  325:          Default_Dummy_ISR,       // vector 29   - NOT A REAL VECTOR
+  326:          Default_Dummy_ISR,       // vector 28   - NOT A REAL VECTOR
+  327:          Default_Dummy_ISR,       // vector 27   - NOT A REAL VECTOR
+  328:          Default_Dummy_ISR,       // vector 26   - NOT A REAL VECTOR
+  329:  #if (gLpmIncluded_d == 1)
+  330:          PWRLib_RTIClock_ISR,     // vector 25   Real time interrupt
+  331:  #else
+  332:          Default_Dummy_ISR,       // vector 25   Real time interrupt
+  333:  #endif
+  334:  #if (gIIC_Enabled_d == 1)
+  335:          IIC_Isr,                 // vector 24   IIC control
+  336:  #else
+  337:          Default_Dummy_ISR,       // vector 24   IIC control
+  338:  #endif
+  339:          
+  340:          Default_Dummy_ISR,       // vector 23   AD conversion complete
+  341:  
+  342:          Switch_Press_ISR,        // vector 22    Keyboard pins
+  343:  
+  344:          gUart2_TxIsr_c,          // vector 21  Uart2 transmit
+  345:          gUart2_RxIsr_c,          // vector 20  Uart2 receive
+  346:          gUart2_ErrorIsr_c,       // vector 19  Uart2 error
+  347:  
+  348:          gUart1_TxIsr_c,          // vector 18  Uart1 transmit
+  349:          gUart1_RxIsr_c,          // vector 17  Uart1 receive
+  350:          gUart1_ErrorIsr_c,       // vector 16  Uart1 error
+  351:  
+  352:          Default_Dummy_ISR,       // vector 15   SPI
+  353:  
+  354:          Default_Dummy_ISR,       // vector 14   TPM2 overflow
+  355:          Default_Dummy_ISR,       // vector 13   TPM2 channel 4
+  356:          Default_Dummy_ISR,       // vector 12   TPM2 channel 3
+  357:          Default_Dummy_ISR,       // vector 11   TPM2 channel 2
+  358:          Default_Dummy_ISR,       // vector 10   TPM2 channel 1
+  359:          Default_Dummy_ISR,       // vector 9    TPM2 channel 0
+  360:  
+  361:          Default_Dummy_ISR,       // vector 8    TPM1 overflow
+  362:          Default_Dummy_ISR,       // vector 7    TPM1 channel 2
+  363:          Default_Dummy_ISR,       // vector 6    TPM1 channel 1
+  364:          TMR_InterruptHandler,    // vector 5    TPM1 channel 0
+  365:  
+  366:          FLL_Lost_Lock_ISR,       // vector 4    ICG (FLL lock of clock)
+  367:          Default_Dummy_ISR,       // vector 3    Low voltage detect
+  368:          MC1319xInterrupt,        // vector 2    External IRQ (MC1319x interrupt)
+  369:          Default_Dummy_ISR,       // vector 1    Software interrupt (SWI)
+  370:                                   // vector 0    Reset (Watchdog timer, Low voltage detect, external pin, illegal opcode)
+  371:  };
+  372:  
+  373:  
+  374:  
+  375:  #endif
+  376:  
+  377:  // **************************************************************************
+  378:  /******************************************************************************
+  379:  *******************************************************************************
+  380:  * Public Functions
+  381:  *******************************************************************************
+  382:  ******************************************************************************/
+  383:  
+  384:  
+  385:  /******************************************************************************
+  386:  *******************************************************************************
+  387:  * Private Functions
+  388:  *******************************************************************************
+  389:  ******************************************************************************/
+  390:  
+  391:  #ifdef gUseBootloader_d
+  392:    /* When bootloader is used, on QE128 and MC1323x, the interrupt vectors must be redirected 
+  393:    from software */  
+  394:    #if defined(PROCESSOR_QE128)
+  395:      #pragma CODE_SEG IRQ_VECTOR_SECTION_DEFAULT
+  396:        
+  397:          void __interrupt near JumpFunctionISR31(void){ Default_Dummy_ISR(); };
+  398:          void __interrupt near JumpFunctionISR30(void){ Default_Dummy_ISR(); };
+  399:          void __interrupt near JumpFunctionISR29(void){ Default_Dummy_ISR(); };
+  400:          void __interrupt near JumpFunctionISR28(void){ Default_Dummy_ISR(); };
+  401:          void __interrupt near JumpFunctionISR27(void){ Default_Dummy_ISR(); };
+  402:          void __interrupt near JumpFunctionISR26(void){ Default_Dummy_ISR(); };
+  403:          void __interrupt near JumpFunctionISR25(void){ Default_Dummy_ISR(); };
+  404:        #if (gLpmIncluded_d == 1)
+  405:          void __interrupt near JumpFunctionISR24(void){ PWRLib_RTIClock_ISR(); };
+  406:        #else
+  407:          void __interrupt near JumpFunctionISR24(void){ Default_Dummy_ISR(); };
+  408:        #endif
+  409:          void __interrupt near JumpFunctionISR23(void){gUart2_TxIsr_c();};
+  410:          void __interrupt near JumpFunctionISR22(void){gUart2_RxIsr_c();};
+  411:          void __interrupt near JumpFunctionISR21(void){gUart2_ErrorIsr_c();};
+  412:          void __interrupt near JumpFunctionISR20(void){Default_Dummy_ISR();};
+  413:        #if (gADC_Enabled_d == 1)
+  414:          void __interrupt near JumpFunctionISR19(void){ADC_ISR();};
+  415:        #else
+  416:          void __interrupt near JumpFunctionISR19(void){Default_Dummy_ISR();};
+  417:        #endif
+  418:          void __interrupt near JumpFunctionISR18(void){Switch_Press_ISR();};
+  419:        #if (gIIC_Enabled_d == 1)
+  420:          void __interrupt near JumpFunctionISR17(void){IIC_Isr();};        
+  421:        #else
+  422:          void __interrupt near JumpFunctionISR17(void){Default_Dummy_ISR();};
+  423:        #endif
+  424:          void __interrupt near JumpFunctionISR16(void){gUart1_TxIsr_c();};
+  425:          void __interrupt near JumpFunctionISR15(void){gUart1_RxIsr_c();};
+  426:          void __interrupt near JumpFunctionISR14(void){gUart1_ErrorIsr_c();};
+  427:          void __interrupt near JumpFunctionISR13(void){Default_Dummy_ISR();};
+  428:          void __interrupt near JumpFunctionISR12(void){Default_Dummy_ISR();};
+  429:          void __interrupt near JumpFunctionISR11(void){Default_Dummy_ISR();};
+  430:          void __interrupt near JumpFunctionISR10(void){Default_Dummy_ISR();};
+  431:          void __interrupt near JumpFunctionISR09(void){Default_Dummy_ISR();};
+  432:          void __interrupt near JumpFunctionISR08(void){Default_Dummy_ISR();};        
+  433:          void __interrupt near JumpFunctionISR07(void){Default_Dummy_ISR();};
+  434:          void __interrupt near JumpFunctionISR06(void){Default_Dummy_ISR();};
+  435:          void __interrupt near JumpFunctionISR05(void){Default_Dummy_ISR();};
+  436:          void __interrupt near JumpFunctionISR04(void){TMR_InterruptHandler();};
+  437:          void __interrupt near JumpFunctionISR03(void){Default_Dummy_ISR();};
+  438:          void __interrupt near JumpFunctionISR02(void){MC1319xInterrupt();};
+  439:          void __interrupt near JumpFunctionISR01(void){Default_Dummy_ISR();};    
+  440:      
+  441:      #pragma CODE_SEG DEFAULT 
+  442:    #elif defined(PROCESSOR_MC1323X)
+  443:      #pragma CODE_SEG IRQ_VECTOR_SECTION_DEFAULT
+  444:      
+  445:          void __interrupt near JumpFunctionISR31(void){Default_Dummy_ISR();};
+  446:          void __interrupt near JumpFunctionISR30(void){Default_Dummy_ISR();};
+  447:          void __interrupt near JumpFunctionISR29(void){Default_Dummy_ISR();};
+  448:          void __interrupt near JumpFunctionISR28(void){Default_Dummy_ISR();};
+  449:          void __interrupt near JumpFunctionISR27(void){Default_Dummy_ISR();};
+  450:      #if defined(PROCESSOR_MC13238C)        
+  451:        #if (gUsbIncluded_d == 1)
+  452:          void __interrupt near JumpFunctionISR26(void){USB_ISR();};
+  453:        #else
+  454:          void __interrupt near JumpFunctionISR26(void){Default_Dummy_ISR();};
+  455:        #endif
+  456:      #elif defined(PROCESSOR_MC13237C)  
+  457:        #if (gADC_Enabled_d == 1)
+  458:          void __interrupt near JumpFunctionISR26(void){ADC_ISR();};
+  459:        #else
+  460:          void __interrupt near JumpFunctionISR26(void){Default_Dummy_ISR();};
+  461:        #endif
+  462:      #else
+  463:          void __interrupt near JumpFunctionISR26(void){Default_Dummy_ISR();};
+  464:      #endif   
+  465:        #if (gLpmIncluded_d == 1)
+  466:          void __interrupt near JumpFunctionISR25(void){PWRLib_RTIClock_ISR();};
+  467:        #else
+  468:          void __interrupt near JumpFunctionISR25(void){Default_Dummy_ISR();};
+  469:        #endif
+  470:          void __interrupt near JumpFunctionISR24(void){Switch_Press_ISR();};
+  471:          void __interrupt near JumpFunctionISR23(void){Default_Dummy_ISR();};
+  472:        #if (gIIC_Enabled_d == 1)        
+  473:          void __interrupt near JumpFunctionISR22(void){IIC_Isr();};
+  474:        #else
+  475:          void __interrupt near JumpFunctionISR22(void){Default_Dummy_ISR();};
+  476:        #endif
+  477:        #if ( gCmtIncluded_d == 1)       
+  478:          void __interrupt near JumpFunctionISR21(void){CMT_InterruptHandler();};
+  479:        #else
+  480:          void __interrupt near JumpFunctionISR21(void){Default_Dummy_ISR();};
+  481:        #endif        
+  482:          void __interrupt near JumpFunctionISR20(void){gUart1_TxIsr_c();};
+  483:          void __interrupt near JumpFunctionISR19(void){gUart1_RxIsr_c();};       
+  484:          void __interrupt near JumpFunctionISR18(void){gUart1_ErrorIsr_c();};
+  485:          void __interrupt near JumpFunctionISR17(void){Default_Dummy_ISR();};        
+  486:          void __interrupt near JumpFunctionISR16(void){Default_Dummy_ISR();};
+  487:          void __interrupt near JumpFunctionISR15(void){Default_Dummy_ISR();};
+  488:          void __interrupt near JumpFunctionISR14(void){Default_Dummy_ISR();};
+  489:          void __interrupt near JumpFunctionISR13(void){Default_Dummy_ISR();};
+  490:          void __interrupt near JumpFunctionISR12(void){Default_Dummy_ISR();};
+  491:          void __interrupt near JumpFunctionISR11(void){Default_Dummy_ISR();};
+  492:          void __interrupt near JumpFunctionISR10(void){Default_Dummy_ISR();};
+  493:          void __interrupt near JumpFunctionISR09(void){TMR_InterruptHandler();};
+  494:          void __interrupt near JumpFunctionISR08(void){Default_Dummy_ISR();};     
+  495:          void __interrupt near JumpFunctionISR07(void){PhyHandlerRxWtrmrk_ISR();};
+  496:          void __interrupt near JumpFunctionISR06(void){PhyHandlerTmr_ISR();};
+  497:          void __interrupt near JumpFunctionISR05(void){PhyHandlerTx_ISR();};
+  498:          void __interrupt near JumpFunctionISR04(void){PhyHandlerRx_ISR();};
+  499:          void __interrupt near JumpFunctionISR03(void){Default_Dummy_ISR();};
+  500:        #if (gTouchpadIncluded_d == 1)
+  501:          void __interrupt near JumpFunctionISR02(void){TP_InterruptHandler();};
+  502:        #else       
+  503:          void __interrupt near JumpFunctionISR02(void){Default_Dummy_ISR();};
+  504:        #endif
+  505:          void __interrupt near JumpFunctionISR01(void){Default_Dummy_ISR();};
+  506:          
+  507:      #pragma CODE_SEG DEFAULT 
+  508:    
+  509:    #endif /* defined(PROCESSOR_QE128) || defined(PROCESSOR_MC1323X) */
+  510:  #endif /* defined(gUseBootloader_d) */

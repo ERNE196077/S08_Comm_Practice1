@@ -1,0 +1,1174 @@
+ANSI-C/cC++ Compiler for HC08 V-5.0.45 Build 14019, Jan 20 2014
+
+    1:  /************************************************************************************
+    2:  * Function to handle the different power down states.
+    3:  *
+    4:  *
+    5:  * (c) Copyright 2008, Freescale, Inc. All rights reserved.
+    6:  *
+    7:  *
+    8:  * No part of this document must be reproduced in any form - including copied,
+    9:  * transcribed, printed or by any electronic means - without specific written
+   10:  * permission from Freescale Semiconductor.
+   11:  *
+   12:  ************************************************************************************/
+   13:  
+   14:  /************************************************************************************
+   15:  *************************************************************************************
+   16:  * Includes
+   17:  *************************************************************************************
+   18:  ************************************************************************************/
+   19:  #include "EmbeddedTypes.h"
+   20:  #include "PortConfig.h" 
+   21:  #include "PWR_Configuration.h"   
+   22:  #include "PWR_Interface.h"
+   23:  #include "PWRLib.h"
+   24:  #include "AppAspInterface.h"
+   25:  #include "MsgSystem.h"
+   26:  #include "IrqControlLib.h"
+   27:  #include "TMR_Interface.h"
+   28:  #include "nv_data.h"
+   29:  #include "powermanager.h"
+   30:  #include "PhyMC1323X.h"
+   31:  
+   32:  #ifndef PROCESSOR_MC1323X
+   33:   #error "*** The current power modes implementation is supported only for MC1323X. Use PWR.c instead"
+   34:  #endif
+   35:  
+   36:  extern uint8_t gPowerSaveMode;
+   37:  extern void Phy_InitOnStartup(uint16_t phyRfCalibration, bool_t useDualAntenna);
+   38:  
+   39:  extern void LowLevelReadClockAsync(zbClock24_t *pRetClk);
+   40:  
+   41:  extern void WAIT_6_NOPS( void);
+   42:  
+   43:  /******************************************************************************
+   44:  *******************************************************************************
+   45:  * Private macros
+   46:  *******************************************************************************
+   47:  ******************************************************************************/
+   48:  
+   49:  #if  (cPWR_DeepSleepMode==5)
+   50:      /* How many millisecond need to count down to sync. low power timers */
+   51:    #define MillisToSyncLpmTimers(time) ( (((uint32_t)DozeDuration - (uint32_t)PWRLib_RTIClockCheck()) \
+   52:                                              * (uint32_t)cRTI_OneTickInMillis) + (uint32_t)(time) )
+   53:  #else                                            
+   54:    /* How many millisecond need to count down to sync. low power timers */
+   55:    #define MillisToSyncLpmTimers(time) ( (((uint32_t)cPWR_RTITicks - (uint32_t)PWRLib_RTIClockCheck()) \
+   56:                                              * (uint32_t)cRTI_OneTickInMillis) + (uint32_t)(time) )
+   57:  #endif //cPWR_DeepSleepMode                                                                                       
+   58:  
+   59:  #define PWR_MINIMUM_SLEEP_TICKS   10  /* Minimum sleep ticks (16us) in DeepSleepMode 6  */
+   60:  /******************************************************************************
+   61:  *******************************************************************************
+   62:  * Private prototypes
+   63:  *******************************************************************************
+   64:  ******************************************************************************/
+   65:  
+   66:  /******************************************************************************
+   67:  *******************************************************************************
+   68:  * Private type definitions
+   69:  *******************************************************************************
+   70:  ******************************************************************************/
+   71:  
+   72:  /******************************************************************************
+   73:  *******************************************************************************
+   74:  * Private memory declarations
+   75:  *******************************************************************************
+   76:  ******************************************************************************/
+   77:  static uint32_t mPWR_DozeDurationMs = cPWR_DozeDurationMs;
+   78:  static bool_t   mPWR_DozeDurationSymbols;
+   79:  
+   80:  
+   81:  #if (cPWR_DeepSleepMode==31)
+   82:    uint8_t PWR_RemainingLoops = 1;
+   83:  #endif /* if (cPWR_DeepSleepMode==31)  */
+   84:  
+   85:  static uint32_t notCountedTimeBeforeSleep;
+   86:  
+   87:  /******************************************************************************
+   88:  *******************************************************************************
+   89:  * Public memory declarations
+   90:  *******************************************************************************
+   91:  ******************************************************************************/
+   92:  uint8_t mLPMFlag = gAllowDeviceToSleep_c;
+   93:  /* but recommended to be regarded as private */
+   94:  
+   95:  zbClock24_t lastLPMExitRadioTime;
+   96:  /************************************************************************************
+   97:  * Set the NVM write operation semaphore.
+   98:  *
+   99:  * This function will set the NVM write operation semaphore so that the idle task wont
+  100:  * do a NVM write operation unless this is released by calling 
+  101:  * NVM_ClearCriticalNVMSection.
+  102:  *
+  103:  * Interface assumptions:
+  104:  *   None
+  105:  *   
+  106:  * Return value:
+  107:  *   None
+  108:  * 
+  109:  ************************************************************************************/
+  110:  
+  111:  void PWR_AllowDeviceToSleep(void)
+  112:  {
+  0000 8b       [2]             PSHH  
+  113:    uint8_t   ccr;
+  114:    IrqControlLib_BackupIrqStatus(ccr);/*To protect from re entrant*/
+  0001 85       [1]             TPA   
+  0002 95       [2]             TSX   
+  0003 f7       [2]             STA   ,X
+  115:    IrqControlLib_DisableAllIrqs();
+  0004 9b       [1]             SEI   
+  116:    if( mLPMFlag != 0 ){    
+  0005 c60000   [4]             LDA   mLPMFlag
+  0008 2704     [3]             BEQ   LE ;abs = 000e
+  117:      mLPMFlag--;
+  000a 450000   [3]             LDHX  @mLPMFlag
+  000d 7a       [4]             DEC   ,X
+  000e          LE:     
+  118:    }
+  119:    IrqControlLib_RestoreIrqStatus(ccr);
+  000e 95       [2]             TSX   
+  000f f6       [3]             LDA   ,X
+  0010 84       [1]             TAP   
+  120:  }
+  0011 8a       [3]             PULH  
+  0012 8d       [7]             RTC   
+  121:  
+  122:  /************************************************************************************
+  123:  * Release the NVM write operation semaphore.
+  124:  *
+  125:  * This function will release the NVM write operation semaphore so that the idle task 
+  126:  * can do a NVM write operation.
+  127:  *  
+  128:  * Interface assumptions:
+  129:  *   None
+  130:  *   
+  131:  * Return value:
+  132:  *   None
+  133:  *
+  134:  ************************************************************************************/
+  135:   
+  136:  void PWR_DisallowDeviceToSleep(void)
+  137:  {
+  0000 8b       [2]             PSHH  
+  138:    uint8_t   ccr;
+  139:    IrqControlLib_BackupIrqStatus(ccr);/*To protect from re entrant*/
+  0001 85       [1]             TPA   
+  0002 95       [2]             TSX   
+  0003 f7       [2]             STA   ,X
+  140:    IrqControlLib_DisableAllIrqs();
+  0004 9b       [1]             SEI   
+  141:    mLPMFlag++;
+  0005 450000   [3]             LDHX  @mLPMFlag
+  0008 7c       [4]             INC   ,X
+  142:    IrqControlLib_RestoreIrqStatus(ccr);
+  0009 95       [2]             TSX   
+  000a f6       [3]             LDA   ,X
+  000b 84       [1]             TAP   
+  143:  }
+  000c 8a       [3]             PULH  
+  000d 8d       [7]             RTC   
+  144:  
+  145:  /***********************************************************************************
+  146:  * This function is used to  Check  the Permission flag to go to 
+  147:  * low power mode
+  148:  *
+  149:  * Interface assumptions:
+  150:  * None
+  151:  * 
+  152:  * The routine limitations.
+  153:  * None
+  154:  *
+  155:  * Return value:
+  156:  *   TRUE  : If the device is allowed to go to the LPM else FALSE
+  157:  *
+  158:  * Effects on global data.
+  159:  * None
+  160:  *
+  161:  * Source of algorithm used.
+  162:  * None
+  163:  *
+  164:  *****************************************************************************/ 
+  165:  
+  166:  bool_t PWR_CheckIfDeviceCanGoToSleep( void ) 
+  167:  {
+  0000 a7fe     [2]             AIS   #-2
+  168:    uint8_t   ccr;
+  169:    bool_t    returnValue;
+  170:    IrqControlLib_BackupIrqStatus(ccr);/*To protect from re entrant*/
+  0002 85       [1]             TPA   
+  0003 95       [2]             TSX   
+  0004 f7       [2]             STA   ,X
+  171:    IrqControlLib_DisableAllIrqs();
+  0005 9b       [1]             SEI   
+  172:    returnValue = mLPMFlag == 0 ? TRUE : FALSE;
+  0006 c60000   [4]             LDA   mLPMFlag
+  0009 2702     [3]             BEQ   LD ;abs = 000d
+  000b 4f       [1]             CLRA  
+  000c 65       [3]             SKIP2 LF ;abs = 000f
+  000d          LD:     
+  000d a601     [2]             LDA   #1
+  000f          LF:     
+  000f e701     [3]             STA   1,X
+  173:    IrqControlLib_RestoreIrqStatus(ccr);
+  0011 f6       [3]             LDA   ,X
+  0012 84       [1]             TAP   
+  174:    return returnValue; 
+  0013 e601     [3]             LDA   1,X
+  175:  }
+  0015 a702     [2]             AIS   #2
+  0017 8d       [7]             RTC   
+  176:  
+  177:  /*****************************************************************************/
+  178:  /* Please see in PWRLib.h for description                                    */
+  179:  bool_t PWR_Stop3AndOff(void) {
+  180:  #if (cPWR_UsePowerDownMode)
+  181:    PWRLib_MCUStop3();
+  0000 ac000000 [8]             CALL  PWRLib_MCUStop3
+  182:    PWRLib_SetMCUIOForPowerSavingMode();
+  0004 ac000000 [8]             CALL  PWRLib_SetMCUIOForPowerSavingMode
+  183:    return TRUE;
+  0008 a601     [2]             LDA   #1
+  184:  #else
+  185:    return FALSE;
+  186:  #endif  /* #if (cPWR_UsePowerDownMode) */
+  187:  }  /* PWR_Stop3AndOff(void) =================================================== */
+  000a 8d       [7]             RTC   
+  188:  
+  189:  
+  190:  /*****************************************************************************/
+  191:  /* Please see in PWRLib.h for description                                    */
+  192:  bool_t PWR_AllOff(void) {
+  193:  #if (cPWR_UsePowerDownMode) 
+  194:    PWRLib_MCUStop1();
+  0000 ac000000 [8]             CALL  PWRLib_MCUStop1
+  195:    return TRUE;
+  0004 a601     [2]             LDA   #1
+  196:  #else
+  197:    return FALSE;
+  198:  #endif  /* #if (cPWR_UsePowerDownMode)  */
+  199:  }  /* PWR_AllOff(void) ========================================================*/
+  0006 8d       [7]             RTC   
+  200:  
+  201:  
+  202:  /*****************************************************************************/
+  203:  /* Please see in PWRLib.h for description                                    */
+  204:  void PWR_RunAgain(void) {
+  205:    #if (cPWR_UsePowerDownMode)
+  206:      PWRLib_ResetMCUIOAfterPowerSavingMode();    
+  0000 ac000000 [8]             CALL  PWRLib_ResetMCUIOAfterPowerSavingMode
+  207:    #endif  /* #if (cPWR_UsePowerDownMode) */
+  208:  }  /* PWR_RunAgain(void) ======================================================*/
+  0004 8d       [7]             RTC   
+  209:  
+  210:  
+  211:  /*****************************************************************************/
+  212:  /* Please see in PWRLib.h for description                                    */
+  213:  bool_t PWR_DeepSleepAllowed(void) {
+  214:    #if ( cPWR_UsePowerDownMode)
+  215:      #if ( cPWR_DeepSleepMode<30)                               /* Normal running mode*/
+  216:        if (PWRLib_GetCurrentZigbeeStackPowerState == StackPS_DeepSleep) {
+  0000 c60000   [4]             LDA   PWRLib_StackPS
+  0003 a17c     [2]             CMP   #124
+  0005 260a     [3]             BNE   L11 ;abs = 0011
+  217:          #if (cPWR_DeepSleepMode != 6) 
+  218:            /* DeepSleepMode 6 allows the radio to be active during low power */
+  219:            if ( PWRLib_GetMacStateReq() == gAspMacStateIdle_c) {
+  0007 ac000000 [8]             CALL  PWRLib_GetMacStateReq
+  000b 4d       [1]             TSTA  
+  000c 2603     [3]             BNE   L11 ;abs = 0011
+  220:              return TRUE;
+  000e a601     [2]             LDA   #1
+  0010 8d       [7]             RTC   
+  0011          L11:    
+  221:            } else {
+  222:              return FALSE;
+  223:            }
+  224:         #else  
+  225:            return TRUE;
+  226:         #endif
+  227:        } else {
+  228:          return FALSE;
+  0011 4f       [1]             CLRA  
+  229:        }
+  230:      #else                                                /* Debug mode */
+  231:        return TRUE;
+  232:      #endif
+  233:    #else                                                      /* Debug mode */
+  234:      return TRUE;
+  235:    #endif  /* #if (cPWR_UsePowerDownMode)*/
+  236:  }  /* PWR_DeepSleepAllowed ==================================================*/
+  0012 8d       [7]             RTC   
+  237:  
+  238:  
+  239:  /*****************************************************************************/
+  240:  /* Please see in PWRLib.h for description                                    */
+  241:  bool_t  PWR_SleepAllowed(void) {
+  242:    
+  243:    #if (cPWR_UsePowerDownMode)
+  244:      #if (cPWR_DeepSleepMode<30)                               /* Normal running mode*/
+  245:        if (( PWRLib_GetCurrentZigbeeStackPowerState == StackPS_Sleep) ||  \
+  0000 c60000   [4]             LDA   PWRLib_StackPS
+  0003 417b04   [4]             CBEQA #123,LA ;abs = 000a
+  0006 a17c     [2]             CMP   #124
+  0008 2611     [3]             BNE   L1B ;abs = 001b
+  000a          LA:     
+  246:            ( PWRLib_GetCurrentZigbeeStackPowerState == StackPS_DeepSleep)) {
+  247:  /*        if ( PWRLib_GetMacStateReq()==gAspMacStateBusy_c) {        This can't be used */
+  248:  
+  249:            if (( PWRLib_GetMacStateReq()==gAspMacStateNotEmpty_c) || \
+  000a ac000000 [8]             CALL  PWRLib_GetMacStateReq
+  000e 410207   [4]             CBEQA #2,L18 ;abs = 0018
+  0011 ac000000 [8]             CALL  PWRLib_GetMacStateReq
+  0015 4d       [1]             TSTA  
+  0016 2603     [3]             BNE   L1B ;abs = 001b
+  0018          L18:    
+  250:                ( PWRLib_GetMacStateReq()==gAspMacStateIdle_c)) {
+  251:              return TRUE;
+  0018 a601     [2]             LDA   #1
+  001a 8d       [7]             RTC   
+  001b          L1B:    
+  252:            } else {
+  253:              return FALSE;
+  254:            }
+  255:        } else {
+  256:          return FALSE;
+  001b 4f       [1]             CLRA  
+  257:        }
+  258:      #else                                                      /* Debug mode */
+  259:        return TRUE;
+  260:      #endif
+  261:    #else                                                      /* Debug mode */
+  262:      return TRUE;
+  263:    #endif  /* #if (cPWR_UsePowerDownMode) else */
+  264:  }  /* PWR_SleepAllowed ======================================================*/
+  001c 8d       [7]             RTC   
+  265:  
+  266:  #include "Led.h"
+  267:  /*****************************************************************************/
+  268:  /* Please see in PWRLib.h for description                                    */
+  269:  PWRLib_WakeupReason_t  PWR_HandleDeepSleep( zbClock24_t  DozeDuration) {
+  0000 a7fb     [2]             AIS   #-5
+  270:    PWRLib_WakeupReason_t  Res;
+  271:    Res.AllBits = 0;
+  0002 95       [2]             TSX   
+  0003 6f04     [5]             CLR   4,X
+  272:    (void) DozeDuration;
+  273:    #if (cPWR_UsePowerDownMode)
+  274:    /* Insure that Key Wakeup interrupts are enabled!! Note insert next line of code if you
+  275:       always need the keyboard irq enabled while entering sleep.
+  276:       KBISC |= cKBI1SC; */
+  277:  		  /*---------------------------------------------------------------------------*/
+  278:      #if (cPWR_DeepSleepMode==0)
+  279:        Res.AllBits = PWRLib_MCU_WakeupReason.AllBits;
+  280:        Res.AllBits = 0xff | (uint8_t) DozeDuration;  // Last part to avoid unused warning
+  281:        /* No code */
+  282:  
+  283:      /*---------------------------------------------------------------------------*/
+  284:      #elif (cPWR_DeepSleepMode==1)
+  285:        #if (cPWR_KBIWakeupEnable==1)
+  286:          if (PWR_Stop3AndOff() != FALSE) {
+  287:            Res.AllBits = PWRLib_MCU_WakeupReason.AllBits;
+  288:            PWR_RunAgain();
+  289:          }
+  290:        #else
+  291:          #error "*** ERROR: cPWR_KBIWakeupEnable has to be set to 1"
+  292:        #endif
+  293:  
+  294:      /*---------------------------------------------------------------------------*/
+  295:      #elif (cPWR_DeepSleepMode==2)
+  296:        #if (cPWR_KBIWakeupEnable==0)
+  297:          #if (cPWR_RTIClockSource == cSRTISC_SourceInt1KHz)          
+  298:            PWRLib_RTIClockStart( cPWR_RTITickTime, DozeDuration);
+  299:            
+  300:            /* turn off analog voltage regulator */
+  301:            IoIndirectWrite(0x60, 0x00);
+  302:            
+  303:            (void) PWR_Stop3AndOff();
+  304:            
+  305:            /* turn on analog voltage regulator */
+  306:            IoIndirectWrite(0x60, 0x01);
+  307:            
+  308:            PWRLib_RTIClockStop();
+  309:            
+  310:            /* Sync. the low power timers */
+  311:            TMR_SyncLpmTimers(MillisToSyncLpmTimers(notCountedTimeBeforeSleep));
+  312:            
+  313:            Res.AllBits = PWRLib_MCU_WakeupReason.AllBits;
+  314:            Res.Bits.DeepSleepTimeout = 1;
+  315:            
+  316:            PWR_RunAgain();
+  317:            cPWR_DeepSleepWakeupStackProc;          /* User function called only on timeout */
+  318:  
+  319:         #else
+  320:           #error  "*** ERROR: cPWR_RTIClockSource has to be set to cSRTISC_SourceInt1KHz"
+  321:         #endif
+  322:        #else
+  323:          #error "*** ERROR: cPWR_KBIWakeupEnable has to be set to 0"
+  324:        #endif
+  325:  
+  326:     //---------------------------------------------------------------------------
+  327:      /* Mode 3: MCU in STOP3, RTI/SCI/KBI wakeup, KBI enabled */ 
+  328:      #elif (cPWR_DeepSleepMode==3)
+  329:        #if (cPWR_KBIWakeupEnable==1)
+  330:         #if (cPWR_RTIClockSource == cSRTISC_SourceInt1KHz)
+  331:          PWRLib_MCU_WakeupReason.Bits.FromKBI = FALSE; // Clear any prior KBI wakeup flag       
+  0005 1500     [5]             BCLR  2,PWRLib_MCU_WakeupReason
+  332:          
+  333:          PWRLib_RTIClockStart( cPWR_RTITickTime, DozeDuration);
+  0007 a607     [2]             LDA   #7
+  0009 87       [2]             PSHA  
+  000a 9efe0c   [5]             LDHX  12,SP
+  000d 89       [2]             PSHX  
+  000e 8b       [2]             PSHH  
+  000f 9efe0c   [5]             LDHX  12,SP
+  0012 89       [2]             PSHX  
+  0013 8b       [2]             PSHH  
+  0014 ac000000 [8]             CALL  PWRLib_RTIClockStart
+  0018 a705     [2]             AIS   #5
+  334:          
+  335:          /* Disable Low Voltage Detect and Low Voltage Detect in Stop Mode */
+  336:          SPMSC1 &= 0xF3;
+  001a 451808   [3]             LDHX  #6152
+  001d f6       [3]             LDA   ,X
+  001e a4f3     [2]             AND   #-13
+  0020 f7       [2]             STA   ,X
+  337:           
+  338:           /* turn off analog voltage regulator */
+  339:           IoIndirectWrite(0x60, 0x00);
+  0021 a660     [2]             LDA   #96
+  0023 e753     [3]             STA   83,X
+  0025 4f       [1]             CLRA  
+  0026 e754     [3]             STA   84,X
+  340:            
+  341:           (void )PWR_Stop3AndOff();
+  0028 ac000000 [8]             CALL  PWR_Stop3AndOff
+  342:            
+  343:           /* turn on analog voltage regulator */
+  344:           IoIndirectWrite(0x60, 0x01);
+  002c a660     [2]             LDA   #96
+  002e c7185b   [4]             STA   6235
+  0031 a601     [2]             LDA   #1
+  0033 c7185c   [4]             STA   6236
+  345:          
+  346:          PWRLib_RTIClockStop();
+  0036 ac000000 [8]             CALL  PWRLib_RTIClockStop
+  347:          
+  348:          /* Sync. the low power timers */
+  349:          TMR_SyncLpmTimers(MillisToSyncLpmTimers(notCountedTimeBeforeSleep));
+  003a 95       [2]             TSX   
+  003b ac000000 [8]             CALL  PWRLib_RTIClockCheck
+  003f 95       [2]             TSX   
+  0040 cd0000   [6]             JSR   _LSUB_LC
+  0043 00000003         DC.L  3
+  0047 95       [2]             TSX   
+  0048 a60a     [2]             LDA   #10
+  004a cd0000   [6]             JSR   _LLSL
+  004d 95       [2]             TSX   
+  004e 89       [2]             PSHX  
+  004f 8b       [2]             PSHH  
+  0050 450000   [3]             LDHX  @notCountedTimeBeforeSleep
+  0053 cd0000   [6]             JSR   _LADD
+  0056 95       [2]             TSX   
+  0057 e603     [3]             LDA   3,X
+  0059 87       [2]             PSHA  
+  005a e602     [3]             LDA   2,X
+  005c 87       [2]             PSHA  
+  005d e601     [3]             LDA   1,X
+  005f 87       [2]             PSHA  
+  0060 f6       [3]             LDA   ,X
+  0061 87       [2]             PSHA  
+  0062 ac000000 [8]             CALL  TMR_SyncLpmTimers
+  0066 a704     [2]             AIS   #4
+  350:  
+  351:          Res.AllBits = PWRLib_MCU_WakeupReason.AllBits;
+  0068 b600     [3]             LDA   PWRLib_MCU_WakeupReason
+  006a 95       [2]             TSX   
+  006b e710     [3]             STA   16,X
+  006d af0c     [2]             AIX   #12
+  352:          
+  353:          if( PWRLib_RTIClockCheck() == 0)
+  006f ac000000 [8]             CALL  PWRLib_RTIClockCheck
+  0073 95       [2]             TSX   
+  0074 e60f     [3]             LDA   15,X
+  0076 ea0e     [3]             ORA   14,X
+  0078 ea0d     [3]             ORA   13,X
+  007a ea0c     [3]             ORA   12,X
+  007c a70c     [2]             AIS   #12
+  007e 260a     [3]             BNE   L8A ;abs = 008a
+  354:          {
+  355:            Res.Bits.DeepSleepTimeout = 1;
+  0080 e610     [3]             LDA   16,X
+  0082 aa20     [2]             ORA   #32
+  0084 e710     [3]             STA   16,X
+  356:            cPWR_DeepSleepWakeupStackProc; // User function called only on timeout
+  0086 ac000000 [8]             CALL  DeepSleepWakeupStackProc
+  008a          L8A:    
+  357:          }
+  358:          PWR_RunAgain();
+  008a ac000000 [8]             CALL  PWR_RunAgain
+  359:         #else
+  360:           #error  "*** ERROR: cPWR_RTIClockSource has to be set to cSRTISC_SourceInt1KHz"
+  361:         #endif
+  362:        #else
+  363:          #error "*** ERROR: cPWR_KBIWakeupEnable has to be set to 1"
+  364:        #endif
+  365:     //---------------------------------------------------------------------------
+  366:     /* Mode 4: MCU in STOP3, RTI/SCI/KBI wakeup, KBI enabled */ 
+  367:     /* RTI wakeup period selectable at runtime. RTI period fixed to 32us */
+  368:      #elif (cPWR_DeepSleepMode==4)
+  369:        #if (cPWR_KBIWakeupEnable==1)
+  370:         #if (cPWR_RTIClockSource == cSRTISC_SourceExt32MHz)
+  371:          PWRLib_MCU_WakeupReason.Bits.FromKBI = FALSE; // Clear any prior KBI wakeup flag       
+  372:          
+  373:          if(!mPWR_DozeDurationSymbols)
+  374:          {               
+  375:           /* Calculate doze time based on the RTI period - 32us */
+  376:           /* The DozeDuration value is computed by the preprocessor.*/
+  377:           DozeDuration = (zbClock24_t)(((zbClock24_t)mPWR_DozeDurationMs * 625) / 20) & (zbClock24_t)0xFFFFFF;
+  378:          }
+  379:          else 
+  380:          {
+  381:           /* RTI resolution is fixed to 32us */
+  382:           DozeDuration = mPWR_DozeDurationMs / 2;         
+  383:          }                       
+  384:          
+  385:          /* Disable Low Voltage Detect and Low Voltage Detect in Stop Mode */
+  386:          SPMSC1 &= 0xF3;
+  387:          
+  388:          PWRLib_RTIClockStart( 1, DozeDuration);
+  389:  
+  390:           /* turn off analog voltage regulator */
+  391:           IoIndirectWrite(0x60, 0x00);
+  392:            
+  393:           (void) PWR_Stop3AndOff();
+  394:            
+  395:           /* turn on analog voltage regulator */
+  396:           IoIndirectWrite(0x60, 0x01);
+  397:          
+  398:          PWRLib_RTIClockStop();
+  399:          
+  400:          /* Sync. the low power timers */      
+  401:          DozeDuration = ((DozeDuration - PWRLib_RTIClockCheck()) / 32) + notCountedTimeBeforeSleep;        
+  402:          TMR_SyncLpmTimers(DozeDuration);
+  403:          
+  404:          Res.AllBits = PWRLib_MCU_WakeupReason.AllBits;
+  405:                   
+  406:          if( PWRLib_RTIClockCheck() == 0)
+  407:          {
+  408:            Res.Bits.DeepSleepTimeout = 1;
+  409:            cPWR_DeepSleepWakeupStackProc; // User function called only on timeout
+  410:          }
+  411:          PWR_RunAgain();
+  412:         #else
+  413:           #error  "*** ERROR: cPWR_RTIClockSource has to be set to cSRTISC_SourceExt32MHz"
+  414:         #endif  
+  415:        #else
+  416:          #error "*** ERROR: cPWR_KBIWakeupEnable has to be set to 1"
+  417:        #endif
+  418:      //---------------------------------------------------------------------------        
+  419:      //---------------------------------------------------------------------------  
+  420:      /* Mode 5: MCU in STOP3, RTI/SCI/KBI wakeup, KBI enabled */ 
+  421:      #elif(cPWR_DeepSleepMode==5)
+  422:        #if (cPWR_KBIWakeupEnable==1)
+  423:         #if (cPWR_RTIClockSource == cSRTISC_SourceInt1KHz)
+  424:          PWRLib_MCU_WakeupReason.Bits.FromKBI = FALSE; // Clear any prior KBI wakeup flag       
+  425:          
+  426:          DozeDuration = mPWR_DozeDurationMs * 16 /((uint32_t)cRTI_OneTickInMillis * 1000);
+  427:          
+  428:          PWRLib_RTIClockStart( cPWR_RTITickTime, DozeDuration);
+  429:  
+  430:          /* Disable Low Voltage Detect and Low Voltage Detect in Stop Mode */
+  431:          SPMSC1 &= 0xF3;
+  432:          
+  433:           /* turn off analog voltage regulator */
+  434:           IoIndirectWrite(0x60, 0x00);
+  435:            
+  436:           (void) PWR_Stop3AndOff();
+  437:            
+  438:           /* turn on analog voltage regulator */
+  439:           IoIndirectWrite(0x60, 0x01);
+  440:          
+  441:          PWRLib_RTIClockStop();
+  442:          
+  443:          /* Sync. the low power timers */
+  444:          TMR_SyncLpmTimers(MillisToSyncLpmTimers(notCountedTimeBeforeSleep));
+  445:  
+  446:          Res.AllBits = PWRLib_MCU_WakeupReason.AllBits;
+  447:                   
+  448:          if( PWRLib_RTIClockCheck() == 0)
+  449:          {
+  450:            Res.Bits.DeepSleepTimeout = 1;
+  451:            cPWR_DeepSleepWakeupStackProc; // User function called only on timeout
+  452:          }
+  453:          PWR_RunAgain();
+  454:         #else
+  455:           #error  "*** ERROR: cPWR_RTIClockSource has to be set to cSRTISC_SourceInt1KHz"
+  456:         #endif  
+  457:        #else
+  458:          #error "*** ERROR: cPWR_KBIWakeupEnable has to be set to 1"
+  459:        #endif  
+  460:      //---------------------------------------------------------------------------
+  461:      /* Mode 6: MCU in STOP3, Wakeup on 802.15.4 timer, Other wake-up sources: KBI/SCI */
+  462:      #elif (cPWR_DeepSleepMode==6)
+  463:        
+  464:        {              
+  465:         zbClock24_t currentClock;
+  466:         zbClock24_t actualDozeDuration;
+  467:         
+  468:         if(!mPWR_DozeDurationSymbols)
+  469:         {               
+  470:          /* Calculate doze time based on the Radio Event Time frequency - 62.5 KHz*/
+  471:          /* The DozeDuration value is computed by the preprocessor.*/
+  472:          DozeDuration = (zbClock24_t)(((zbClock24_t)mPWR_DozeDurationMs * 625) / 20) & (zbClock24_t)0xFFFFFF;
+  473:         }
+  474:         else 
+  475:         {
+  476:          DozeDuration = mPWR_DozeDurationMs;
+  477:         }
+  478:         
+  479:         if(DozeDuration > PWR_MINIMUM_SLEEP_TICKS)
+  480:         {               
+  481:          PWRLib_MCU_WakeupReason.Bits.FromKBI = FALSE; // Clear any prior KBI wakeup flag
+  482:                
+  483:          // Get current clock from radio.
+  484:          PhyTimeReadClock(&currentClock);                            
+  485:           
+  486:          mRADIO_SetStatus(RADIO_Doze);
+  487:  
+  488:          actualDozeDuration = currentClock + DozeDuration;      
+  489:         
+  490:          PP_PHY_T4CMP0  = *(((uint8_t *)&actualDozeDuration)+3);
+  491:          PP_PHY_T4CMP8  = *(((uint8_t *)&actualDozeDuration)+2);
+  492:          PP_PHY_T4CMP16 = *(((uint8_t *)&actualDozeDuration)+1);
+  493:          PP_PHY_CTL4   |= PP_PHY_CTL4_TMR4CMP_EN_BIT;
+  494:          PP_PHY_CTL4   &= ~PP_PHY_CTL4_TMR4MSK_BIT;
+  495:                   
+  496:          /* Enable Low Voltage Detect and Low Voltage Detect in Stop Mode */
+  497:          SPMSC1 |= 0x0C;
+  498:         
+  499:         
+  500:          (void) PWR_Stop3AndOff(); // STOP3              
+  501:         
+  502:          Res.AllBits = PWRLib_MCU_WakeupReason.AllBits;
+  503:  
+  504:          PP_PHY_CTL4     &= ~PP_PHY_CTL4_TMR4CMP_EN_BIT;
+  505:          PP_PHY_STATUS1  =  PP_PHY_STATUS1_TMR4_IRQ;
+  506:          PP_PHY_CTL4     |= PP_PHY_CTL4_TMR4MSK_BIT;
+  507:         
+  508:          // Get current clock from radio
+  509:          PhyTimeReadClock(&lastLPMExitRadioTime);
+  510:  
+  511:          actualDozeDuration = (zbClock24_t)((lastLPMExitRadioTime - currentClock) & 0xFFFFFF);
+  512:          
+  513:          if(actualDozeDuration >= DozeDuration)
+  514:          {
+  515:            Res.Bits.DeepSleepTimeout = 1;     /* Sleep timeout ran out */
+  516:            Res.Bits.FromTimer = 1;            /* Wakeup by radio timer */
+  517:          }       
+  518:         
+  519:          /* Sync. the low power timers */      
+  520:          // Transform doze time in ms
+  521:          DozeDuration = (zbClock24_t)(((uint32_t)actualDozeDuration * 10) / 625); 
+  522:          TMR_SyncLpmTimers(DozeDuration + notCountedTimeBeforeSleep);
+  523:          
+  524:          mRADIO_SetStatus(RADIO_Idle);
+  525:          PWR_RunAgain();
+  526:         }
+  527:         else
+  528:         {
+  529:           /* Not enough time to program the TRM compare */
+  530:           Res.Bits.DeepSleepTimeout = 1;     /* Sleep timeout ran out */
+  531:         }
+  532:         
+  533:         if(Res.Bits.DeepSleepTimeout == 1) 
+  534:         {
+  535:            cPWR_DeepSleepWakeupStackProc; // User function called only on timeout
+  536:         }   
+  537:        }
+  538:      #elif (cPWR_DeepSleepMode==30)
+  539:          #error "*** ERROR: cPWR_DeepSleepMode == 30 not allowed"
+  540:  
+  541:      /*---------------------------------------------------------------------------*/
+  542:      #elif (cPWR_DeepSleepMode==31)
+  543:        #if (cPWR_KBIWakeupEnable)
+  544:         #if (cPWR_RTIClockSource == cSRTISC_SourceInt1KHz)
+  545:          if( PWR_RemainingLoops > 0) {
+  546:            PWR_RemainingLoops--;
+  547:            PWRLib_RTIClockStart( cSRTISC_Int1024ms, DozeDuration);
+  548:            if (PWR_Stop3AndOff() != FALSE) {
+  549:              while (( PWRLib_MCU_WakeupReason.Bits.FromKBI == 0) && ( PWRLib_RTIClockCheck() > 0)) {
+  550:                (void) PWRLib_MCUStop3();
+  551:              }
+  552:              PWRLib_RTIClockStop();
+  553:              
+  554:              /* Sync. the low power timers */
+  555:              TMR_SyncLpmTimers(MillisToSyncLpmTimers(notCountedTimeBeforeSleep));
+  556:  
+  557:              Res.AllBits = PWRLib_MCU_WakeupReason.AllBits;
+  558:              PWR_RunAgain();
+  559:              if ( PWRLib_RTIClockCheck() == 0) {
+  560:                Res.Bits.DeepSleepTimeout = 1;
+  561:                cPWR_DeepSleepWakeupStackProc;                            /* User function called only on timeout*/
+  562:              }
+  563:            }
+  564:          }
+  565:         #else
+  566:           #error  "*** ERROR: cPWR_RTIClockSource has to be set to cSRTISC_SourceInt1KHz"
+  567:         #endif
+  568:        #else
+  569:          #error "*** ERROR: cPWR_KBIWakeupEnable has to be set to 1"
+  570:        #endif
+  571:  
+  572:      /*---------------------------------------------------------------------------*/
+  573:      #elif (cPWR_DeepSleepMode==33)
+  574:        PWRLib_SetMCUIOForPowerSavingMode();
+  575:        PWRLib_MCUWait();
+  576:        Res.AllBits = PWRLib_MCU_WakeupReason.AllBits;
+  577:  
+  578:      /*---------------------------------------------------------------------------*/
+  579:      #elif (cPWR_DeepSleepMode==34)
+  580:        PWRLib_SetMCUIOForPowerSavingMode();
+  581:        PWRLib_MCUStop3();
+  582:        Res.AllBits = PWRLib_MCU_WakeupReason.AllBits;
+  583:  
+  584:      /*---------------------------------------------------------------------------*/
+  585:      #elif (cPWR_DeepSleepMode==35)
+  586:        PWRLib_SetMCUIOForPowerSavingMode();
+  587:        PWRLib_MCUStop2();
+  588:        Res.AllBits = PWRLib_MCU_WakeupReason.AllBits;
+  589:  
+  590:      /*---------------------------------------------------------------------------*/
+  591:      #elif (cPWR_DeepSleepMode==36)
+  592:        PWRLib_SetMCUIOForPowerSavingMode();
+  593:        PWRLib_MCUStop1();
+  594:        Res.AllBits = PWRLib_MCU_WakeupReason.AllBits;
+  595:  
+  596:      /*---------------------------------------------------------------------------*/
+  597:      #elif (cPWR_DeepSleepMode==37)
+  598:      /*IrqControlLib_DisableAllIrqs(); */
+  599:        (void) PWRLib_RadioDozeReq(0x0ffff0, FALSE);
+  600:        Res.AllBits = PWRLib_MCU_WakeupReason.AllBits;
+  601:  
+  602:      /*---------------------------------------------------------------------------*/
+  603:      #elif (cPWR_DeepSleepMode==38)
+  604:      /*IrqControlLib_DisableAllIrqs(); */
+  605:        (void) PWRLib_RadioAcomaDozeReq( FALSE);
+  606:        Res.AllBits = PWRLib_MCU_WakeupReason.AllBits;
+  607:  
+  608:      /*---------------------------------------------------------------------------*/
+  609:      #elif (cPWR_DeepSleepMode==39)
+  610:     /* IrqControlLib_DisableAllIrqs(); */
+  611:        PWRLib_RadioHibernateReq();
+  612:        Res.AllBits = PWRLib_MCU_WakeupReason.AllBits;
+  613:  
+  614:     /*---------------------------------------------------------------------------*/
+  615:      #elif (cPWR_DeepSleepMode==40)
+  616:     /* IrqControlLib_DisableAllIrqs(); */
+  617:        PWRLib_RadioHibernateReq();
+  618:     /* IrqControlLib_DisableAllIrqs(); */
+  619:        PWRLib_RadioOffReq();
+  620:        Res.AllBits = PWRLib_MCU_WakeupReason.AllBits;
+  621:     /*---------------------------------------------------------------------------*/
+  622:      #else
+  623:        #error "*** ERROR: Not a valid cPWR_DeepSleepMode chosen"
+  624:      #endif
+  625:      PWRLib_MCU_WakeupReason.AllBits = 0;
+  008e 3f00     [5]             CLR   PWRLib_MCU_WakeupReason
+  626:      return Res;
+  0090 9efe0d   [5]             LDHX  13,SP
+  0093 9ee605   [4]             LDA   5,SP
+  0096 f7       [2]             STA   ,X
+  627:    #else  /* #if (cPWR_UsePowerDownMode) else */
+  628:      Res.AllBits = 0xff | (uint8_t) DozeDuration;			/* Last part to avoid unused warning*/
+  629:      PWRLib_MCU_WakeupReason.AllBits = 0;
+  630:      return Res;          /*(PWRLib_WakeupReason_t) DozeDuration;*/
+  631:    #endif  /* #if (cPWR_UsePowerDownMode) end*/
+  632:  }  /* PWR_HandleDeepSleep =====================================================*/
+  0097 a705     [2]             AIS   #5
+  0099 8d       [7]             RTC   
+  633:  
+  634:  
+  635:  /*****************************************************************************/
+  636:  /* Please see in PWRLib.h for description                                    */
+  637:  PWRLib_WakeupReason_t  PWR_HandleSleep( zbClock24_t DozeDuration) {
+  0000 8b       [2]             PSHH  
+  638:    PWRLib_WakeupReason_t   Res;
+  639:    
+  640:    (void)DozeDuration;
+  641:    Res.AllBits = 0;
+  0001 95       [2]             TSX   
+  0002 7f       [4]             CLR   ,X
+  642:    #if (cPWR_UsePowerDownMode)
+  643:    /* check whether timer is enabled ?		*/
+  644:    if (TPM1SC != 0) {
+  0003 3d08     [4]             TST   8
+  0005 2715     [3]             BEQ   L1C ;abs = 001c
+  645:    /* Insure that Key Wakeup interrupts are enabled!! Note insert next line of code if you
+  646:     always need the keyboard irq enabled while entering sleep.
+  647:     KBISC |= cKBI1SC;
+  648:    */ 
+  649:      /*---------------------------------------------------------------------------*/
+  650:      #if (cPWR_SleepMode==0)
+  651:        Res.AllBits = PWRLib_MCU_WakeupReason.AllBits;
+  652:        PWRLib_MCU_WakeupReason.AllBits = 0;
+  653:        return Res;
+  654:  
+  655:      /*---------------------------------------------------------------------------*/
+  656:      #elif (cPWR_SleepMode==1)
+  657:        Res.AllBits = PWRLib_MCU_WakeupReason.AllBits;
+  0007 b600     [3]             LDA   PWRLib_MCU_WakeupReason
+  0009 f7       [2]             STA   ,X
+  658:        PWRLib_MCUWait();
+  000a ac000000 [8]             CALL  PWRLib_MCUWait
+  659:        Res.AllBits = PWRLib_MCU_WakeupReason.AllBits;
+  000e b600     [3]             LDA   PWRLib_MCU_WakeupReason
+  0010 95       [2]             TSX   
+  0011 f7       [2]             STA   ,X
+  660:        Res.Bits.SleepTimeout = 1;
+  0012 aa40     [2]             ORA   #64
+  0014 f7       [2]             STA   ,X
+  661:        PWRLib_MCU_WakeupReason.AllBits = 0;
+  0015 3f00     [5]             CLR   PWRLib_MCU_WakeupReason
+  662:        return Res;
+  0017 9efe09   [5]             LDHX  9,SP
+  001a 2006     [3]             BRA   L22 ;abs = 0022
+  001c          L1C:    
+  663:      /*---------------------------------------------------------------------------*/
+  664:      #else
+  665:        #error "*** ERROR: Not a valid cPWR_SleepMode chosen"
+  666:      #endif
+  667:    } else {
+  668:      
+  669:      return Res;
+  001c 9efe09   [5]             LDHX  9,SP
+  001f 9ee601   [4]             LDA   1,SP
+  0022          L22:    
+  0022 f7       [2]             STA   ,X
+  670:    }
+  671:    #else  /* #if (cPWR_UsePowerDownMode) else */
+  672:  
+  673:      Res.AllBits = 0xff;
+  674:    
+  675:      return Res;
+  676:    #endif  /* #if (cPWR_UsePowerDownMode) end */
+  677:  }  /* PWR_HandleSleep =========================================================*/
+  0023 8a       [3]             PULH  
+  0024 8d       [7]             RTC   
+  678:  
+  679:  
+  680:  /************************************************************************************
+  681:  *************************************************************************************
+  682:  * Very Public functions, recommended for general use
+  683:  *************************************************************************************
+  684:  ************************************************************************************/
+  685:  
+  686:  /*****************************************************************************/
+  687:  /* Please see in PWRLib.h for description                                    */
+  688:  PWRLib_WakeupReason_t PWR_CheckForAndEnterNewPowerState(PWR_CheckForAndEnterNewPowerState_t NewPowerState, zbClock24_t DozeDuration) {
+  0000 8b       [2]             PSHH  
+  689:    PWRLib_WakeupReason_t    ReturnValue;
+  690:    ReturnValue.AllBits = 0;
+  0001 95       [2]             TSX   
+  0002 7f       [4]             CLR   ,X
+  691:  
+  692:    #if (cPWR_UsePowerDownMode)
+  693:      mSETPIN_CHKPWRSTATE_MODE;
+  694:  
+  695:      if ( NewPowerState == PWR_Run) {
+  0003 e608     [3]             LDA   8,X
+  0005 414d56   [4]             CBEQA #77,L5E ;abs = 005e
+  696:        /* ReturnValue = 0; */
+  697:      }
+  698:      else if ( NewPowerState == PWR_OFF) {
+  0008 a151     [2]             CMP   #81
+  000a 2609     [3]             BNE   L15 ;abs = 0015
+  000c          LC:     
+  699:        while ( PWR_AllOff() == FALSE)  ;    /* Never returns */
+  000c ac000000 [8]             CALL  PWR_AllOff
+  0010 4d       [1]             TSTA  
+  0011 264b     [3]             BNE   L5E ;abs = 005e
+  0013 20f7     [3]             BRA   LC ;abs = 000c
+  0015          L15:    
+  700:      }
+  701:      else if ( NewPowerState == PWR_Reset) {
+  0015 a150     [2]             CMP   #80
+  0017 2606     [3]             BNE   L1F ;abs = 001f
+  702:        PWRLib_Reset();                      /* Never returns	 */
+  0019 ac000000 [8]             CALL  PWRLib_Reset
+  703:      }
+  001d 203f     [3]             BRA   L5E ;abs = 005e
+  001f          L1F:    
+  704:       
+  705:      else if (( NewPowerState == PWR_DeepSleep) && PWR_DeepSleepAllowed()) {
+  001f a14f     [2]             CMP   #79
+  0021 261a     [3]             BNE   L3D ;abs = 003d
+  0023 ac000000 [8]             CALL  PWR_DeepSleepAllowed
+  0027 4d       [1]             TSTA  
+  0028 2713     [3]             BEQ   L3D ;abs = 003d
+  706:        ReturnValue = PWR_HandleDeepSleep( DozeDuration);
+  002a 95       [2]             TSX   
+  002b 89       [2]             PSHX  
+  002c 8b       [2]             PSHH  
+  002d 9efe09   [5]             LDHX  9,SP
+  0030 89       [2]             PSHX  
+  0031 8b       [2]             PSHH  
+  0032 9efe09   [5]             LDHX  9,SP
+  0035 89       [2]             PSHX  
+  0036 8b       [2]             PSHH  
+  0037 ac000000 [8]             CALL  PWR_HandleDeepSleep
+  707:      } 
+  003b 201f     [3]             BRA   L5C ;abs = 005c
+  003d          L3D:    
+  708:      else if (( NewPowerState == PWR_Sleep) && PWR_SleepAllowed()) {
+  003d 95       [2]             TSX   
+  003e e608     [3]             LDA   8,X
+  0040 a14e     [2]             CMP   #78
+  0042 261a     [3]             BNE   L5E ;abs = 005e
+  0044 ac000000 [8]             CALL  PWR_SleepAllowed
+  0048 4d       [1]             TSTA  
+  0049 2713     [3]             BEQ   L5E ;abs = 005e
+  709:        ReturnValue = PWR_HandleSleep( DozeDuration);
+  004b 95       [2]             TSX   
+  004c 89       [2]             PSHX  
+  004d 8b       [2]             PSHH  
+  004e 9efe09   [5]             LDHX  9,SP
+  0051 89       [2]             PSHX  
+  0052 8b       [2]             PSHH  
+  0053 9efe09   [5]             LDHX  9,SP
+  0056 89       [2]             PSHX  
+  0057 8b       [2]             PSHH  
+  0058 ac000000 [8]             CALL  PWR_HandleSleep
+  005c          L5C:    
+  005c a706     [2]             AIS   #6
+  005e          L5E:    
+  710:      }
+  711:      else {
+  712:        /* ReturnValue = FALSE; */
+  713:      }
+  714:      /*--- Come here after sleeping or ... */
+  715:      mMCU_SetStatus( MCU_Running);
+  716:      mRESETPIN_CHKPWRSTATE_MODE
+  717:      PWRLib_MCU_WakeupReason.AllBits = 0;                     /* Clear wakeup reason */
+  005e 3f00     [5]             CLR   PWRLib_MCU_WakeupReason
+  718:    #else
+  719:      ReturnValue.AllBits = 0xff | (NewPowerState > 0) | (DozeDuration > 0); 
+  720:                                /* To remove warning for variabels in functioncall */
+  721:    #endif  /* #if (cPWR_UsePowerDownMode) */
+  722:  
+  723:    return ReturnValue;
+  0060 9efe0a   [5]             LDHX  10,SP
+  0063 9ee601   [4]             LDA   1,SP
+  0066 f7       [2]             STA   ,X
+  724:  }   /* PWR_CheckForAndEnterNewPowerState ============================================*/
+  0067 8a       [3]             PULH  
+  0068 8d       [7]             RTC   
+  725:  
+  726:  
+  727:  /*****************************************************************************/
+  728:  /* Please see in PWRLib.h for description                                    */
+  729:  PWRLib_LVD_VoltageLevel_t   PWRLib_LVD_ReportLevel(void) {
+  730:    PWRLib_LVD_VoltageLevel_t   Level;
+  731:  
+  732:    #if ((cPWR_LVD_Enable == 0) || (cPWR_LVD_Enable == 3))
+  733:      Level = PWR_NODEPOWER_LEVEL_100;
+  0000 a60c     [2]             LDA   #12
+  734:    #elif (cPWR_LVD_Enable==1)
+  735:      Level = PWRLib_LVD_CollectLevel();
+  736:    #elif (cPWR_LVD_Enable==2)
+  737:      Level = PWRLib_LVD_SavedLevel;
+  738:    #else
+  739:      #error "*** ERROR: Illegal value for cPWR_LVD_Enable"
+  740:    #endif /* #if (cPWR_LVD_Enable) */
+  741:    return Level;
+  742:  }  /* PWRLib_LVD_ReportLevel ================================================*/
+  0002 8d       [7]             RTC   
+  743:  
+  744:  
+  745:  /*****************************************************************************/
+  746:  /* Please see in PWR.h for description                                       */
+  747:  void PWR_CheckForAndEnterNewPowerState_Init(void) {
+  748:  #if (cPWR_UsePowerDownMode)
+  749:  
+  750:    PWRLib_Init();
+  0000 ac000000 [8]             CALL  PWRLib_Init
+  751:  
+  752:  #endif  /* #if (cPWR_UsePowerDownMode) */
+  753:  }   /* PWR_CheckForAndEnterNewPowerState_Init ==================================*/
+  0004 8d       [7]             RTC   
+  754:  
+  755:  /********************************************************************************/
+  756:  PWRLib_WakeupReason_t PWR_EnterLowPower(void)
+  757:  {
+  0000 89       [2]             PSHX  
+  0001 8b       [2]             PSHH  
+  0002 a7fe     [2]             AIS   #-2
+  758:  		 
+  759:    uint8_t ccr;
+  760:    PWRLib_WakeupReason_t ReturnValue;  
+  761:    ReturnValue.AllBits = 0;
+  0004 95       [2]             TSX   
+  0005 7f       [4]             CLR   ,X
+  762:    
+  763:    
+  764:    if (PWRLib_LVD_ReportLevel() == PWR_NODEPOWER_LEVEL_CRITICAL) {
+  0006 ac000000 [8]             CALL  PWRLib_LVD_ReportLevel
+  000a 4d       [1]             TSTA  
+  000b 2611     [3]             BNE   L1E ;abs = 001e
+  765:      /* Voltage <= 1.8V so enter power-off state - to disable false Tx'ing(void)*/
+  766:      ReturnValue = PWR_CheckForAndEnterNewPowerState( PWR_OFF, 0);
+  000d 95       [2]             TSX   
+  000e 89       [2]             PSHX  
+  000f 8b       [2]             PSHH  
+  0010 a651     [2]             LDA   #81
+  0012 87       [2]             PSHA  
+  0013 4f       [1]             CLRA  
+  0014 87       [2]             PSHA  
+  0015 87       [2]             PSHA  
+  0016 87       [2]             PSHA  
+  0017 87       [2]             PSHA  
+  0018 ac000000 [8]             CALL  PWR_CheckForAndEnterNewPowerState
+  001c a707     [2]             AIS   #7
+  001e          L1E:    
+  767:    }
+  768:    IrqControlLib_BackupIrqStatus(ccr);    
+  001e 85       [1]             TPA   
+  001f 95       [2]             TSX   
+  0020 e701     [3]             STA   1,X
+  769:    IrqControlLib_DisableAllIrqs();
+  0022 9b       [1]             SEI   
+  770:    if (TS_PendingEvents() == FALSE)
+  0023 ac000000 [8]             CALL  TS_PendingEvents
+  0027 4d       [1]             TSTA  
+  0028 2633     [3]             BNE   L5D ;abs = 005d
+  771:    {		 
+  772:      PWRLib_SetCurrentZigbeeStackPowerState(StackPS_DeepSleep);
+  002a a67c     [2]             LDA   #124
+  002c c70000   [4]             STA   PWRLib_StackPS
+  773:      if (TMR_AreAllTimersOff())  /*No timer running*/
+  002f ac000000 [8]             CALL  TMR_AreAllTimersOff
+  0033 4d       [1]             TSTA  
+  0034 2716     [3]             BEQ   L4C ;abs = 004c
+  774:      {			
+  775:        /* if Low Power Capability is enabled*/
+  776:        /* if more low power timers are running, stop the hardware timer
+  777:         and save the spend time in millisecond that wasn't counted.
+  778:         */
+  779:        notCountedTimeBeforeSleep = TMR_NotCountedMillisTimeBeforeSleep();
+  0036 450000   [3]             LDHX  @notCountedTimeBeforeSleep
+  0039 ac000000 [8]             CALL  TMR_NotCountedMillisTimeBeforeSleep
+  780:      
+  781:        ReturnValue = PWR_CheckForAndEnterNewPowerState ( PWR_DeepSleep, cPWR_RTITicks);
+  003d 95       [2]             TSX   
+  003e 89       [2]             PSHX  
+  003f 8b       [2]             PSHH  
+  0040 a64f     [2]             LDA   #79
+  0042 87       [2]             PSHA  
+  0043 ae03     [2]             LDX   #3
+  0045 8c       [1]             CLRH  
+  0046 89       [2]             PSHX  
+  0047 8b       [2]             PSHH  
+  0048 8b       [2]             PSHH  
+  0049 8b       [2]             PSHH  
+  782:      }else /*timers are running*/
+  004a 200b     [3]             BRA   L57 ;abs = 0057
+  004c          L4C:    
+  783:      { 	 
+  784:       ReturnValue = PWR_CheckForAndEnterNewPowerState ( PWR_Sleep, 0);
+  004c 95       [2]             TSX   
+  004d 89       [2]             PSHX  
+  004e 8b       [2]             PSHH  
+  004f a64e     [2]             LDA   #78
+  0051 87       [2]             PSHA  
+  0052 4f       [1]             CLRA  
+  0053 87       [2]             PSHA  
+  0054 87       [2]             PSHA  
+  0055 87       [2]             PSHA  
+  0056 87       [2]             PSHA  
+  0057          L57:    
+  0057 ac000000 [8]             CALL  PWR_CheckForAndEnterNewPowerState
+  005b a707     [2]             AIS   #7
+  005d          L5D:    
+  785:      }
+  786:    } /* enable irq's if there is pending evens */
+  787:    IrqControlLib_RestoreIrqStatus(ccr);
+  005d 95       [2]             TSX   
+  005e e601     [3]             LDA   1,X
+  0060 84       [1]             TAP   
+  788:      
+  789:    return ReturnValue;
+  0061 9efe03   [5]             LDHX  3,SP
+  0064 9ee601   [4]             LDA   1,SP
+  0067 f7       [2]             STA   ,X
+  790:  }
+  0068 a704     [2]             AIS   #4
+  006a 8d       [7]             RTC   
+  791:  
+  792:  /********************************************************************************/
+  793:  /* Please see in PWR_Interface.h for description                                          */
+  794:  void PWR_SetDozeTimeMs(uint32_t dozeTimeMs)
+  795:  {
+  796:   if(dozeTimeMs == 0) 
+  0000 95       [2]             TSX   
+  0001 e606     [3]             LDA   6,X
+  0003 ea05     [3]             ORA   5,X
+  0005 ea04     [3]             ORA   4,X
+  0007 ea03     [3]             ORA   3,X
+  0009 2710     [3]             BEQ   L1B ;abs = 001b
+  797:   {
+  798:    return;
+  799:   }
+  800:   mPWR_DozeDurationMs = dozeTimeMs;
+  000b 9efe06   [5]             LDHX  6,SP
+  000e 960002   [5]             STHX  mPWR_DozeDurationMs:2
+  0011 9efe04   [5]             LDHX  4,SP
+  0014 960000   [5]             STHX  mPWR_DozeDurationMs
+  801:   mPWR_DozeDurationSymbols = FALSE;
+  0017 4f       [1]             CLRA  
+  0018 c70000   [4]             STA   mPWR_DozeDurationSymbols
+  001b          L1B:    
+  802:  }
+  001b 8d       [7]             RTC   
+  803:  /********************************************************************************/
+  804:  
+  805:  /********************************************************************************/
+  806:  /* Please see in PWR_Interface.h for description                                          */
+  807:  void PWR_SetDozeTimeSymbols(uint32_t dozeTimeSym)
+  808:  {
+  809:   if(dozeTimeSym == 0) 
+  0000 95       [2]             TSX   
+  0001 e606     [3]             LDA   6,X
+  0003 ea05     [3]             ORA   5,X
+  0005 ea04     [3]             ORA   4,X
+  0007 ea03     [3]             ORA   3,X
+  0009 2711     [3]             BEQ   L1C ;abs = 001c
+  810:   {
+  811:    return;
+  812:   }
+  813:   mPWR_DozeDurationMs = dozeTimeSym;
+  000b 9efe06   [5]             LDHX  6,SP
+  000e 960002   [5]             STHX  mPWR_DozeDurationMs:2
+  0011 9efe04   [5]             LDHX  4,SP
+  0014 960000   [5]             STHX  mPWR_DozeDurationMs
+  814:   mPWR_DozeDurationSymbols = TRUE; 
+  0017 a601     [2]             LDA   #1
+  0019 c70000   [4]             STA   mPWR_DozeDurationSymbols
+  001c          L1C:    
+  815:  }
+  001c 8d       [7]             RTC   
+  816:  /********************************************************************************/
+  817:   
+  818:  /******************************************************************************
+  819:  *******************************************************************************
+  820:  * Private functions
+  821:  *******************************************************************************
+  822:  ******************************************************************************/
+  823:  
+  824:  /******************************************************************************
+  825:  *******************************************************************************
+  826:  * Private Debug stuff
+  827:  *******************************************************************************
+  828:  ******************************************************************************/
+  829:  

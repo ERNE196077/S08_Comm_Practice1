@@ -1,0 +1,410 @@
+ANSI-C/cC++ Compiler for HC08 V-5.0.45 Build 14019, Jan 20 2014
+
+    1:  /************************************************************************************
+    2:  * Includes the Comm Utils.
+    3:  *
+    4:  * (c) Copyright 2011, Freescale, Inc. All rights reserved.
+    5:  *
+    6:  * No part of this document must be reproduced in any form - including copied,
+    7:  * transcribed, printed or by any electronic means - without specific written
+    8:  * permission from Freescale Semiconductor.
+    9:  *
+   10:  *
+   11:  ************************************************************************************/
+   12:  #include "EmbeddedTypes.h"
+   13:  #include "CommUtil.h"
+   14:  
+   15:  /******************************************************************************/
+   16:  /******************************************************************************/
+   17:  
+   18:  /************************************************************************************
+   19:  *************************************************************************************
+   20:  * Private macros
+   21:  *************************************************************************************
+   22:  ************************************************************************************/
+   23:  
+   24:  /************************************************************************************
+   25:  *************************************************************************************
+   26:  * Private prototypes
+   27:  *************************************************************************************/
+   28:  
+   29:  /************************************************************************************
+   30:  *************************************************************************************
+   31:  * Private type definitions
+   32:  *************************************************************************************
+   33:  ************************************************************************************/
+   34:  
+   35:  /************************************************************************************
+   36:  *************************************************************************************
+   37:  * Public memory declarations
+   38:  *************************************************************************************
+   39:  ************************************************************************************/
+   40:   
+   41:  /************************************************************************************
+   42:  *************************************************************************************
+   43:  * Private memory declarations
+   44:  *************************************************************************************
+   45:  ************************************************************************************/
+   46:  
+   47:  /************************************************************************************
+   48:  *************************************************************************************
+   49:  * Public functions
+   50:  *************************************************************************************
+   51:  ************************************************************************************/
+   52:  
+   53:  #if (gComm_Type_d != gNoComm_c)
+   54:  
+   55:  /************************************************************************************/
+   56:  
+   57:  void CommUtil_TxCallback(unsigned char const *pBuf)
+   58:  {
+   59:    (void) pBuf;
+   60:  }
+  0000 8d       [7]             RTC   
+   61:  
+   62:  /************************************************************************************/
+   63:  
+   64:  void CommUtil_Tx(uint8_t * pData, uint8_t length)
+   65:  {
+  0000 89       [2]             PSHX  
+  0001 8b       [2]             PSHH  
+  0002 87       [2]             PSHA  
+  0003          L3:     
+   66:    /* wait until module can insert message into Comm buffers */
+   67:    while(!Comm_Transmit((unsigned char const*)pData,(index_t)length,NULL));
+  0003 9efe02   [5]             LDHX  2,SP
+  0006 89       [2]             PSHX  
+  0007 8b       [2]             PSHH  
+  0008 95       [2]             TSX   
+  0009 e602     [3]             LDA   2,X
+  000b 87       [2]             PSHA  
+  000c 4f       [1]             CLRA  
+  000d 87       [2]             PSHA  
+  000e 87       [2]             PSHA  
+  000f 87       [2]             PSHA  
+  0010 ac000000 [8]             CALL  Uart1_Transmit
+  0014 a706     [2]             AIS   #6
+  0016 4d       [1]             TSTA  
+  0017 27ea     [3]             BEQ   L3 ;abs = 0003
+  0019          L19:    
+   68:    /* wait until tx complete */
+   69:    while (Comm_IsTxActive());      
+  0019 ac000000 [8]             CALL  Uart1_IsTxActive
+  001d 4d       [1]             TSTA  
+  001e 26f9     [3]             BNE   L19 ;abs = 0019
+   70:  }
+  0020 a703     [2]             AIS   #3
+  0022 8d       [7]             RTC   
+   71:  
+   72:  /************************************************************************************/
+   73:  
+   74:  void CommUtil_Print(uint8_t* pString, commUtilBlock_t allowToBlock)
+   75:  {
+  0000 89       [2]             PSHX  
+  0001 8b       [2]             PSHH  
+  0002 87       [2]             PSHA  
+  0003 a7fe     [2]             AIS   #-2
+   76:    uint16_t i = 0;
+  0005 9e6f02   [6]             CLR   2,SP
+  0008 9e6f01   [6]             CLR   1,SP
+   77:    uint8_t*  pTmpString = pString ;
+   78:    
+   79:    while (*pTmpString != '\0') 
+  000b 200a     [3]             BRA   L17 ;abs = 0017
+  000d          LD:     
+   80:    {
+   81:      pTmpString++;
+  000d af01     [2]             AIX   #1
+   82:      i++;
+  000f 9e6c02   [6]             INC   2,SP
+  0012 2603     [3]             BNE   L17 ;abs = 0017
+  0014 9e6c01   [6]             INC   1,SP
+  0017          L17:    
+  0017 7d       [3]             TST   ,X
+  0018 26f3     [3]             BNE   LD ;abs = 000d
+   83:    } 
+   84:    if(allowToBlock)
+  001a 95       [2]             TSX   
+  001b 6d02     [4]             TST   2,X
+  001d 270c     [3]             BEQ   L2B ;abs = 002b
+   85:    {
+   86:      /* wait until module can insert message into Comm buffers and until tx completes */  
+   87:  	CommUtil_Tx(pString,(uint8_t)i);
+  001f 9efe04   [5]             LDHX  4,SP
+  0022 9ee602   [4]             LDA   2,SP
+  0025 ac000000 [8]             CALL  CommUtil_Tx
+   88:    }
+  0029 2013     [3]             BRA   L3E ;abs = 003e
+  002b          L2B:    
+   89:    else
+   90:    {
+   91:      (void)Comm_Transmit((unsigned char const*)pString,(index_t)i,NULL);
+  002b 9efe04   [5]             LDHX  4,SP
+  002e 89       [2]             PSHX  
+  002f 8b       [2]             PSHH  
+  0030 95       [2]             TSX   
+  0031 e603     [3]             LDA   3,X
+  0033 87       [2]             PSHA  
+  0034 4f       [1]             CLRA  
+  0035 87       [2]             PSHA  
+  0036 87       [2]             PSHA  
+  0037 87       [2]             PSHA  
+  0038 ac000000 [8]             CALL  Uart1_Transmit
+  003c a706     [2]             AIS   #6
+  003e          L3E:    
+   92:    }
+   93:  }
+  003e a705     [2]             AIS   #5
+  0040 8d       [7]             RTC   
+   94:  
+   95:  /************************************************************************************/
+   96:  
+   97:  /* Trasform from hex to ascii */
+   98:  static uint8_t HexToAscii(uint8_t hex)
+   99:  {
+  100:    hex &= 0x0F;
+  0000 a40f     [2]             AND   #15
+  101:    return hex + ((hex <= 9) ? '0' : ('A'-10));
+  0002 a109     [2]             CMP   #9
+  0004 2303     [3]             BLS   L9 ;abs = 0009
+  0006 ae37     [2]             LDX   #55
+  0008 65       [3]             SKIP2 LB ;abs = 000b
+  0009          L9:     
+  0009 ae30     [2]             LDX   #48
+  000b          LB:     
+  000b 89       [2]             PSHX  
+  000c 95       [2]             TSX   
+  000d fb       [3]             ADD   ,X
+  000e 8a       [3]             PULH  
+  102:  }
+  000f 8d       [7]             RTC   
+  103:  
+  104:  /************************************************************************************/
+  105:  
+  106:  void CommUtil_PrintHex(uint8_t *hex, uint8_t len, uint8_t flags)
+  107:  {
+  0000 89       [2]             PSHX  
+  0001 87       [2]             PSHA  
+  0002 a7f8     [2]             AIS   #-8
+  108:    uint8_t i=0; 
+  0004 9e6f02   [6]             CLR   2,SP
+  109:    uint8_t hexString[6]; /* 2 bytes  - hexadecimal display 
+  110:                             1 byte   - separator ( comma)
+  111:  						   1 byte   - separator ( space)
+  112:                             2 bytes  - new line (\n\r)  */
+  113:    
+  114:    if(! (flags & gPrtHexBigEndian_c))
+  0007 a501     [2]             BIT   #1
+  0009 260f     [3]             BNE   L1A ;abs = 001a
+  115:     {
+  116:      hex = hex + (len-1);
+  000b 8c       [1]             CLRH  
+  000c afff     [2]             AIX   #-1
+  000e 9f       [1]             TXA   
+  000f 8b       [2]             PSHH  
+  0010 95       [2]             TSX   
+  0011 eb0f     [3]             ADD   15,X
+  0013 e70f     [3]             STA   15,X
+  0015 86       [3]             PULA  
+  0016 e90e     [3]             ADC   14,X
+  0018 e70e     [3]             STA   14,X
+  001a          L1A:    
+  001a cc00c3   [4]             JMP   LC3 ;abs = 00c3
+  001d          L1D:    
+  117:     }
+  118:     
+  119:    while(len)
+  120:    {
+  121:      /* wait until previous hex print transmission is over */  
+  122:      while (Comm_IsTxActive());  
+  001d ac000000 [8]             CALL  Uart1_IsTxActive
+  0021 4d       [1]             TSTA  
+  0022          L22:    
+  0022 26f9     [3]             BNE   L1D ;abs = 001d
+  123:        
+  124:      /* start preparing the print of a new byte */
+  125:      i=0;
+  126:      hexString[i++] = HexToAscii((*hex)>>4);
+  0024 9efe0e   [5]             LDHX  14,SP
+  0027 f6       [3]             LDA   ,X
+  0028 62       [1]             NSA   
+  0029 a40f     [2]             AND   #15
+  002b ac000000 [8]             CALL  HexToAscii
+  002f 95       [2]             TSX   
+  0030 e702     [3]             STA   2,X
+  127:      hexString[i++] = HexToAscii( *hex);
+  0032 a602     [2]             LDA   #2
+  0034 e701     [3]             STA   1,X
+  0036 9efe0e   [5]             LDHX  14,SP
+  0039 f6       [3]             LDA   ,X
+  003a ac000000 [8]             CALL  HexToAscii
+  003e 95       [2]             TSX   
+  003f e703     [3]             STA   3,X
+  128:  
+  129:      if(flags & gPrtHexCommas_c)
+  0041 e608     [3]             LDA   8,X
+  0043 a504     [2]             BIT   #4
+  0045 2708     [3]             BEQ   L4F ;abs = 004f
+  130:       {
+  131:        hexString[i++] = ',';
+  0047 a603     [2]             LDA   #3
+  0049 e701     [3]             STA   1,X
+  004b a62c     [2]             LDA   #44
+  004d e704     [3]             STA   4,X
+  004f          L4F:    
+  132:       }
+  133:      if(flags & gPrtHexSpaces_c) 
+  004f e608     [3]             LDA   8,X
+  0051 a508     [2]             BIT   #8
+  0053 270f     [3]             BEQ   L64 ;abs = 0064
+  134:       { 
+  135:        hexString[i++] = ' ';
+  0055 e601     [3]             LDA   1,X
+  0057 87       [2]             PSHA  
+  0058 4c       [1]             INCA  
+  0059 e701     [3]             STA   1,X
+  005b 95       [2]             TSX   
+  005c ac0000d5 [8]             CALL  CommUtil_PrintHex:213
+  0060 88       [3]             PULX  
+  0061 a620     [2]             LDA   #32
+  0063 f7       [2]             STA   ,X
+  0064          L64:    
+  136:       }
+  137:      hex = hex + (flags & gPrtHexBigEndian_c ? 1 : -1);
+  0064 95       [2]             TSX   
+  0065 e608     [3]             LDA   8,X
+  0067 a501     [2]             BIT   #1
+  0069 2605     [3]             BNE   L70 ;abs = 0070
+  006b 45ffff   [3]             LDHX  #-1
+  006e 2003     [3]             BRA   L73 ;abs = 0073
+  0070          L70:    
+  0070 ae01     [2]             LDX   #1
+  0072 8c       [1]             CLRH  
+  0073          L73:    
+  0073 9f       [1]             TXA   
+  0074 87       [2]             PSHA  
+  0075 8b       [2]             PSHH  
+  0076 86       [3]             PULA  
+  0077 95       [2]             TSX   
+  0078 e701     [3]             STA   1,X
+  007a 86       [3]             PULA  
+  007b 95       [2]             TSX   
+  007c eb0e     [3]             ADD   14,X
+  007e e70e     [3]             STA   14,X
+  0080 f6       [3]             LDA   ,X
+  0081 e90d     [3]             ADC   13,X
+  0083 e70d     [3]             STA   13,X
+  138:      len--;
+  139:      
+  140:      if((len == 0) && (flags & gPrtHexNewLine_c))
+  0085 6b0928   [7]             DBNZ  9,X,LB0 ;abs = 00b0
+  0088 e608     [3]             LDA   8,X
+  008a a502     [2]             BIT   #2
+  008c 2722     [3]             BEQ   LB0 ;abs = 00b0
+  141:       {
+  142:        hexString[i++] = '\n';
+  008e e601     [3]             LDA   1,X
+  0090 4c       [1]             INCA  
+  0091 af02     [2]             AIX   #2
+  0093 87       [2]             PSHA  
+  0094 9f       [1]             TXA   
+  0095 9eeb03   [4]             ADD   3,SP
+  0098 87       [2]             PSHA  
+  0099 8b       [2]             PSHH  
+  009a 86       [3]             PULA  
+  009b a900     [2]             ADC   #0
+  009d 87       [2]             PSHA  
+  009e 8a       [3]             PULH  
+  009f 88       [3]             PULX  
+  00a0 a60a     [2]             LDA   #10
+  00a2 f7       [2]             STA   ,X
+  143:        hexString[i++] = '\r';
+  00a3 95       [2]             TSX   
+  00a4 f6       [3]             LDA   ,X
+  00a5 4c       [1]             INCA  
+  00a6 e702     [3]             STA   2,X
+  00a8 ac0000d5 [8]             CALL  CommUtil_PrintHex:213
+  00ac 88       [3]             PULX  
+  00ad a60d     [2]             LDA   #13
+  00af f7       [2]             STA   ,X
+  00b0          LB0:    
+  144:       }
+  145:       /* transmit formatted byte */      
+  146:      (void)Comm_Transmit((unsigned char const*)hexString,(index_t)i,NULL);   
+  00b0 95       [2]             TSX   
+  00b1 af02     [2]             AIX   #2
+  00b3 89       [2]             PSHX  
+  00b4 8b       [2]             PSHH  
+  00b5 95       [2]             TSX   
+  00b6 e603     [3]             LDA   3,X
+  00b8 87       [2]             PSHA  
+  00b9 4f       [1]             CLRA  
+  00ba 87       [2]             PSHA  
+  00bb 87       [2]             PSHA  
+  00bc 87       [2]             PSHA  
+  00bd ac000000 [8]             CALL  Uart1_Transmit
+  00c1 a706     [2]             AIS   #6
+  00c3          LC3:    
+  00c3 95       [2]             TSX   
+  00c4 6d09     [4]             TST   9,X
+  00c6 2703     [3]             BEQ   LCB ;abs = 00cb
+  00c8 cc0022   [4]             JMP   L22 ;abs = 0022
+  00cb          LCB:    
+  147:    }
+  148:    /* wait to complete the last transmission */
+  149:    while (Comm_IsTxActive());   
+  00cb ac000000 [8]             CALL  Uart1_IsTxActive
+  00cf 4d       [1]             TSTA  
+  00d0 26f9     [3]             BNE   LCB ;abs = 00cb
+  150:  }
+  00d2 a70a     [2]             AIS   #10
+  00d4 8d       [7]             RTC   
+  00d5          LD5:    
+  00d5 af03     [2]             AIX   #3
+  00d7 9f       [1]             TXA   
+  00d8 8b       [2]             PSHH  
+  00d9 95       [2]             TSX   
+  00da eb04     [3]             ADD   4,X
+  00dc e704     [3]             STA   4,X
+  00de 86       [3]             PULA  
+  00df a900     [2]             ADC   #0
+  00e1 87       [2]             PSHA  
+  00e2 8a       [3]             PULH  
+  00e3 8d       [7]             RTC   
+  151:  
+  152:  /************************************************************************************/
+  153:  
+  154:  #else /* (gComm_Type_d != gNoComm_c) */
+  155:  
+  156:  /************************************************************************************/
+  157:  /* Create  dummy functions  */
+  158:  /************************************************************************************/
+  159:  
+  160:  void CommUtil_Print(char * pString, commUtilBlock_t allowToBlock)
+  161:  {
+  162:    /* Avoid compiler warning */
+  163:    (void)pString;
+  164:    (void)allowToBlock;
+  165:  }
+  166:  
+  167:  /************************************************************************************/
+  168:  
+  169:  void CommUtil_PrintHex(uint8_t *hex, uint8_t len, uint8_t flags)
+  170:  {
+  171:    /* Avoid compiler warning */
+  172:    (void)hex;
+  173:    (void)len;
+  174:    (void)flags;
+  175:  }
+  176:  
+  177:  /************************************************************************************/
+  178:  
+  179:  void CommUtil_Tx(uint8_t * pData, uint8_t length){
+  180:    /* Avoid compiler warning */
+  181:    (void)pData;
+  182:    (void)length;
+  183:  }
+  184:  
+  185:  /************************************************************************************/
+  186:  #endif  /* (gComm_Type_d != gNoComm_c) */
+  187:  

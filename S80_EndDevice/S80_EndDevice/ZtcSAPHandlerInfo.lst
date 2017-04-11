@@ -1,0 +1,306 @@
+ANSI-C/cC++ Compiler for HC08 V-5.0.45 Build 14019, Jan 20 2014
+
+    1:  /******************************************************************************
+    2:  * Data and functions related to information about SAP Handlers.
+    3:  *
+    4:  * Copyright (c) 2008, Freescale, Inc.  All rights reserved.
+    5:  *
+    6:  *
+    7:  * No part of this document must be reproduced in any form - including copied,
+    8:  * transcribed, printed or by any electronic means - without specific written
+    9:  * permission from  Freescale Semiconductor.
+   10:  *
+   11:  * This file contains definitions of read-only data used by Ztc.
+   12:  * Due to their size, the opcode description tables are in a separate file.
+   13:  *
+   14:  ******************************************************************************/
+   15:  
+   16:  #include "EmbeddedTypes.h"
+   17:  
+   18:  #include "ZtcInterface.h"
+   19:  
+   20:  
+   21:  #if gMacStandAlone_d
+   22:  #include "Mapp.h"
+   23:  #endif
+   24:  
+   25:  
+   26:  #if gZtcIncluded_d
+   27:  
+   28:  #include "AppAspInterface.h"
+   29:  
+   30:  #include "AspZtc.h"
+   31:  
+   32:  #include "ZtcPrivate.h"
+   33:  #include "ZtcClientCommunication.h"
+   34:  #include "ZtcMsgTypeInfo.h"
+   35:  #include "ZtcSAPHandlerInfo.h"
+   36:  #include "ZtcCopyData.h"
+   37:  #include "Telec.h"
+   38:  
+   39:  /******************************************************************************
+   40:  *******************************************************************************
+   41:  * Public memory definitions
+   42:  *******************************************************************************
+   43:  ******************************************************************************/
+   44:  
+   45:  /* Master table of information about SAP Handlers. */
+   46:  #define Sap(opcodeGroup, converse, intSAPIdName, \
+   47:              pSAPFunc, modeTableIndex, msgQueue, msgEvent, pTaskID, \
+   48:              msgTypeTable, msgTypeTableLen) \
+   49:      extern ztcMsgTypeInfo_t const msgTypeTable[]; \
+   50:      extern index_t const msgTypeTableLen;
+   51:  #include "ZtcSAPHandlerInfoTbl.h"
+   52:  
+   53:  #if (gZtcMacGetSetPIBCapability_d || \
+   54:       gSAPMessagesEnableMcps_d     || \
+   55:       gSAPMessagesEnableMlme_d     || \
+   56:       gSAPMessagesEnableAsp_d      || \
+   57:       gZtcErrorReporting_d         || \
+   58:       gSAPMessagesEnableNlde_d     || \
+   59:       gSAPMessagesEnableNlme_d     || \
+   60:       gSAPMessagesEnableApsde_d    || \
+   61:       gSAPMessagesEnableAfde_d     || \
+   62:       gSAPMessagesEnableApsme_d    || \
+   63:       gSAPMessagesEnableZdp_d)
+   64:  #define Sap(opcodeGroup, converse, intSAPIdName, \
+   65:              pSAPFunc, modeTableIndex, msgQueue, msgEvent, pTaskID, \
+   66:              msgTypeTable, msgTypeTableLen) \
+   67:    {opcodeGroup, converse, intSAPIdName, pSAPFunc, modeTableIndex, \
+   68:     msgQueue, msgEvent, pTaskID, msgTypeTable, &msgTypeTableLen},
+   69:  ztcSAPHandlerInfo_t const gaZtcSAPHandlerInfo[] = {
+   70:  #include "ZtcSAPHandlerInfoTbl.h"
+   71:  };
+   72:  #else
+   73:  #define Sap(opcodeGroup, converse, intSAPIdName, \
+   74:              pSAPFunc, modeTableIndex, msgQueue, msgEvent, pTaskID, \
+   75:              msgTypeTable, msgTypeTableLen) \
+   76:    {opcodeGroup, converse, intSAPIdName, pSAPFunc, modeTableIndex, \
+   77:     msgQueue, msgEvent, pTaskID, msgTypeTable, &msgTypeTableLen},
+   78:  ztcSAPHandlerInfo_t const gaZtcSAPHandlerInfo[1];
+   79:  #endif
+   80:  /****************************************************************************/
+   81:  
+   82:  /* Current SAP Handler modes. One byte per SAP Handler. There are only three */
+   83:  /* modes, so 2 bits would be enough, but there aren't very many SAP Handlers. */
+   84:  #define SapMode(name, index, defaultMode)   defaultMode,
+   85:  
+   86:  ztcSAPMode_t maZtcSAPModeTable[] = {    /* Cannot be const. */
+   87:  #include "ZtcSAPHandlerInfoTbl.h"
+   88:  };
+   89:  index_t const mZtcSAPModeTableLen = NumberOfElements(maZtcSAPModeTable);
+   90:  
+   91:  /******************************************************************************
+   92:  *******************************************************************************
+   93:  * Private memory declarations
+   94:  *******************************************************************************
+   95:  ******************************************************************************/
+   96:  
+   97:  #define DisabledSap(opcodeGroup) opcodeGroup,
+   98:  
+   99:  /* Used by pZtcSAPInfoFromOpcodeGroup() to recognized opcode groups */
+  100:  /* that have been compiled out, to improve error messages. */
+  101:  #if gZtcErrorReporting_d
+  102:  ztcOpcodeGroup_t const maDisabledOpcodeGroups[] = {
+  103:  #include "ZtcSAPHandlerInfoTbl.h"
+  104:    gZtcInvalidOpcodeGroup_c              /* End of table mark. */
+  105:  };
+  106:  #endif
+  107:  
+  108:  /******************************************************************************
+  109:  *******************************************************************************
+  110:  * Public functions
+  111:  *******************************************************************************
+  112:  ******************************************************************************/
+  113:  
+  114:  /* Given an internal SAP Handler id, return a pointer to the corresponding
+  115:   * entry in the SAP Handler info table. If the internal SAP Handler id is
+  116:   * not found in the table, return NULL.
+  117:   */
+  118:  ztcSAPHandlerInfo_t const *pZtcSAPInfoFromIntSAPId
+  119:    (
+  120:    ztcIntSAPId_t const intSAPId
+  121:    )
+  122:  {
+  123:    index_t i;
+  124:  
+  125:    for (i = 0; i < NumberOfElements(gaZtcSAPHandlerInfo); ++i) {
+  126:      if (gaZtcSAPHandlerInfo[i].intSAPId == intSAPId) {
+  127:        return &(gaZtcSAPHandlerInfo[i]);
+  128:      }
+  129:    }
+  130:  
+  131:    return NULL;
+  132:  }                                       /* pZtcSAPInfoFromIntSAPId() */
+  133:  
+  134:  /****************************************************************************/
+  135:  
+  136:  /* Given an opcode group, return a pointer to the corresponding entry in the
+  137:   * SAP Handler info table. If the opcode group is not found in the table,
+  138:   * return NULL. If the opcode group is found in the disables table, return
+  139:   * 0x0001.
+  140:   */
+  141:  ztcSAPHandlerInfo_t const *pZtcSAPInfoFromOpcodeGroup
+  142:    (
+  143:    ztcOpcodeGroup_t const opcodeGroup
+  144:    )
+  145:  {
+  146:    index_t i;
+  147:  
+  148:    for (i = 0; i < NumberOfElements(gaZtcSAPHandlerInfo); ++i) {
+  149:      if (gaZtcSAPHandlerInfo[i].opcodeGroup == opcodeGroup) {
+  150:        return &(gaZtcSAPHandlerInfo[i]);
+  151:      }
+  152:    }
+  153:  
+  154:  #if gZtcErrorReporting_d
+  155:    i = 0;
+  156:    while (maDisabledOpcodeGroups[ i ] != gZtcSAPModeInvalid_c) {
+  157:      if (maDisabledOpcodeGroups[ i++ ] == opcodeGroup) {
+  158:        return gZtcIsDisabledOpcodeGroup_c;
+  159:      }
+  160:    }
+  161:  #endif
+  162:  
+  163:    return NULL;
+  164:  }                                       /* pZtcSAPInfoFromOpcodeGroup() */
+  165:  
+  166:  /*
+  167:    Synchronous calls to the ASP handler.
+  168:  */
+  169:  uint8_t APP_ASP_SapHandler(AppToAspMessage_t *pMsg)
+  170:  {
+  171:    uint8_t msgStatus = gZbSuccess_c;
+  172:    switch(pMsg->msgType) {
+  173:      case aspMsgTypeGetTimeReq_c:
+  174:        Asp_GetTimeReq(&pMsg->msgData.req.aspGetTimeReq.time);
+  175:        break;
+  176:  
+  177:      case aspMsgTypeWakeReq_c:
+  178:        Asp_WakeReq();
+  179:        break;
+  180:  
+  181:      case aspMsgTypeGetMacStateReq_c:
+  182:        msgStatus = Asp_GetMacStateReq();
+  183:        break;
+  184:        
+  185:  #ifndef PROCESSOR_MC1323X
+  186:  
+  187:  #if gAspPowerSaveCapability_d
+  188:      case aspMsgTypeDozeReq_c:
+  189:        msgStatus = Asp_DozeReq(&pMsg->msgData.req.aspDozeReq.dozeDuration,pMsg->msgData.req.aspDozeReq.clko_en);
+  190:        break;
+  191:  
+  192:      case aspMsgTypeAutoDozeReq_c:
+  193:        Asp_AutoDozeReq(pMsg->msgData.req.aspAutoDozeReq.autoEnable,
+  194:                        pMsg->msgData.req.aspAutoDozeReq.enableWakeIndication,
+  195:                        &pMsg->msgData.req.aspAutoDozeReq.autoDozeInterval,
+  196:                        pMsg->msgData.req.aspAutoDozeReq.clko_en);
+  197:        break;
+  198:  
+  199:      case aspMsgTypeSetMinDozeTimeReq_c:
+  200:        Asp_SetMinDozeTimeReq(&pMsg->msgData.req.aspSetMinDozeTimeReq.minDozeTime);
+  201:        break;
+  202:  
+  203:      case aspMsgTypeAcomaReq_c:
+  204:        msgStatus = Asp_AcomaReq(pMsg->msgData.req.aspAcomaReq.clko_en);
+  205:        break;
+  206:  
+  207:      case aspMsgTypeHibernateReq_c:
+  208:        msgStatus = Asp_HibernateReq();
+  209:        break;
+  210:  #endif
+  211:  
+  212:  #if gAspHwCapability_d
+  213:      case aspMsgTypeClkoReq_c:
+  214:        msgStatus = Asp_ClkoReq(pMsg->msgData.req.aspClkoReq.clkoEnable, pMsg->msgData.req.aspClkoReq.clkoRate);
+  215:        break;
+  216:  
+  217:      case aspMsgTypeTrimReq_c:      
+  218:        Asp_TrimReq(pMsg->msgData.req.aspTrimReq.trimValue);
+  219:        break;
+  220:  
+  221:      case aspMsgTypeDdrReq_c:
+  222:        Asp_DdrReq(pMsg->msgData.req.aspDdrReq.directionMask);
+  223:        break;
+  224:  
+  225:      case aspMsgTypePortReq_c:
+  226:        Asp_PortReq(pMsg->msgData.req.aspPortReq.portWrite, &pMsg->msgData.req.aspPortReq.portValue);
+  227:        break;
+  228:  #endif
+  229:  
+  230:  #endif //PROCESSOR_MC1323X
+  231:  
+  232:  #if gAspEventCapability_d
+  233:      case aspMsgTypeEventReq_c:
+  234:        msgStatus = Asp_EventReq(&pMsg->msgData.req.aspEventReq.eventTime);
+  235:        break;
+  236:  #endif
+  237:  
+  238:  #if gBeaconedCapability_d
+  239:      case aspMsgTypeGetInactiveTimeReq_c:
+  240:        msgStatus = Asp_GetInactiveTimeReq(&pMsg->msgData.req.aspGetInactiveTimeReq.time);
+  241:        break;
+  242:  
+  243:      case aspMsgTypeSetNotifyReq_c:
+  244:        msgStatus = Asp_SetNotifyReq(pMsg->msgData.req.aspSetNotifyReq.notifications);
+  245:        break;
+  246:  #endif
+  247:  
+  248:  
+  249:  #if gAspPowerLevelCapability_d
+  250:      case aspMsgTypeSetPowerLevel_c:
+  251:        msgStatus = Asp_SetPowerLevel(pMsg->msgData.req.aspSetPowerLevelReq.powerLevel);
+  252:        break;
+  253:  
+  254:      case aspMsgTypeGetPowerLevel_c:
+  255:        msgStatus = Asp_GetPowerLevel();
+  256:        break;
+  257:  #endif
+  258:  
+  259:      case aspMsgTypeTelecTest_c:
+  260:        ASP_TelecTest(pMsg->msgData.req.aspTelecTest.mode);
+  261:        break;
+  262:  
+  263:      case aspMsgTypeTelecSetFreq_c:
+  264:        ASP_TelecSetFreq(pMsg->msgData.req.aspTelecsetFreq.channel);
+  265:        break;
+  266:        
+  267:      case aspMsgTypeTelecSendRawData_c:
+  268:        if(pMsg->msgData.req.aspTelecSendRawData.length <= 125)
+  269:        {
+  270:           #ifdef PROCESSOR_MC1323X
+  271:           ASP_TelecSendRawData((uint8_t*)&pMsg->msgData.req.aspTelecSendRawData);
+  272:           #else
+  273:           ASP_TelecSendRawData(pMsg->msgData.req.aspTelecSendRawData.length,
+  274:                                (uint8_t*)&pMsg->msgData.req.aspTelecSendRawData.dataPtr);
+  275:           #endif //PROCESSOR_MC1323X                              
+  276:         }
+  277:         else
+  278:         {
+  279:           msgStatus = gZbInvalidRequest_c; 
+  280:         }
+  281:        break;
+  282:        
+  283:  #ifdef PROCESSOR_MC1323X
+  284:      case aspMsgTypeGetPpdMode_c:
+  285:        Asp_GetPpdMode(&pMsg->msgData.req.aspPpdMode.ppdMode);              
+  286:      break;
+  287:      case aspMsgTypeSetPpdMode_c:
+  288:        Asp_SetPpdMode(pMsg->msgData.req.aspPpdMode.ppdMode);
+  289:      break;
+  290:  #endif //PROCESSOR_MC1323X
+  291:  
+  292:      default:
+  293:        msgStatus = gZbInvalidRequest_c;
+  294:        break;
+  295:  
+  296:    }
+  297:  
+  298:    /* monitoring this task */
+  299:    ZTC_TaskEventMonitor(gNwkASP_SAPHandlerId_c, (uint8_t *)pMsg, msgStatus);
+  300:    return msgStatus;
+  301:  }
+  302:  
+  303:  #endif                                  /* #if gZtcIncluded_d == 1 */
+  304:  

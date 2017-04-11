@@ -1,0 +1,318 @@
+ANSI-C/cC++ Compiler for HC08 V-5.0.45 Build 14019, Jan 20 2014
+
+    1:  /******************************************************************************
+    2:  * ZTC routines to handle the ZTC <--> external client protocol.
+    3:  *
+    4:  * (c) Copyright 2008, Freescale, Inc. All rights reserved.
+    5:  *
+    6:  *
+    7:  * No part of this document must be reproduced in any form - including copied,
+    8:  * transcribed, printed or by any electronic means - without specific written
+    9:  * permission from Freescale Semiconductor.
+   10:  *
+   11:  ******************************************************************************/
+   12:  
+   13:  #include "EmbeddedTypes.h"
+   14:  
+   15:  #include "ZtcInterface.h"
+   16:  
+   17:  #if gZtcIncluded_d
+   18:  
+   19:  #include "FunctionLib.h"
+   20:  
+   21:  #include "ZtcPrivate.h"
+   22:  #include "ZtcClientCommunication.h"
+   23:  
+   24:  #ifdef gSCIInterface_d
+   25:    #include "Uart_Interface.h"
+   26:  #endif
+   27:  
+   28:  #ifdef gCDCInterface_d
+   29:    #include "CDC_Interface.h"
+   30:  #endif
+   31:  
+   32:  #ifdef gSPIInterface_d
+   33:    #include "SPI_Interface.h"
+   34:  #endif
+   35:  
+   36:  #ifdef gI2CInterface_d
+   37:    #include "IIC_Interface.h"
+   38:  #endif 
+   39:  
+   40:  /******************************************************************************
+   41:  *******************************************************************************
+   42:  * Private macros
+   43:  *******************************************************************************
+   44:  ******************************************************************************/
+   45:  
+   46:  #if ((defined(gSPIInterface_d) && defined(gI2CInterface_d)) || \
+   47:       (defined(gSCIInterface_d) && defined(gSPIInterface_d)) || \
+   48:       (defined(gSCIInterface_d) && defined(gI2CInterface_d)) || \
+   49:       (defined(gCDCInterface_d) && defined(gSPIInterface_d)) || \
+   50:       (defined(gCDCInterface_d) && defined(gI2CInterface_d)) || \
+   51:       (defined(gCDCInterface_d) && defined(gSCIInterface_d)))
+   52:   #error "Error: Configuration not supported. Multiple communication interfaces defined"
+   53:  #endif
+   54:  
+   55:  #if defined(gSPIInterface_d)
+   56:  
+   57:    #define ZtcComm_GetByteFromRxBuffer   SPI_GetByteFromBuffer
+   58:    #define ZtcComm_Transmit              SPI_SlaveTransmit
+   59:    #define ZtcComm_IsTxActive            SPI_IsSlaveTxActive
+   60:    
+   61:  #elif defined(gI2CInterface_d)
+   62:  
+   63:    #define ZtcComm_GetByteFromRxBuffer   IIC_GetByteFromRxBuffer
+   64:    #define ZtcComm_Transmit              IIC_Transmit_Slave
+   65:    #define ZtcComm_IsTxActive            IIC_IsSlaveTxActive
+   66:    
+   67:  #elif defined(gSCIInterface_d)
+   68:  
+   69:    #define ZtcComm_GetByteFromRxBuffer   UartX_GetByteFromRxBuffer
+   70:    #define ZtcComm_Transmit              UartX_Transmit
+   71:    #define ZtcComm_IsTxActive            UartX_IsTxActive
+   72:      
+   73:  #elif defined(gCDCInterface_d)
+   74:  
+   75:    #define ZtcComm_GetByteFromRxBuffer   CDC_GetByteFromRxBuffer
+   76:    #define ZtcComm_Transmit              CDC_Transmit
+   77:    #define ZtcComm_IsTxActive            CDC_IsTxActive  
+   78:    
+   79:  #else
+   80:    #error "A serial communication interface must be enabled to use ZTC."  
+   81:  #endif
+   82:  
+   83:  
+   84:  /******************************************************************************
+   85:  *******************************************************************************
+   86:  * Public memory declarations
+   87:  *******************************************************************************
+   88:  ******************************************************************************/
+   89:  
+   90:  /* UART packet received from the external client, minus the UART/SPI envelope. */
+   91:  clientPacket_t gZtcPacketFromClient;
+   92:  
+   93:  /* UART/SPI packet to be sent to external client, minus the UART/SPI envelope. */
+   94:  clientPacket_t gZtcPacketToClient;
+   95:  
+   96:  /* If true, ZtcWritePacketToClient() will block after enabling the UART/SPI Tx */
+   97:  /* interrupt, until the UART/SPI driver's output buffer is empty again. */
+   98:  #ifdef gZtcDebug_d
+   99:  bool_t gZtcTxBlocking = TRUE;
+  100:  #else
+  101:  bool_t gZtcTxBlocking = FALSE;
+  102:  #endif
+  103:  
+  104:  /************************************************************************************
+  105:  *************************************************************************************
+  106:  * Private prototypes
+  107:  *************************************************************************************/
+  108:  
+  109:  
+  110:  /******************************************************************************
+  111:  *******************************************************************************
+  112:  * Public functions
+  113:  *******************************************************************************
+  114:  ******************************************************************************/
+  115:  
+  116:  /* Read data from the UART/SPI. If the UART/SPI ISR has received a complete packet
+  117:   * (STX, packet header, and FCS), copy it to the Ztc's global
+  118:   * gZtcPacketFromClient buffer and return true. Otherwise return false.
+  119:   * This routine is called each time a byte is received from the UART/SPI.
+  120:   * Client packets consist of a UART/SPI envelope enclosing a variable length
+  121:   * clientPacket_t.
+  122:   * The UART/SPI envelope is a leading sync (STX) byte and a trailing FCS.
+  123:   */
+  124:  
+  125:  static index_t bytesReceived = 0;       /* Does not count the STX. */
+  126:  
+  127:  #define mMinValidPacketLen_c    (sizeof(clientPacketHdr_t) + sizeof(clientPacketChecksum_t))
+  128:  typedef enum {
+  129:    packetIsValid,
+  130:    packetIsTooShort,
+  131:    framingError
+  132:  } ztcPacketStatus_t;
+  133:  
+  134:  /* Does the buffer contain a valid packet? */
+  135:  ztcPacketStatus_t ZtcCheckPacket(void) {
+  136:    clientPacketChecksum_t checksum = 0;
+  137:    index_t i;
+  138:    index_t len;
+  139:  
+  140:    if (bytesReceived < mMinValidPacketLen_c) {
+  141:      return packetIsTooShort;            /* Too short to be valid. */
+  142:    }
+  143:  
+  144:    if (bytesReceived >= sizeof(gZtcPacketFromClient)) {
+  145:      return framingError;
+  146:    }
+  147:  
+  148:    /* The packet's len field does not count the STX, the opcode group, the */
+  149:    /* opcode, the len field, or the checksum. */
+  150:    len = gZtcPacketFromClient.structured.header.len;
+  151:    if (bytesReceived < len + sizeof(clientPacketHdr_t) + sizeof(checksum)) {
+  152:      return packetIsTooShort;
+  153:    }
+  154:  
+  155:    /* If the length appears to be too long, it might be because the external */
+  156:    /* client is sending a packet that is too long, or it might be that we're */
+  157:    /* out of sync with the external client. Assume we're out of sync. */
+  158:    if (len > sizeof(gZtcPacketFromClient.structured.payload)) {
+  159:      return framingError;
+  160:    }
+  161:  
+  162:    /* If the length looks right, make sure that the checksum is correct. */
+  163:    if (bytesReceived == len + sizeof(clientPacketHdr_t) + sizeof(checksum)) {
+  164:      for (checksum = 0, i = 0; i < len + sizeof(clientPacketHdr_t); ++i) {
+  165:        checksum ^= gZtcPacketFromClient.raw[i];
+  166:      }
+  167:    }
+  168:  
+  169:    if (checksum == gZtcPacketFromClient.structured.payload[len]) {
+  170:      return packetIsValid;
+  171:    }
+  172:  
+  173:    return framingError;
+  174:  }                                       /* ZtcCheckPacket() */
+  175:  
+  176:  bool_t ZtcReadPacketFromClient(void) {
+  177:    static bool_t startOfFrameSeen = FALSE;
+  178:    uint8_t byte;
+  179:    index_t i;
+  180:    ztcPacketStatus_t status;
+  181:  
+  182:    while (ZtcComm_GetByteFromRxBuffer(&byte)) {
+  183:      if (!startOfFrameSeen) {
+  184:        bytesReceived = 0;
+  185:        startOfFrameSeen = (byte == mZtcStxValue_c);
+  186:        break;                            /* Don't store the STX in the buffer. */
+  187:      }
+  188:  
+  189:      gZtcPacketFromClient.raw[bytesReceived++] = byte;
+  190:      for (;;) {
+  191:        status = ZtcCheckPacket();
+  192:        if (status == packetIsValid) {
+  193:          startOfFrameSeen = FALSE;
+  194:          bytesReceived = 0;
+  195:          return TRUE;
+  196:        }
+  197:  
+  198:        if (status == packetIsTooShort) {
+  199:          break;
+  200:        }
+  201:  
+  202:        /* If there appears to be a framing error, search the data received for */
+  203:        /* the next STX and try again. */
+  204:        startOfFrameSeen = FALSE;
+  205:        for (i = 0; i < bytesReceived; ++i) {
+  206:          if (gZtcPacketFromClient.raw[i] == mZtcStxValue_c) {
+  207:            bytesReceived -= (i + 1);     /* Don't count the STX. */
+  208:            FLib_MemCpy(gZtcPacketFromClient.raw, gZtcPacketFromClient.raw + i + 1, bytesReceived);
+  209:            startOfFrameSeen = TRUE;
+  210:            break;                        /* Back to the "for (;;)" loop. */
+  211:          }                               /* if (gZtcPacketFromClient.raw[i] == mZtcStxValue_c) */
+  212:        }                                 /* for (i = 0; i < bytesReceived; ++i) */
+  213:      break;
+  214:      }                                   /* for (;;) */
+  215:    }                                     /* while (ZtcComm_GetByteFromRxBuffer(&byte)) */
+  216:  
+  217:    return FALSE;                         /* Not yet. */
+  218:  }                                       /* ZtcReadPacketFromClient() */
+  219:  
+  220:  /****************************************************************************/
+  221:  
+  222:  volatile bool_t mZtcPacketToClientIsBusy;
+  223:  void ZtcWritePacketCallBack(unsigned char const *pBuf) {
+  224:    (void) pBuf;
+  225:    mZtcPacketToClientIsBusy = FALSE;
+  226:  }
+  227:  
+  228:  void ZtcWritePacketToClient(index_t const len) {
+  229:    mZtcPacketToClientIsBusy = TRUE;
+  230:    ZtcTransmitBuffer(gZtcPacketToClient.raw, len, ZtcWritePacketCallBack);
+  231:  }
+  232:  
+  233:  /**************************************/
+  234:  
+  235:  static volatile bool_t mZtcOutputBufferIsBusy;
+  236:  static void ZtcTransmitCallBack(unsigned char const *pBuf) {
+  237:    (void) pBuf;
+  238:    mZtcOutputBufferIsBusy = FALSE;
+  239:  }
+  240:  
+  241:  /* Send an arbitrary buffer to the external client. Block until the entire */
+  242:  /* buffer has been sent, regardless of the state of the ZtcComm_IsTxActive */
+  243:  /* flag. */
+  244:  void ZtcTransmitBufferBlock(uint8_t const *pSrc, index_t const len) {
+  245:    mZtcOutputBufferIsBusy = TRUE;
+  246:  
+  247:    ZtcTransmitBuffer(pSrc, len, ZtcTransmitCallBack);
+  248:    while (ZtcComm_IsTxActive());
+  249:  }
+  250:  
+  251:  /**************************************/
+  252:  
+  253:  static volatile bool_t mZtcChecksumWritten;
+  254:  void ZtcWriteChecksumCallBack(unsigned char const *pBuf) {
+  255:    (void) pBuf;
+  256:    mZtcChecksumWritten = TRUE;
+  257:  }
+  258:  
+  259:  void ZtcTransmitBuffer
+  260:    (
+  261:    uint8_t const *pSrc,
+  262:    index_t const len,
+  263:    void (*pfCallBack)(unsigned char const *pBuf)
+  264:    )
+  265:  {
+  266:    uint8_t stxValue[4];
+  267:    uint8_t checksum;
+  268:    uint8_t i;
+  269:    
+  270:    /* For compatibility with SCI_SPI bridge */
+  271:    /* First packet has the length of the payload*/
+  272:    stxValue[0] = mZtcStxValue_c;
+  273:    FLib_MemCpy((void *)&stxValue[1],(void *)pSrc, 3);
+  274:  
+  275:    while (!ZtcComm_Transmit(stxValue, 4, NULL));
+  276:    /* if uart/spi blocking enabled, wait for tx complete flag.*/ 
+  277:    if(gZtcTxBlocking) { 
+  278:    while (ZtcComm_IsTxActive());
+  279:    }
+  280:    
+  281:    if(gZtcTxBlocking) { 
+  282:    /*if uart blocking enabled, call uart with no callback and wait for tx complete flag
+  283:      and execute callback manually
+  284:    */
+  285:      while (!ZtcComm_Transmit((uint8_t *)&pSrc[3], len-3, NULL));  
+  286:      while (ZtcComm_IsTxActive());
+  287:      if (pfCallBack)
+  288:        pfCallBack(NULL);
+  289:    } else { 
+  290:    /*else call uart with callbacm*/
+  291:    while (!ZtcComm_Transmit((uint8_t *)&pSrc[3], len-3, NULL));
+  292:    }
+  293:    
+  294:    checksum = 0;
+  295:    for (i = 0; i < len; ++i) {
+  296:      checksum ^= pSrc[i];
+  297:    }
+  298:  
+  299:    mZtcChecksumWritten = FALSE;
+  300:  
+  301:    if (gZtcTxBlocking) {
+  302:    /*if uart blocking enabled, call uart with no callback and wait for tx complete flag
+  303:      and execute callback manually
+  304:    */  
+  305:      while (!ZtcComm_Transmit(&checksum, sizeof(checksum), NULL));
+  306:      while (ZtcComm_IsTxActive());    
+  307:      ZtcWriteChecksumCallBack(NULL);
+  308:    } else {    
+  309:    /*else call uart with callbacm*/  
+  310:      while (!ZtcComm_Transmit(&checksum, sizeof(checksum), ZtcWriteChecksumCallBack)); 
+  311:    }
+  312:    
+  313:  }                                       /* ZtcWritePacketToClient() */
+  314:  
+  315:  #endif                                  /* #if gZtcIncluded_d == 1 */
+  316:  

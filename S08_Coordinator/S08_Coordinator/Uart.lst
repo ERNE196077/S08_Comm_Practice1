@@ -1,0 +1,1578 @@
+ANSI-C/cC++ Compiler for HC08 V-5.0.45 Build 14019, Jan 20 2014
+
+    1:  /*****************************************************************************
+    2:  * UART / SCI / USB / Serial Port implementation.
+    3:  *
+    4:  * (c) Copyright 2006, Freescale, Inc. All rights reserved.
+    5:  *
+    6:  *
+    7:  * No part of this document must be reproduced in any form - including copied,
+    8:  * transcribed, printed or by any electronic means - without specific written
+    9:  * permission from Freescale Semiconductor.
+   10:  *
+   11:  *****************************************************************************/
+   12:  
+   13:  /* Note: This code is size optimized for the case where only one SCI port is
+   14:   * enabled. If both ports are enabled, it might be worthwhile to create
+   15:   * functions that take a port number as a parameter.
+   16:   */
+   17:  
+   18:  #include "EmbeddedTypes.h"
+   19:  #include "Uart_Interface.h"
+   20:  #include "PortConfig.h"
+   21:  #include "Uart.h"
+   22:  #include "IoConfig.h"
+   23:  #include "functionlib.h"
+   24:  #include "TS_Interface.h"
+   25:  #include "msgsystem.h"
+   26:  
+   27:  #ifdef PROCESSOR_MC1323X
+   28:  #include "PWRLib.h"
+   29:  #endif
+   30:  
+   31:  #ifndef gMacStandAlone_d
+   32:  #define gMacStandAlone_d 0
+   33:  #endif
+   34:  
+   35:  #if gMacStandAlone_d
+   36:    #include "Mac_Globals.h"
+   37:  #endif
+   38:  
+   39:  /************************************************************************************
+   40:  *************************************************************************************
+   41:  * Private prototypes
+   42:  *************************************************************************************/
+   43:  
+   44:  
+   45:  /*****************************************************************************
+   46:  ******************************************************************************
+   47:  * Public memory definitions
+   48:  ******************************************************************************
+   49:  *****************************************************************************/
+   50:  
+   51:  /* if neither UART enabled, then no code or data */
+   52:  #if gUart1_Enabled_d || gUart2_Enabled_d
+   53:  
+   54:  /* id for Uart task */
+   55:  tsTaskID_t gUartTaskId;
+   56:  
+   57:  
+   58:  /* Each port can store one unget byte. */
+   59:  #if gUart1_Enabled_d
+   60:  static bool_t uart1_ungetFlag = FALSE;
+   61:  static uint8_t uart1_ungetByte;
+   62:  bool_t Uart1_TxCompleteFlag = FALSE;
+   63:  #endif
+   64:  
+   65:  #if gUart2_Enabled_d
+   66:  static bool_t uart2_ungetFlag = FALSE;
+   67:  static uint8_t uart2_ungetByte;
+   68:  bool_t Uart2_TxCompleteFlag = FALSE;
+   69:  #endif
+   70:  #if gUart1_EnableFullHWFlowControl_d
+   71:    static volatile bool_t bUart1RecipientBusy = FALSE;
+   72:  #endif
+   73:  
+   74:  #if gUart2_EnableFullHWFlowControl_d
+   75:    static volatile bool_t bUart2RecipientBusy = FALSE; 
+   76:  #endif
+   77:  
+   78:  
+   79:  
+   80:  /* The transmit code keeps a circular list of buffers to be sent. */
+   81:  /* Each SCI port has it's own list. */
+   82:  typedef struct SciTxBufRef_tag {
+   83:    unsigned char const *pBuf;
+   84:    void (*pfCallBack)(unsigned char const *pBuf);
+   85:  } SciTxBufRef_t;
+   86:  
+   87:  /* The leading index is the next position to store a buffer reference. */
+   88:  /* The trailing index is the buffer currently being transmitted. */
+   89:  /* Using a separate table for the buffer lengths reduces code size. */
+   90:  #if gUart1_Enabled_d
+   91:  static SciTxBufRef_t maSci1TxBufRefTable[gUart_TransmitBuffers_c];
+   92:  static index_t maSci1TxBufLenTable[gUart_TransmitBuffers_c];
+   93:  static index_t mSci1TxCurIndex;
+   94:  static index_t mSci1TxBufRefLeadingIndex;   /* Post-increment. */
+   95:  static index_t mSci1TxBufRefTrailingIndex;  /* Post-increment. */
+   96:  
+   97:  /*Callback table and index pointers*/
+   98:  static SciTxBufRef_t maSci1TxCallbackTable[gUart_TransmitBuffers_c];
+   99:  static index_t maSci1TxCallbackLeadingIndex = 0; 
+  100:  static index_t maSci1TxCallbackTrailingIndex = 0; 
+  101:  #endif
+  102:  
+  103:  #if gUart2_Enabled_d
+  104:  static SciTxBufRef_t maSci2TxBufRefTable[gUart_TransmitBuffers_c];
+  105:  static index_t maSci2TxBufLenTable[gUart_TransmitBuffers_c];
+  106:  static index_t mSci2TxCurIndex;
+  107:  static index_t mSci2TxBufRefLeadingIndex;   /* Post-increment. */
+  108:  static index_t mSci2TxBufRefTrailingIndex;  /* Post-increment. */
+  109:  /*Callback table and index pointers*/
+  110:  static SciTxBufRef_t maSci2TxCallbackTable[gUart_TransmitBuffers_c];
+  111:  static index_t maSci2TxCallbackLeadingIndex = 0; 
+  112:  static index_t maSci2TxCallbackTrailingIndex = 0; 
+  113:  #endif
+  114:  
+  115:  /* Each port has a small local circular Rx buffer to store data until the */
+  116:  /* application can retrieve it. In addition to the leading and trailing */
+  117:  /* indexes, the Rx code keeps a count of the number of bytes in the buffer. */
+  118:  #if gUart1_Enabled_d
+  119:  static   uint8_t maSci1RxBuf[gUart1_ReceiveBufferSize_c];
+  120:  static   index_t mSci1RxBufLeadingIndex;      /* Post-increment. */
+  121:  static   index_t mSci1RxBufTrailingIndex;     /* Post-increment. */
+  122:  volatile index_t mSci1RxBufferByteCount;      /* # of bytes in buffer. */
+  123:  static void (*pfSci1RxCallBack)(void) = NULL;
+  124:  #endif
+  125:  
+  126:  #if gUart2_Enabled_d
+  127:  static   uint8_t maSci2RxBuf[gUart2_ReceiveBufferSize_c];
+  128:  static   index_t mSci2RxBufLeadingIndex;      /* Post-increment. */
+  129:  static   index_t mSci2RxBufTrailingIndex;     /* Post-increment. */
+  130:  volatile index_t mSci2RxBufferByteCount;      /* # of bytes in buffer. */
+  131:  static void (*pfSci2RxCallBack)(void) = NULL;
+  132:  #endif
+  133:  
+  134:  /*****************************************************************************
+  135:  ******************************************************************************
+  136:  * Private memory definitions
+  137:  ******************************************************************************
+  138:  *****************************************************************************/
+  139:  
+  140:  /* Keep track of the high water mark in the Rx circular buffer. */
+  141:  #if gUart_Debug_d
+  142:  #if gUart1_Enabled_d
+  143:  static index_t uart1RxBufHighWaterMark = 0;
+  144:  #endif
+  145:  #if gUart2_Enabled_d
+  146:  static index_t uart2RxBufHighWaterMark = 0;
+  147:  #endif
+  148:  #endif
+  149:  
+  150:  #if gUart1_Enabled_d && gUart1_EnableHWFlowControl_d
+  151:  static uint8_t mUart1FlowDisableCounter = 0;
+  152:  #endif
+  153:  
+  154:  #if gUart2_Enabled_d && gUart2_EnableHWFlowControl_d
+  155:  static uint8_t mUart2FlowDisableCounter = 0;
+  156:  #endif
+  157:  
+  158:  /*****************************************************************************
+  159:  ******************************************************************************
+  160:  * Public functions
+  161:  ******************************************************************************
+  162:  *****************************************************************************/
+  163:  
+  164:  /*****************************************************************************/
+  165:  
+  166:  
+  167:  void Uart_ClearErrors(void) {
+  168:    /* Temp storage for SCIXD */
+  169:    uint8_t sciXd;
+  170:  
+  171:  #if gUart1_Enabled_d
+  172:    while (SCI1S1 & (mSCIxS1_OR_c | mSCIxS1_NF_c | mSCIxS1_FE_c | mSCIxS1_PF_c)) {
+  0000 65       [3]             SKIP2 L3 ;abs = 0003
+  0001          L1:     
+  173:      /* Read SCI2D, clear error. */
+  174:      sciXd = SCI1D;
+  0001 b63f     [3]             LDA   63
+  0003          L3:     
+  0003 b63c     [3]             LDA   60
+  0005 a50f     [2]             BIT   #15
+  0007 26f8     [3]             BNE   L1 ;abs = 0001
+  175:    }
+  176:  #endif
+  177:  
+  178:  #if gUart2_Enabled_d
+  179:    while (SCI2S1 & (mSCIxS1_OR_c | mSCIxS1_NF_c | mSCIxS1_FE_c | mSCIxS1_PF_c)) {
+  180:      /* Read SCI2D, clear error. */
+  181:      sciXd = SCI2D;
+  182:    }
+  183:  #endif
+  184:  }                                       /* Uart_ClearErrors() */
+  0009 8d       [7]             RTC   
+  185:  
+  186:  /*****************************************************************************/
+  187:  
+  188:  
+  189:  /* Retrieve a byte from the driver's Rx buffer and store it at *pDst. */
+  190:  /* Return TRUE if a byte was retrieved; FALSE if the Rx buffer is empty. */
+  191:  bool_t Uart1_GetByteFromRxBuffer(unsigned char *pDst) {
+  0000 89       [2]             PSHX  
+  0001 8b       [2]             PSHH  
+  0002 a7fe     [2]             AIS   #-2
+  192:  #if !gUart1_Enabled_d
+  193:    (void) pDst;
+  194:    return 0;
+  195:  #else
+  196:    unsigned char scic2;
+  197:  #ifdef PROCESSOR_MC1323X
+  198:    /* Temporary storage for the PP_PHY_CTL2_TRCV_MSK_BIT value
+  199:    to be used by MC1323x radio IRQ protection macros. */
+  200:    unsigned char trcv;
+  201:  #endif
+  202:    if (uart1_ungetFlag) {
+  0004 c60000   [4]             LDA   uart1_ungetFlag
+  0007 270a     [3]             BEQ   L13 ;abs = 0013
+  203:      uart1_ungetFlag = FALSE;
+  0009 4f       [1]             CLRA  
+  000a c70000   [4]             STA   uart1_ungetFlag
+  204:      *pDst = uart1_ungetByte;
+  000d c60000   [4]             LDA   uart1_ungetByte
+  0010 f7       [2]             STA   ,X
+  205:      return TRUE;
+  0011 2049     [3]             BRA   L5C ;abs = 005c
+  0013          L13:    
+  206:    }
+  207:  
+  208:    if (!mSci1RxBufferByteCount) {
+  0013 c60000   [4]             LDA   mSci1RxBufferByteCount
+  0016 2746     [3]             BEQ   L5E ;abs = 005e
+  209:      return FALSE;
+  210:    }
+  211:  
+  212:  #ifdef PROCESSOR_MC1323X
+  213:    IrqControlLib_ProtectFromMC1323xIrq(trcv);
+  0018 b645     [3]             LDA   69
+  001a a480     [2]             AND   #-128
+  001c 95       [2]             TSX   
+  001d f7       [2]             STA   ,X
+  001e 1e45     [5]             BSET  7,69
+  214:  #endif
+  215:    /* Disable the Rx interrupt while the counter is updated. */
+  216:    scic2 = SCI1C2;
+  0020 b63b     [3]             LDA   59
+  0022 e701     [3]             STA   1,X
+  217:    SCI1C2 &= ~mSCIxC2_RIE_c;
+  0024 1b3b     [5]             BCLR  5,59
+  218:  
+  219:    *pDst = maSci1RxBuf[mSci1RxBufTrailingIndex];
+  0026 ce0000   [4]             LDX   mSci1RxBufTrailingIndex
+  0029 8c       [1]             CLRH  
+  002a d60000   [4]             LDA   @maSci1RxBuf,X
+  002d 9efe03   [5]             LDHX  3,SP
+  0030 f7       [2]             STA   ,X
+  220:    if (++mSci1RxBufTrailingIndex >= sizeof(maSci1RxBuf)) 
+  0031 450000   [3]             LDHX  @mSci1RxBufTrailingIndex
+  0034 7c       [4]             INC   ,X
+  0035 c60000   [4]             LDA   mSci1RxBufTrailingIndex
+  0038 a120     [2]             CMP   #32
+  003a 2504     [3]             BCS   L40 ;abs = 0040
+  221:    {
+  222:      mSci1RxBufTrailingIndex = 0;
+  003c 4f       [1]             CLRA  
+  003d c70000   [4]             STA   mSci1RxBufTrailingIndex
+  0040          L40:    
+  223:    }
+  224:  
+  225:    --mSci1RxBufferByteCount;
+  0040 450000   [3]             LDHX  @mSci1RxBufferByteCount
+  0043 7a       [4]             DEC   ,X
+  226:  #if gUart1_EnableHWFlowControl_d
+  227:    if (mSci1RxBufferByteCount <= gUart1_RxFlowControlSkew_d) 
+  0044 c60000   [4]             LDA   mSci1RxBufferByteCount
+  0047 a108     [2]             CMP   #8
+  0049 2204     [3]             BHI   L4F ;abs = 004f
+  228:    {
+  229:      Uart1_EnableFlow();
+  004b ac000000 [8]             CALL  Uart1_EnableFlow
+  004f          L4F:    
+  230:    }
+  231:  #endif
+  232:    SCI1C2 = scic2;
+  004f 95       [2]             TSX   
+  0050 e601     [3]             LDA   1,X
+  0052 b73b     [3]             STA   59
+  233:  #ifdef PROCESSOR_MC1323X
+  234:    IrqControlLib_UnprotectFromMC1323xIrq(trcv);
+  0054 7d       [3]             TST   ,X
+  0055 2703     [3]             BEQ   L5A ;abs = 005a
+  0057 1e45     [5]             BSET  7,69
+  0059 65       [3]             SKIP2 L5C ;abs = 005c
+  005a          L5A:    
+  005a 1f45     [5]             BCLR  7,69
+  005c          L5C:    
+  235:  #endif
+  236:  
+  237:    return TRUE;
+  005c a601     [2]             LDA   #1
+  005e          L5E:    
+  238:  #endif
+  239:  }                                       /* Uart1_GetBytesFromRxBuffer() */
+  005e a704     [2]             AIS   #4
+  0060 8d       [7]             RTC   
+  240:  
+  241:  /**************************************/
+  242:  
+  243:  bool_t Uart2_GetByteFromRxBuffer(unsigned char *pDst) {
+  244:  #if !gUart2_Enabled_d
+  245:    (void) pDst;
+  246:    return 0;
+  0000 4f       [1]             CLRA  
+  247:  #else
+  248:    unsigned char scic2;
+  249:  
+  250:    if (uart2_ungetFlag) {
+  251:      uart2_ungetFlag = FALSE;
+  252:      *pDst = uart2_ungetByte;
+  253:      return TRUE;
+  254:    }
+  255:  
+  256:    if (!mSci2RxBufferByteCount) {
+  257:      return FALSE;
+  258:    }
+  259:    
+  260:    /* Disable the Rx interrupt while the counter is updated. */
+  261:    scic2 = SCI2C2;
+  262:    SCI2C2 &= ~mSCIxC2_RIE_c;
+  263:    
+  264:    *pDst = maSci2RxBuf[mSci2RxBufTrailingIndex];
+  265:    if (++mSci2RxBufTrailingIndex >= sizeof(maSci2RxBuf)) 
+  266:    {
+  267:      mSci2RxBufTrailingIndex = 0;
+  268:    }
+  269:  
+  270:    --mSci2RxBufferByteCount;
+  271:  #if gUart2_EnableHWFlowControl_d
+  272:    if (mSci2RxBufferByteCount <= gUart2_RxFlowControlSkew_d) 
+  273:    {
+  274:      Uart2_EnableFlow();
+  275:    }
+  276:  #endif
+  277:    SCI2C2 = scic2;
+  278:  
+  279:    return TRUE;
+  280:  #endif
+  281:  }                                       /* Uart2_GetBytesFromRxBuffer() */
+  0001 8d       [7]             RTC   
+  282:  
+  283:  /*****************************************************************************/
+  284:  
+  285:  /* Return TRUE if there is data still not sent. */
+  286:  bool_t Uart1_IsTxActive(void) {
+  287:  #if !gUart1_Enabled_d
+  288:    return FALSE;
+  289:  #else
+  290:    #if gUart1_EnableFullHWFlowControl_d
+  291:      bool_t status;
+  292:      
+  293:      status = (maSci1TxBufLenTable[mSci1TxBufRefTrailingIndex] != 0) || (!(SCI1S1 & 0x40));
+  294:  
+  295:      if(TRUE == bUart1RecipientBusy)
+  296:      {
+  297:        pfSci1RxCallBack();
+  298:        if(0 == Uart1_RecipientBusy())
+  299:        {
+  300:          bUart1RecipientBusy = FALSE;
+  301:          if(status)
+  302:          {
+  303:            SCI1C2 |= mSCIxC2_TIE_c;
+  304:          }
+  305:        }
+  306:      }
+  307:      return status ;
+  308:    #else
+  309:      return (maSci1TxBufLenTable[mSci1TxBufRefTrailingIndex] != 0) || (!(SCI1S1 & 0x40));
+  0000 ce0000   [4]             LDX   mSci1TxBufRefTrailingIndex
+  0003 8c       [1]             CLRH  
+  0004 d60000   [4]             LDA   @maSci1TxBufLenTable,X
+  0007 2604     [3]             BNE   LD ;abs = 000d
+  0009 4f       [1]             CLRA  
+  000a 0c3c02   [5]             BRSET 6,60,LF ;abs = 000f
+  000d          LD:     
+  000d a601     [2]             LDA   #1
+  000f          LF:     
+  310:    #endif
+  311:  #endif
+  312:  }                                       /* Uart1_IsTxActive() */
+  000f 8d       [7]             RTC   
+  313:  
+  314:  /*****************************************************************************/
+  315:  
+  316:  bool_t Uart2_IsTxActive(void) {
+  317:  #if !gUart2_Enabled_d
+  318:    return FALSE;
+  0000 4f       [1]             CLRA  
+  319:  #else
+  320:    #if gUart2_EnableFullHWFlowControl_d
+  321:      bool_t status;
+  322:      status = (maSci2TxBufLenTable[mSci2TxBufRefTrailingIndex] != 0) || (!(SCI2S1 & 0x40)); 
+  323:      if(TRUE == bUart2RecipientBusy)
+  324:      {
+  325:        pfSci2RxCallBack();
+  326:        if(0 == Uart2_RecipientBusy())
+  327:        {
+  328:          bUart2RecipientBusy = FALSE;
+  329:          if(status)
+  330:          {
+  331:            SCI2C2 |= mSCIxC2_TIE_c;
+  332:          }
+  333:        }
+  334:      }
+  335:      
+  336:      return status;
+  337:    #else
+  338:      return (maSci2TxBufLenTable[mSci2TxBufRefTrailingIndex] != 0) || (!(SCI2S1 & 0x40));
+  339:    #endif  
+  340:  #endif
+  341:  }                                       /* Uart2_IsTxActive() */
+  0001 8d       [7]             RTC   
+  342:  
+  343:  /*****************************************************************************/
+  344:  
+  345:  /* Initialize the serial port(s) and this module's local data. */
+  346:  void Uart_ModuleInit(void) {
+  347:  #if gUart1_Enabled_d
+  348:    
+  349:    Uart1_SetBaud(gUartDefaultBaud_c);
+  0000 ae08     [2]             LDX   #8
+  0002 8c       [1]             CLRH  
+  0003 ac000000 [8]             CALL  Uart1_SetBaud
+  350:  
+  351:    SCI1C1 = mSCI1C1_Init_c;
+  0007 3f3a     [5]             CLR   58
+  352:    SCI1C3 = mSCI1C3_Init_c;
+  0009 6e0f3e   [4]             MOV   #15,62
+  353:    SCI1C2 = mSCI1C2_Init_c;
+  000c 6e0c3b   [4]             MOV   #12,59
+  354:    
+  355:    #ifdef PROCESSOR_MC1323X
+  356:      SCI1C4 = mSCI1C4_Init_c;
+  000f 4f       [1]             CLRA  
+  0010 c71804   [4]             STA   6148
+  357:    #endif
+  358:  
+  359:    #if gUart1_EnableHWFlowControl_d
+  360:      Uart1_EnableFlow();
+  0013 ac000000 [8]             CALL  Uart1_EnableFlow
+  361:    #endif
+  362:  #endif
+  363:  
+  364:  #if gUart2_Enabled_d
+  365:    SCI2BDH = (gUartDefaultBaud_c >> 8);
+  366:    SCI2BDL = (gUartDefaultBaud_c & 0xFF);
+  367:  
+  368:    SCI2C1 = mSCI2C1_Init_c;
+  369:    SCI2C3 = mSCI2C3_Init_c;
+  370:    SCI2C2 = mSCI2C2_Init_c;
+  371:    
+  372:    #if gUart2_EnableHWFlowControl_d
+  373:      Uart2_EnableFlow();
+  374:    #endif
+  375:  #endif
+  376:  
+  377:    Uart_ClearErrors();
+  0017 ac000000 [8]             CALL  Uart_ClearErrors
+  378:    Uart_TaskInit();
+  001b ac000000 [8]             CALL  Uart_TaskInit
+  379:  }                                       /* Uart_ModuleInit() */
+  001f 8d       [7]             RTC   
+  380:  
+  381:  
+  382:  /*****************************************************************************/
+  383:  
+  384:  /* Set a pointer to the function to be called whenever a byte is received. */
+  385:  /* If the pointer is set to NULL, turn off the Rx interrupt and clear the Rx */
+  386:  /* buffer. */
+  387:  void Uart1_SetRxCallBack(void (*pfCallBack)(void)) {
+  388:  #if !gUart1_Enabled_d
+  389:    (void) pfCallBack;
+  390:  #else
+  391:    pfSci1RxCallBack = pfCallBack;
+  0000 9efe05   [5]             LDHX  5,SP
+  0003 960001   [5]             STHX  pfSci1RxCallBack:1
+  0006 95       [2]             TSX   
+  0007 e603     [3]             LDA   3,X
+  0009 c70000   [4]             STA   pfSci1RxCallBack
+  392:  
+  393:    if (pfSci1RxCallBack) {
+  000c 450000   [3]             LDHX  @pfSci1RxCallBack
+  000f cd0000   [6]             JSR   _CMP24_RC
+  0012 00               DC.B  0
+  0013 0000             DC.W  0
+  0015 2703     [3]             BEQ   L1A ;abs = 001a
+  394:      SCI1C2 |= mSCIxC2_RIE_c;
+  0017 1a3b     [5]             BSET  5,59
+  395:    } else {
+  0019 8d       [7]             RTC   
+  001a          L1A:    
+  396:      SCI1C2 &= ~mSCIxC2_RIE_c;
+  001a 1b3b     [5]             BCLR  5,59
+  397:      mSci1RxBufLeadingIndex = mSci1RxBufTrailingIndex = mSci1RxBufferByteCount = 0;
+  001c 4f       [1]             CLRA  
+  001d 450000   [3]             LDHX  @mSci1RxBufferByteCount
+  0020 f7       [2]             STA   ,X
+  0021 f6       [3]             LDA   ,X
+  0022 c70000   [4]             STA   mSci1RxBufTrailingIndex
+  0025 c70000   [4]             STA   mSci1RxBufLeadingIndex
+  398:    }
+  399:  #endif
+  400:  }                                       /* Uart1_SetRxCallback() */
+  0028 8d       [7]             RTC   
+  401:  
+  402:  /*****************************************************************************/
+  403:  
+  404:  void Uart2_SetRxCallBack(void (*pfCallBack)(void)) {
+  405:  #if !gUart2_Enabled_d
+  406:    (void) pfCallBack;
+  407:  #else
+  408:    pfSci2RxCallBack = pfCallBack;
+  409:  
+  410:    if (pfSci2RxCallBack) {
+  411:      SCI2C2 |= mSCIxC2_RIE_c;
+  412:    } else {
+  413:      SCI2C2 &= ~mSCIxC2_RIE_c;
+  414:      mSci2RxBufLeadingIndex = mSci2RxBufTrailingIndex = mSci2RxBufferByteCount = 0;
+  415:    }
+  416:  #endif
+  417:  }                                       /* Uart2_SetRxCallback() */
+  0000 8d       [7]             RTC   
+  418:  
+  419:  /*****************************************************************************/
+  420:  
+  421:  /* Set the UART baud rate. */
+  422:  void Uart1_SetBaud(UartBaudRate_t baudRate) {
+  0000 89       [2]             PSHX  
+  0001 8b       [2]             PSHH  
+  423:  #if !gUart1_Enabled_d
+  424:    (void) baudRate;
+  425:  #else
+  426:  #ifdef PROCESSOR_MC1323X
+  427:    /* Set RXEDGEN in SCI1BDH to enable UART wake-up from STOP3. */
+  428:    SCI1BDH = (baudRate >> 8) | (1 << 6);
+  0002 8b       [2]             PSHH  
+  0003 86       [3]             PULA  
+  0004 aa40     [2]             ORA   #64
+  0006 b738     [3]             STA   56
+  429:  #else
+  430:    SCI1BDH = baudRate >> 8;
+  431:  #endif 
+  432:   SCI1BDL = baudRate & 0xFF;
+  0008 bf39     [3]             STX   57
+  433:    
+  434:    #ifdef PROCESSOR_MC1323X    
+  435:      switch(baudRate)
+  000a 9efe01   [5]             LDHX  1,SP
+  000d 8b       [2]             PSHH  
+  000e 86       [3]             PULA  
+  000f cd0000   [6]             JSR   _Search_Table_16_Offset
+  0012 0341             DC.W  833
+  0014 34               DC.B  L49
+  0015 0008             DC.W  8
+  0017 2c               DC.B  L44
+  0018 0011             DC.W  17
+  001a 26               DC.B  L41
+  001b 001a             DC.W  26
+  001d 1f               DC.B  L3D
+  001e 0034             DC.W  52
+  0020 18               DC.B  L39
+  0021 0068             DC.W  104
+  0023 11               DC.B  L35
+  0024 00d0             DC.W  208
+  0026 0a               DC.B  L31
+  0027 01a0             DC.W  416
+  0029 03               DC.B  L2D
+  002a 0341             DC.W  833
+  002c 04               DC.B  L31
+  002d          L2D:    
+  436:      {
+  437:        case Baudrate_1200:
+  438:                SCI1C4 = gUARTBaudRate1200Div_c;
+  439:                break;
+  440:                
+  441:        case Baudrate_2400:              
+  442:                SCI1C4 = gUARTBaudRate2400Div_c;
+  002d a615     [2]             LDA   #21
+  443:                break;
+  002f 2015     [3]             BRA   L46 ;abs = 0046
+  0031          L31:    
+  444:                
+  445:        case Baudrate_4800:
+  446:                SCI1C4 = gUARTBaudRate4800Div_c;
+  0031 a60b     [2]             LDA   #11
+  0033 2011     [3]             BRA   L46 ;abs = 0046
+  0035          L35:    
+  447:                break;
+  448:                
+  449:        case Baudrate_9600:              
+  450:                SCI1C4 = gUARTBaudRate9600Div_c;
+  0035 a605     [2]             LDA   #5
+  451:                break;   
+  0037 200d     [3]             BRA   L46 ;abs = 0046
+  0039          L39:    
+  452:                
+  453:        case Baudrate_19200:
+  454:                SCI1C4 = gUARTBaudRate19200Div_c;
+  0039 a603     [2]             LDA   #3
+  455:                break;
+  003b 2009     [3]             BRA   L46 ;abs = 0046
+  003d          L3D:    
+  456:                
+  457:        case Baudrate_38400:              
+  458:                SCI1C4 = gUARTBaudRate38400Div_c;
+  003d a601     [2]             LDA   #1
+  459:                break;
+  003f 2005     [3]             BRA   L46 ;abs = 0046
+  0041          L41:    
+  460:                
+  461:        case Baudrate_57600:
+  462:                SCI1C4 = gUARTBaudRate57600Div_c;
+  0041 a60c     [2]             LDA   #12
+  463:                break;
+  0043 65       [3]             SKIP2 L46 ;abs = 0046
+  0044          L44:    
+  464:                
+  465:        case Baudrate_115200:              
+  466:                SCI1C4 = gUARTBaudRate115200Div_c;
+  0044 a616     [2]             LDA   #22
+  0046          L46:    
+  0046 c71804   [4]             STA   6148
+  0049          L49:    
+  467:                break;                                      
+  468:      }    
+  469:    #endif
+  470:  #endif
+  471:  }                                       /* Uart1_SetBaud() */
+  0049 a702     [2]             AIS   #2
+  004b 8d       [7]             RTC   
+  472:  
+  473:  /*****************************************************************************/
+  474:  
+  475:  void Uart2_SetBaud(UartBaudRate_t baudRate) {
+  476:  #if !gUart2_Enabled_d
+  477:    (void) baudRate;
+  478:  #else
+  479:    SCI2BDH = baudRate >> 8;
+  480:    SCI2BDL = baudRate & 0xFF;   
+  481:  #endif
+  482:  }                                       /* Uart2_SetBaud() */
+  0000 8d       [7]             RTC   
+  483:  
+  484:  /*****************************************************************************/
+  485:  
+  486:  /* Begin transmitting size bytes of data from *pBuffer. */
+  487:  /* Returns FALSE if there are no more slots in the buffer reference table. */
+  488:  bool_t Uart1_Transmit(unsigned char const *pBuf, index_t bufLen, void (*pfCallBack)(unsigned char const *pBuf)) {
+  0000 8b       [2]             PSHH  
+  489:  #if !gUart1_Enabled_d
+  490:    (void) pBuf;
+  491:    (void) bufLen;
+  492:    (void) pfCallBack;
+  493:    return TRUE;
+  494:  #else
+  495:    bool_t status = FALSE;
+  0001 95       [2]             TSX   
+  0002 7f       [4]             CLR   ,X
+  496:    /* Handle empty buffers. */
+  497:    if (!bufLen) 
+  0003 6d07     [4]             TST   7,X
+  0005 261e     [3]             BNE   L25 ;abs = 0025
+  498:    {
+  499:      if(pfCallBack)
+  0007 af04     [2]             AIX   #4
+  0009 cd0000   [6]             JSR   _CMP24_RC
+  000c 00               DC.B  0
+  000d 0000             DC.W  0
+  000f 2710     [3]             BEQ   L21 ;abs = 0021
+  500:        (*pfCallBack)(pBuf);
+  0011 9efe09   [5]             LDHX  9,SP
+  0014 89       [2]             PSHX  
+  0015 8b       [2]             PSHH  
+  0016 9efe08   [5]             LDHX  8,SP
+  0019 9ee607   [4]             LDA   7,SP
+  001c 87       [2]             PSHA  
+  001d ac000000 [8]             CALL  _CALL_STAR08_FAR
+  0021          L21:    
+  501:      return TRUE;
+  0021 a601     [2]             LDA   #1
+  502:    }
+  503:  
+  504:  
+  505:    /* Room for one more? */
+  506:    if (maSci1TxBufLenTable[mSci1TxBufRefLeadingIndex] == 0) 
+  507:    {
+  508:         
+  509:     /* Disable the Tx ISR before updating the shared variables */
+  510:     SCI1C2 &= ~mSCIxC2_TIE_c;
+  511:     
+  512:     maSci1TxBufRefTable[mSci1TxBufRefLeadingIndex].pBuf = pBuf;
+  513:     maSci1TxBufRefTable[mSci1TxBufRefLeadingIndex].pfCallBack = pfCallBack;
+  514:     /* This has to be last, in case the Tx ISR finishes with the previous */
+  515:     /* buffer while this function is executing. */
+  516:     maSci1TxBufLenTable[mSci1TxBufRefLeadingIndex] = bufLen;
+  517:     
+  518:     if (++mSci1TxBufRefLeadingIndex >= NumberOfElements(maSci1TxBufRefTable)) {
+  519:       mSci1TxBufRefLeadingIndex = 0;
+  520:     }
+  521:    
+  522:     Uart1_TxCompleteFlag = FALSE;
+  523:     /* Enable the transmit interrupt. Harmless if the interrupt is already */
+  524:     /* enabled. */
+  525:     SCI1C2 |= mSCIxC2_TIE_c;
+  526:     
+  527:     status = TRUE;
+  528:    }
+  529:  
+  530:    return status; 
+  531:  #endif
+  532:  }                                       /* Uart1_Transmit() */
+  0023 8a       [3]             PULH  
+  0024 8d       [7]             RTC   
+  0025          L25:    
+  0025 ce0000   [4]             LDX   mSci1TxBufRefLeadingIndex
+  0028 8c       [1]             CLRH  
+  0029 d60000   [4]             LDA   @maSci1TxBufLenTable,X
+  002c 2644     [3]             BNE   L72 ;abs = 0072
+  002e 1f3b     [5]             BCLR  7,59
+  0030 89       [2]             PSHX  
+  0031 a605     [2]             LDA   #5
+  0033 42       [5]             MUL   
+  0034 97       [1]             TAX   
+  0035 9ee60b   [4]             LDA   11,SP
+  0038 d70001   [4]             STA   @maSci1TxBufRefTable:1,X
+  003b 9ee60a   [4]             LDA   10,SP
+  003e d70000   [4]             STA   @maSci1TxBufRefTable,X
+  0041 9ee608   [4]             LDA   8,SP
+  0044 d70004   [4]             STA   @maSci1TxBufRefTable:4,X
+  0047 9ee607   [4]             LDA   7,SP
+  004a d70003   [4]             STA   @maSci1TxBufRefTable:3,X
+  004d 9ee606   [4]             LDA   6,SP
+  0050 d70002   [4]             STA   @maSci1TxBufRefTable:2,X
+  0053 9ee609   [4]             LDA   9,SP
+  0056 88       [3]             PULX  
+  0057 d70000   [4]             STA   @maSci1TxBufLenTable,X
+  005a 450000   [3]             LDHX  @mSci1TxBufRefLeadingIndex
+  005d 7c       [4]             INC   ,X
+  005e c60000   [4]             LDA   mSci1TxBufRefLeadingIndex
+  0061 a103     [2]             CMP   #3
+  0063 2504     [3]             BCS   L69 ;abs = 0069
+  0065 4f       [1]             CLRA  
+  0066 c70000   [4]             STA   mSci1TxBufRefLeadingIndex
+  0069          L69:    
+  0069 4f       [1]             CLRA  
+  006a c70000   [4]             STA   Uart1_TxCompleteFlag
+  006d 1e3b     [5]             BSET  7,59
+  006f 4c       [1]             INCA  
+  0070 95       [2]             TSX   
+  0071 f7       [2]             STA   ,X
+  0072          L72:    
+  0072 95       [2]             TSX   
+  0073 f6       [3]             LDA   ,X
+  0074 8a       [3]             PULH  
+  0075 8d       [7]             RTC   
+  533:  
+  534:  /**************************************/
+  535:  bool_t Uart2_Transmit(unsigned char const *pBuf, index_t bufLen, void (*pfCallBack)(unsigned char const *pBuf)) {
+  536:  #if !gUart2_Enabled_d
+  537:    (void) pBuf;
+  538:    (void) bufLen;
+  539:    (void) pfCallBack;
+  540:    return TRUE;
+  0000 a601     [2]             LDA   #1
+  541:  #else
+  542:    bool_t status = FALSE;
+  543:    /* Handle empty buffers. */
+  544:    if (!bufLen) 
+  545:    {
+  546:      if(pfCallBack)
+  547:        (*pfCallBack)(pBuf);
+  548:      return TRUE;
+  549:    }
+  550:    
+  551:    /* Room for one more? */
+  552:    if (maSci2TxBufLenTable[mSci2TxBufRefLeadingIndex] == 0) 
+  553:    {
+  554:      /* Disable the Tx ISR before reading or updating the shared variables */
+  555:     SCI2C2 &= ~mSCIxC2_TIE_c;   
+  556:     
+  557:     maSci2TxBufRefTable[mSci2TxBufRefLeadingIndex].pBuf = pBuf;
+  558:     maSci2TxBufRefTable[mSci2TxBufRefLeadingIndex].pfCallBack = pfCallBack;
+  559:     /* This has to be last, in case the Tx ISR finishes with the previous */
+  560:     /* buffer while this function is executing. */
+  561:     maSci2TxBufLenTable[mSci2TxBufRefLeadingIndex] = bufLen;
+  562:  
+  563:     if (++mSci2TxBufRefLeadingIndex >= NumberOfElements(maSci2TxBufRefTable)) {
+  564:       mSci2TxBufRefLeadingIndex = 0;
+  565:     }
+  566:     Uart2_TxCompleteFlag = FALSE;
+  567:     /* Enable the transmit interrupt. Harmless if the interrupt is already */
+  568:     /* enabled. */
+  569:     
+  570:     SCI2C2 |= mSCIxC2_TIE_c;
+  571:     status = TRUE;
+  572:    } 
+  573:    
+  574:    return status;
+  575:  #endif
+  576:  }                                       /* Uart2_Transmit() */
+  0002 8d       [7]             RTC   
+  577:  
+  578:  /*****************************************************************************/
+  579:  
+  580:  /* Shut down the serial port(s). */
+  581:  void Uart_ModuleUninit(void) {
+  582:  #if gUart1_Enabled_d
+  583:    SCI1C1 = mSCIxC1_Reset_c;
+  0000 3f3a     [5]             CLR   58
+  584:    SCI1C3 = mSCIxC2_Reset_c;
+  0002 3f3e     [5]             CLR   62
+  585:    SCI1C2 = mSCIxC3_Reset_c;
+  0004 3f3b     [5]             CLR   59
+  586:    
+  587:    #ifdef PROCESSOR_MC1323X
+  588:      SCI1C4 = mSCIxC4_Reset_c;    
+  0006 4f       [1]             CLRA  
+  0007 c71804   [4]             STA   6148
+  589:    #endif 
+  590:  #endif
+  591:  
+  592:  #if gUart2_Enabled_d
+  593:    SCI2C1 = mSCIxC1_Reset_c;
+  594:    SCI2C3 = mSCIxC2_Reset_c;
+  595:    SCI2C2 = mSCIxC3_Reset_c;
+  596:  #endif
+  597:  }                                       /* Uart_ModuleUninit() */
+  000a 8d       [7]             RTC   
+  598:  
+  599:  /*****************************************************************************/
+  600:  
+  601:  /* Unget a byte: store the byte so that it will be returned by the next call */
+  602:  /* to the get byte function. Also call the Rx call back. */
+  603:  void Uart1_UngetByte(unsigned char byte) {
+  604:  #if !gUart1_Enabled_d
+  605:    (void) byte;
+  606:  #else
+  607:    /* If the un get flag is already true, there isn't anything we can */
+  608:    /* do about it. Not much point in checking. Its up to the called to */
+  609:    /* use this function correctly. */
+  610:    uart1_ungetFlag = TRUE;
+  0000 ae01     [2]             LDX   #1
+  0002 cf0000   [4]             STX   uart1_ungetFlag
+  611:    uart1_ungetByte = byte;
+  0005 c70000   [4]             STA   uart1_ungetByte
+  612:  
+  613:    /* Likewise, it is the caller's responsibility to not call this function */
+  614:    /* if the call back pointer is not valid. */
+  615:    pfSci1RxCallBack();
+  0008 320001   [5]             LDHX  pfSci1RxCallBack:1
+  000b c60000   [4]             LDA   pfSci1RxCallBack
+  000e 8b       [2]             PSHH  
+  000f 8b       [2]             PSHH  
+  0010 8b       [2]             PSHH  
+  0011 ac000000 [8]             CALL  _CALL_STAR08_FAR
+  616:  
+  617:  #endif
+  618:  }                                       /* Uart1_UngetByte() */
+  0015 8d       [7]             RTC   
+  619:  
+  620:  /*****************************************************************************/
+  621:  
+  622:  void Uart2_UngetByte(unsigned char byte) {
+  623:  #if !gUart2_Enabled_d
+  624:    (void) byte;
+  625:  #else
+  626:    uart2_ungetFlag = TRUE;
+  627:    uart2_ungetByte = byte;
+  628:    pfSci2RxCallBack();
+  629:  #endif
+  630:  }                                       /* Uart2_UngetByte() */
+  0000 8d       [7]             RTC   
+  631:  
+  632:  /*****************************************************************************/
+  633:  
+  634:  void Uart_Task(event_t events)
+  635:  {
+  0000 89       [2]             PSHX  
+  0001 8b       [2]             PSHH  
+  636:    void (*pfCallBack)(unsigned char const *pBuf);
+  637:  
+  638:  #if gUart1_Enabled_d
+  639:  
+  640:    if ((events & gRxSci1Event_c) && (pfSci1RxCallBack!=NULL)) {
+  0002 9f       [1]             TXA   
+  0003 a501     [2]             BIT   #1
+  0005 2714     [3]             BEQ   L1B ;abs = 001b
+  0007 320001   [5]             LDHX  pfSci1RxCallBack:1
+  000a 2605     [3]             BNE   L11 ;abs = 0011
+  000c c60000   [4]             LDA   pfSci1RxCallBack
+  000f 270a     [3]             BEQ   L1B ;abs = 001b
+  0011          L11:    
+  641:      pfSci1RxCallBack();
+  0011 c60000   [4]             LDA   pfSci1RxCallBack
+  0014 8b       [2]             PSHH  
+  0015 8b       [2]             PSHH  
+  0016 8b       [2]             PSHH  
+  0017 ac000000 [8]             CALL  _CALL_STAR08_FAR
+  001b          L1B:    
+  642:    }
+  643:  
+  644:    if( events & gTxSci1Event_c ) {
+  001b 95       [2]             TSX   
+  001c e601     [3]             LDA   1,X
+  001e a504     [2]             BIT   #4
+  0020 2639     [3]             BNE   L5B ;abs = 005b
+  0022 203f     [3]             BRA   L63 ;abs = 0063
+  0024          L24:    
+  645:      /*Tx call back event received - run through the callback table and execute any pending
+  646:      Callbacks.
+  647:      */
+  648:      while (maSci1TxCallbackLeadingIndex != maSci1TxCallbackTrailingIndex) {    
+  649:         pfCallBack = maSci1TxCallbackTable[maSci1TxCallbackTrailingIndex].pfCallBack;
+  0024 c60000   [4]             LDA   maSci1TxCallbackTrailingIndex
+  0027 ae05     [2]             LDX   #5
+  0029 42       [5]             MUL   
+  002a 8c       [1]             CLRH  
+  002b 97       [1]             TAX   
+  002c 9ebe0003 [6]             LDHX  @maSci1TxCallbackTable:3,X
+  0030 8b       [2]             PSHH  
+  0031 8c       [1]             CLRH  
+  0032 89       [2]             PSHX  
+  0033 97       [1]             TAX   
+  0034 d60002   [4]             LDA   @maSci1TxCallbackTable:2,X
+  650:        /*Call calback with buffer info as parameter*/
+  651:         pfCallBack(maSci1TxCallbackTable[maSci1TxCallbackTrailingIndex].pBuf);
+  0037 9ebe0000 [6]             LDHX  @maSci1TxCallbackTable,X
+  003b 89       [2]             PSHX  
+  003c 8b       [2]             PSHH  
+  003d 95       [2]             TSX   
+  003e ee03     [3]             LDX   3,X
+  0040 89       [2]             PSHX  
+  0041 95       [2]             TSX   
+  0042 ee03     [3]             LDX   3,X
+  0044 8a       [3]             PULH  
+  0045 87       [2]             PSHA  
+  0046 ac000000 [8]             CALL  _CALL_STAR08_FAR
+  652:        /*increment and wrap around trailing index*/      
+  653:        if (++maSci1TxCallbackTrailingIndex >= NumberOfElements(maSci1TxCallbackTable)) {
+  004a 450000   [3]             LDHX  @maSci1TxCallbackTrailingIndex
+  004d 7c       [4]             INC   ,X
+  004e c60000   [4]             LDA   maSci1TxCallbackTrailingIndex
+  0051 a103     [2]             CMP   #3
+  0053 a702     [2]             AIS   #2
+  0055 2504     [3]             BCS   L5B ;abs = 005b
+  654:          maSci1TxCallbackTrailingIndex = 0;    
+  0057 4f       [1]             CLRA  
+  0058 c70000   [4]             STA   maSci1TxCallbackTrailingIndex
+  005b          L5B:    
+  005b c60000   [4]             LDA   maSci1TxCallbackTrailingIndex
+  005e c10000   [4]             CMP   maSci1TxCallbackLeadingIndex
+  0061 26c1     [3]             BNE   L24 ;abs = 0024
+  0063          L63:    
+  655:        }
+  656:      } /* while */
+  657:    } /*if events ...*/
+  658:  
+  659:  
+  660:  #endif gUart1_Enabled_d
+  661:    
+  662:  #if gUart2_Enabled_d
+  663:  
+  664:    if ((events & gRxSci2Event_c) && (pfSci2RxCallBack!=NULL)) {
+  665:      pfSci2RxCallBack();
+  666:    } 
+  667:  
+  668:    if( events & gTxSci2Event_c ) {
+  669:      /*Tx call back event received - run through the callback table and execute any pending
+  670:      Callbacks.
+  671:      */
+  672:      while (maSci2TxCallbackLeadingIndex != maSci2TxCallbackTrailingIndex) {    
+  673:         pfCallBack = maSci2TxCallbackTable[maSci2TxCallbackTrailingIndex].pfCallBack;
+  674:        /*Call calback with buffer info as parameter*/
+  675:         pfCallBack(maSci2TxCallbackTable[maSci2TxCallbackTrailingIndex].pBuf);
+  676:        /*increment and wrap around trailing index*/
+  677:        if (++maSci2TxCallbackTrailingIndex >= NumberOfElements(maSci2TxCallbackTable)) {
+  678:          maSci2TxCallbackTrailingIndex = 0;    
+  679:        }
+  680:      } /* while */
+  681:    } /*if events ...*/
+  682:  
+  683:  #endif gUart2_Enabled_d
+  684:  }
+  0063 a702     [2]             AIS   #2
+  0065 8d       [7]             RTC   
+  685:  
+  686:  
+  687:  /*****************************************************************************/
+  688:  
+  689:  
+  690:  /* Interrupts service routines (for QE128 these routines are placed in non-paged memory) */
+  691:  /*****************************************************************************/
+  692:  /* Place it in NON_BANKED memory */
+  693:  #ifdef MEMORY_MODEL_BANKED
+  694:  #pragma CODE_SEG __NEAR_SEG NON_BANKED
+  695:  #else
+  696:  #pragma CODE_SEG DEFAULT
+  697:  #endif /* MEMORY_MODEL_BANKED */
+  698:  #if gUart1_Enabled_d
+  699:  INTERRUPT_KEYWORD void Uart1_ErrorIsr(void) {
+  0000 8b       [2]             PSHH  
+  700:    /* Temp storage for SCI1D */
+  701:    uint8_t sci1d;
+  702:    while (SCI1S1 & (mSCIxS1_OR_c | mSCIxS1_NF_c | mSCIxS1_FE_c | mSCIxS1_PF_c)) {
+  0001 65       [3]             SKIP2 L4 ;abs = 0004
+  0002          L2:     
+  703:      /* Read SCI1D, clear error */
+  704:      sci1d = SCI1D;
+  0002 b63f     [3]             LDA   63
+  0004          L4:     
+  0004 b63c     [3]             LDA   60
+  0006 a50f     [2]             BIT   #15
+  0008 26f8     [3]             BNE   L2 ;abs = 0002
+  705:    }
+  706:  }                                       /* Uart1_ErrorIsr() */
+  000a 8a       [3]             PULH  
+  000b 80       [9]             RTI   
+  707:  #endif
+  708:  
+  709:  /*****************************************************************************/
+  710:  
+  711:  #if gUart2_Enabled_d
+  712:  INTERRUPT_KEYWORD void Uart2_ErrorIsr(void) {
+  713:    /* Temp storage for SCI2D */
+  714:    uint8_t sci2d;
+  715:    while (SCI2S1 & (mSCIxS1_OR_c | mSCIxS1_NF_c | mSCIxS1_FE_c | mSCIxS1_PF_c)) {
+  716:      /* Read SCI1D, clear error. */
+  717:      sci2d = SCI2D;
+  718:    }
+  719:  }                                       /* Uart2_ErrorIsr() */
+  720:  #endif
+  721:  
+  722:  /*****************************************************************************/
+  723:  
+  724:  /* Rx ISR. If there is room, store the byte in the Rx circular buffer. */
+  725:  #if gUart1_Enabled_d
+  726:  INTERRUPT_KEYWORD void Uart1_RxIsr(void) {
+  0000 8b       [2]             PSHH  
+  727:    /* Temp storage for SCI1D */
+  728:    uint8_t sci1d;
+  729:  
+  730:    /* The HCS08 does not save H on interrupt. */
+  731:    __asm {
+  732:      PSHH
+  0001 8b       [2]             PSHH  
+  733:    }
+  734:  
+  735:  #ifdef PROCESSOR_MC1323X 
+  736:  if (SCI1S2 & (1 << 6))
+  0002 0d3d05   [5]             BRCLR 6,61,LA ;abs = 000a
+  737:  {
+  738:  	SCI1S2 = SCI1S2;
+  0005 4e3d3d   [5]             MOV   61,61
+  739:  	PWRLib_MCU_WakeupReason.Bits.FromSCI = TRUE;
+  0008 1200     [5]             BSET  1,PWRLib_MCU_WakeupReason
+  000a          LA:     
+  740:  }
+  741:  #endif 
+  742:    
+  743:  #if gUart_Debug_d
+  744:    if (mSci1RxBufferByteCount > uart1RxBufHighWaterMark) {
+  745:      uart1RxBufHighWaterMark = mSci1RxBufferByteCount;
+  746:    }
+  747:  
+  748:  /*   if (mSci1RxBufferByteCount >= sizeof(maSci1RxBuf)) { */
+  749:  /*     /\* Out of room in the Rx buffer. *\/ */
+  750:  /*     while (mSci1RxBufferByteCount);    /\* assert(). *\/ */
+  751:  /*     __asm { */
+  752:  /*       PULH */
+  753:  /*     } */
+  754:  /*     return; */
+  755:  /*   } */
+  756:  #endif
+  757:  
+  758:    /* Receive register full and no errors */
+  759:    if ((SCI1S1 & (mSCIxS1_RDRF_c | mSCIxS1_OR_c | mSCIxS1_NF_c | mSCIxS1_FE_c | mSCIxS1_PF_c)) == mSCIxS1_RDRF_c) 
+  000a b63c     [3]             LDA   60
+  000c a42f     [2]             AND   #47
+  000e a120     [2]             CMP   #32
+  0010 2657     [3]             BNE   L69 ;abs = 0069
+  760:    {
+  761:      maSci1RxBuf[mSci1RxBufLeadingIndex] = SCI1D;
+  0012 8c       [1]             CLRH  
+  0013 ce0000   [4]             LDX   mSci1RxBufLeadingIndex
+  0016 b63f     [3]             LDA   63
+  0018 d70000   [4]             STA   @maSci1RxBuf,X
+  762:  
+  763:      if (++mSci1RxBufLeadingIndex >= sizeof(maSci1RxBuf)) 
+  001b 450000   [3]             LDHX  @mSci1RxBufLeadingIndex
+  001e 7c       [4]             INC   ,X
+  001f c60000   [4]             LDA   mSci1RxBufLeadingIndex
+  0022 a120     [2]             CMP   #32
+  0024 2504     [3]             BCS   L2A ;abs = 002a
+  764:      {
+  765:        mSci1RxBufLeadingIndex = 0;
+  0026 4f       [1]             CLRA  
+  0027 c70000   [4]             STA   mSci1RxBufLeadingIndex
+  002a          L2A:    
+  766:      }
+  767:  
+  768:      if (mSci1RxBufferByteCount < sizeof(maSci1RxBuf)) 
+  002a c60000   [4]             LDA   mSci1RxBufferByteCount
+  002d a120     [2]             CMP   #32
+  002f 2406     [3]             BCC   L37 ;abs = 0037
+  769:      {
+  770:        ++mSci1RxBufferByteCount;
+  0031 450000   [3]             LDHX  @mSci1RxBufferByteCount
+  0034 7c       [4]             INC   ,X
+  771:      }
+  0035 200f     [3]             BRA   L46 ;abs = 0046
+  0037          L37:    
+  772:      else 
+  773:      {
+  774:        /* A new character was received while the buffer is already full. 
+  775:         * The oldest character in the buffer has been overwritten. 
+  776:         * The trailing index must be also incremented to compensate the overwritten characters
+  777:         */
+  778:         if(++mSci1RxBufTrailingIndex >= sizeof(maSci1RxBuf)) 
+  0037 450000   [3]             LDHX  @mSci1RxBufTrailingIndex
+  003a 7c       [4]             INC   ,X
+  003b c60000   [4]             LDA   mSci1RxBufTrailingIndex
+  003e a120     [2]             CMP   #32
+  0040 2504     [3]             BCS   L46 ;abs = 0046
+  779:         {
+  780:          mSci1RxBufTrailingIndex = 0;
+  0042 4f       [1]             CLRA  
+  0043 c70000   [4]             STA   mSci1RxBufTrailingIndex
+  0046          L46:    
+  781:         }
+  782:      }
+  783:      
+  784:  
+  785:  #if gUart1_EnableHWFlowControl_d
+  786:      if (sizeof(maSci1RxBuf) - mSci1RxBufferByteCount <= gUart1_RxFlowControlSkew_d) 
+  0046 c60000   [4]             LDA   mSci1RxBufferByteCount
+  0049 87       [2]             PSHA  
+  004a a620     [2]             LDA   #32
+  004c 95       [2]             TSX   
+  004d f0       [3]             SUB   ,X
+  004e f7       [2]             STA   ,X
+  004f 4f       [1]             CLRA  
+  0050 a200     [2]             SBC   #0
+  0052 87       [2]             PSHA  
+  0053 8a       [3]             PULH  
+  0054 88       [3]             PULX  
+  0055 650008   [3]             CPHX  #8
+  0058 2204     [3]             BHI   L5E ;abs = 005e
+  787:      {
+  788:        Uart1_DisableFlow();
+  005a ac000000 [8]             CALL  Uart1_DisableFlow
+  005e          L5E:    
+  789:      }
+  790:  #endif
+  791:  
+  792:      /* Let the application know a byte has been received. */
+  793:      TS_SendEvent(gUartTaskId, gRxSci1Event_c);
+  005e c60000   [4]             LDA   gUartTaskId
+  0061 ae01     [2]             LDX   #1
+  0063 8c       [1]             CLRH  
+  0064 ac000000 [8]             CALL  TS_SendEvent
+  794:    }
+  0068 65       [3]             SKIP2 L6B ;abs = 006b
+  0069          L69:    
+  795:    else 
+  796:    {
+  797:      sci1d = SCI1D;                      /* Clear the error. */
+  0069 b63f     [3]             LDA   63
+  006b          L6B:    
+  798:    }
+  799:  
+  800:    __asm {
+  801:      PULH
+  006b 8a       [3]             PULH  
+  802:    }
+  803:  }                                       /* Uart1_RxIsr() */
+  006c 8a       [3]             PULH  
+  006d 80       [9]             RTI   
+  804:  #endif
+  805:  
+  806:  /**************************************/
+  807:  
+  808:  #if gUart2_Enabled_d
+  809:  INTERRUPT_KEYWORD void Uart2_RxIsr(void) {
+  810:    /* Temp storage for SCI2D */
+  811:    uint8_t sci2d;
+  812:  
+  813:    /* The HCS08 does not save H on interrupt. */
+  814:    __asm {
+  815:      PSHH
+  816:    }
+  817:  
+  818:  #if gUart_Debug_d
+  819:    if (mSci2RxBufferByteCount > uart2RxBufHighWaterMark) {
+  820:      uart2RxBufHighWaterMark = mSci2RxBufferByteCount;
+  821:    }
+  822:  
+  823:  /*   if (mSci2RxBufferByteCount >= sizeof(maSci2RxBuf)) { */
+  824:  /*     /\* Out of room in the Rx buffer. *\/ */
+  825:  /*     while (mSci2RxBufferByteCount);    /\* assert(). *\/ */
+  826:  /*     __asm { */
+  827:  /*       PULH */
+  828:  /*     } */
+  829:  /*     return; */
+  830:  /*   } */
+  831:  #endif
+  832:  
+  833:    /* Receive register full and no errors */
+  834:    if ((SCI2S1 & (mSCIxS1_RDRF_c | mSCIxS1_OR_c | mSCIxS1_NF_c | mSCIxS1_FE_c | mSCIxS1_PF_c)) == mSCIxS1_RDRF_c) 
+  835:    {
+  836:      maSci2RxBuf[mSci2RxBufLeadingIndex] = SCI2D;
+  837:  
+  838:      if (++mSci2RxBufLeadingIndex >= sizeof(maSci2RxBuf)) 
+  839:      {
+  840:        mSci2RxBufLeadingIndex = 0;
+  841:      }
+  842:  
+  843:      if(mSci2RxBufferByteCount < sizeof(maSci2RxBuf)) 
+  844:      {
+  845:        ++mSci2RxBufferByteCount;
+  846:      }
+  847:      else 
+  848:      {
+  849:        /* A new character was received while the buffer is already full. 
+  850:         * The oldest character in the buffer has been overwritten. 
+  851:         * The trailing index must be also incremented to compensate the overwritten characters
+  852:         */
+  853:         if (++mSci2RxBufTrailingIndex >= sizeof(maSci2RxBuf)) 
+  854:         {
+  855:           mSci2RxBufTrailingIndex = 0;
+  856:         }
+  857:      }
+  858:      
+  859:  #if gUart2_EnableHWFlowControl_d
+  860:      if (sizeof(maSci2RxBuf) - mSci2RxBufferByteCount <= gUart2_RxFlowControlSkew_d) {
+  861:        Uart2_DisableFlow();
+  862:      }
+  863:  #endif
+  864:  
+  865:      /* Let the application know a byte has been received. */
+  866:      TS_SendEvent(gUartTaskId, gRxSci2Event_c);
+  867:    }
+  868:    else {
+  869:      sci2d = SCI2D;                      /* Clear the error. */
+  870:    }
+  871:  
+  872:    __asm {
+  873:      PULH
+  874:    }
+  875:  }                                       /* Uart2_RxIsr() */
+  876:  #endif
+  877:  
+  878:  /* Transmit ISR. */
+  879:  #if gUart1_Enabled_d
+  880:  INTERRUPT_KEYWORD void Uart1_TxIsr(void) {
+  0000 8b       [2]             PSHH  
+  0001 a7fd     [2]             AIS   #-3
+  881:    uint8_t sci1s1;
+  882:    void (*pfCallBack)(unsigned char const *pBuf);
+  883:  
+  884:    /* The HCS08 does not save H on interrupt. */
+  885:    __asm {
+  886:      PSHH
+  0003 8b       [2]             PSHH  
+  887:    }
+  888:    #if gUart1_EnableFullHWFlowControl_d
+  889:    if(Uart1_RecipientBusy())
+  890:    {
+  891:      SCI1C2 &= ~mSCIxC2_TIE_c;
+  892:      bUart1RecipientBusy = TRUE;
+  893:    }
+  894:    else
+  895:    #endif
+  896:    {
+  897:    /* Write a byte. */
+  898:    sci1s1 = SCI1S1;                       /* Required before write to data register. */
+  0004 b63c     [3]             LDA   60
+  899:    SCI1D = maSci1TxBufRefTable[mSci1TxBufRefTrailingIndex].pBuf[mSci1TxCurIndex];
+  0006 ce0000   [4]             LDX   mSci1TxBufRefTrailingIndex
+  0009 a605     [2]             LDA   #5
+  000b 42       [5]             MUL   
+  000c 87       [2]             PSHA  
+  000d c60000   [4]             LDA   mSci1TxCurIndex
+  0010 8c       [1]             CLRH  
+  0011 88       [3]             PULX  
+  0012 db0001   [4]             ADD   @maSci1TxBufRefTable:1,X
+  0015 87       [2]             PSHA  
+  0016 4f       [1]             CLRA  
+  0017 d90000   [4]             ADC   @maSci1TxBufRefTable,X
+  001a 87       [2]             PSHA  
+  001b 8a       [3]             PULH  
+  001c 88       [3]             PULX  
+  001d 7e3f     [5]             MOV   X+,63
+  900:  
+  901:    /* Finished with this buffer? */
+  902:    if (++mSci1TxCurIndex >= maSci1TxBufLenTable[mSci1TxBufRefTrailingIndex]) {
+  001f 450000   [3]             LDHX  @mSci1TxCurIndex
+  0022 7c       [4]             INC   ,X
+  0023 ce0000   [4]             LDX   mSci1TxBufRefTrailingIndex
+  0026 c60000   [4]             LDA   mSci1TxCurIndex
+  0029 8c       [1]             CLRH  
+  002a d10000   [4]             CMP   @maSci1TxBufLenTable,X
+  002d 2403     [3]             BCC   L32 ;abs = 0032
+  002f cc00c4   [4]             JMP   LC4 ;abs = 00c4
+  0032          L32:    
+  903:  
+  904:      /* Mark this one as done, and call the callback. */
+  905:      maSci1TxBufLenTable[mSci1TxBufRefTrailingIndex] = 0;
+  0032 4f       [1]             CLRA  
+  0033 d70000   [4]             STA   @maSci1TxBufLenTable,X
+  906:      pfCallBack = maSci1TxBufRefTable[mSci1TxBufRefTrailingIndex].pfCallBack;
+  0036 a605     [2]             LDA   #5
+  0038 42       [5]             MUL   
+  0039 97       [1]             TAX   
+  003a 9ebe0003 [6]             LDHX  @maSci1TxBufRefTable:3,X
+  003e 9eff03   [5]             STHX  3,SP
+  0041 8c       [1]             CLRH  
+  0042 97       [1]             TAX   
+  0043 de0002   [4]             LDX   @maSci1TxBufRefTable:2,X
+  0046 9eef02   [4]             STX   2,SP
+  907:      if (pfCallBack) {
+  0049 95       [2]             TSX   
+  004a af01     [2]             AIX   #1
+  004c cd0000   [6]             JSR   _CMP24_RC
+  004f 00               DC.B  0
+  0050 0000             DC.W  0
+  0052 274d     [3]             BEQ   LA1 ;abs = 00a1
+  908:        /*Signal uart task that we got a callback to be executed*/
+  909:        TS_SendEvent(gUartTaskId, gTxSci1Event_c);
+  0054 c60000   [4]             LDA   gUartTaskId
+  0057 ae04     [2]             LDX   #4
+  0059 8c       [1]             CLRH  
+  005a ac000000 [8]             CALL  TS_SendEvent
+  910:        /*add callback information to callback table*/
+  911:        maSci1TxCallbackTable[maSci1TxCallbackLeadingIndex].pfCallBack = pfCallBack;
+  005e c60000   [4]             LDA   maSci1TxCallbackLeadingIndex
+  0061 ae05     [2]             LDX   #5
+  0063 42       [5]             MUL   
+  0064 8c       [1]             CLRH  
+  0065 97       [1]             TAX   
+  0066 9ee604   [4]             LDA   4,SP
+  0069 d70004   [4]             STA   @maSci1TxCallbackTable:4,X
+  006c 9ee603   [4]             LDA   3,SP
+  006f d70003   [4]             STA   @maSci1TxCallbackTable:3,X
+  0072 9ee602   [4]             LDA   2,SP
+  0075 d70002   [4]             STA   @maSci1TxCallbackTable:2,X
+  912:        maSci1TxCallbackTable[maSci1TxCallbackLeadingIndex].pBuf = maSci1TxBufRefTable[mSci1TxBufRefTrailingIndex].pBuf;
+  0078 c60000   [4]             LDA   mSci1TxBufRefTrailingIndex
+  007b 89       [2]             PSHX  
+  007c ae05     [2]             LDX   #5
+  007e 42       [5]             MUL   
+  007f 97       [1]             TAX   
+  0080 9ebe0000 [6]             LDHX  @maSci1TxBufRefTable,X
+  0084 8b       [2]             PSHH  
+  0085 8c       [1]             CLRH  
+  0086 9f       [1]             TXA   
+  0087 9eee02   [4]             LDX   2,SP
+  008a d70001   [4]             STA   @maSci1TxCallbackTable:1,X
+  008d 86       [3]             PULA  
+  008e d70000   [4]             STA   @maSci1TxCallbackTable,X
+  913:        /*increment and wrap around leading index*/        
+  914:        if (++maSci1TxCallbackLeadingIndex >= NumberOfElements(maSci1TxBufRefTable)) {
+  0091 450000   [3]             LDHX  @maSci1TxCallbackLeadingIndex
+  0094 7c       [4]             INC   ,X
+  0095 c60000   [4]             LDA   maSci1TxCallbackLeadingIndex
+  0098 a103     [2]             CMP   #3
+  009a 8a       [3]             PULH  
+  009b 2504     [3]             BCS   LA1 ;abs = 00a1
+  915:          maSci1TxCallbackLeadingIndex = 0;
+  009d 4f       [1]             CLRA  
+  009e c70000   [4]             STA   maSci1TxCallbackLeadingIndex
+  00a1          LA1:    
+  916:        }
+  917:      
+  918:      }
+  919:      /*Set Tx Complete flag*/
+  920:      Uart1_TxCompleteFlag = TRUE;
+  00a1 a601     [2]             LDA   #1
+  00a3 c70000   [4]             STA   Uart1_TxCompleteFlag
+  921:  
+  922:      /* Increment to the next buffer. */
+  923:      mSci1TxCurIndex = 0;
+  00a6 4f       [1]             CLRA  
+  00a7 c70000   [4]             STA   mSci1TxCurIndex
+  924:      if (++mSci1TxBufRefTrailingIndex >= NumberOfElements(maSci1TxBufRefTable)) {
+  00aa 450000   [3]             LDHX  @mSci1TxBufRefTrailingIndex
+  00ad 7c       [4]             INC   ,X
+  00ae c60000   [4]             LDA   mSci1TxBufRefTrailingIndex
+  00b1 a103     [2]             CMP   #3
+  00b3 2504     [3]             BCS   LB9 ;abs = 00b9
+  925:        mSci1TxBufRefTrailingIndex = 0;
+  00b5 4f       [1]             CLRA  
+  00b6 c70000   [4]             STA   mSci1TxBufRefTrailingIndex
+  00b9          LB9:    
+  926:      }
+  927:  
+  928:      /* If there is no more data to send, turn off the transmit interrupt. */
+  929:      if (!maSci1TxBufLenTable[mSci1TxBufRefTrailingIndex]) {
+  00b9 ce0000   [4]             LDX   mSci1TxBufRefTrailingIndex
+  00bc 8c       [1]             CLRH  
+  00bd d60000   [4]             LDA   @maSci1TxBufLenTable,X
+  00c0 2602     [3]             BNE   LC4 ;abs = 00c4
+  930:        SCI1C2 &= ~mSCIxC2_TIE_c;
+  00c2 1f3b     [5]             BCLR  7,59
+  00c4          LC4:    
+  931:        }
+  932:      }
+  933:    }
+  934:  
+  935:    __asm {
+  936:      PULH
+  00c4 8a       [3]             PULH  
+  937:    }
+  938:  }                                       /* Uart1_TxIsr() */
+  00c5 a703     [2]             AIS   #3
+  00c7 8a       [3]             PULH  
+  00c8 80       [9]             RTI   
+  939:  #endif
+  940:  
+  941:  /**************************************/
+  942:  
+  943:  #if gUart2_Enabled_d
+  944:  INTERRUPT_KEYWORD void Uart2_TxIsr(void) {
+  945:    uint8_t sci2s1;
+  946:    void (*pfCallBack)(unsigned char const *pBuf);
+  947:   
+  948:    /* The HCS08 does not save H on interrupt. */
+  949:    __asm {
+  950:      PSHH
+  951:    }
+  952:    #if gUart2_EnableFullHWFlowControl_d
+  953:    if(Uart2_RecipientBusy())
+  954:    {
+  955:      SCI2C2 &= ~mSCIxC2_TIE_c;
+  956:      bUart2RecipientBusy = TRUE;
+  957:    }
+  958:    else
+  959:    #endif
+  960:    {
+  961:    /* Write a byte. */
+  962:    sci2s1 = SCI2S1;                       /* Required before write to data register. */
+  963:    SCI2D = maSci2TxBufRefTable[mSci2TxBufRefTrailingIndex].pBuf[mSci2TxCurIndex];
+  964:  
+  965:    /* Finished with this buffer? */
+  966:    if (++mSci2TxCurIndex >= maSci2TxBufLenTable[mSci2TxBufRefTrailingIndex]) {
+  967:  
+  968:      /* Mark this one as done, and call the callback. */
+  969:      maSci2TxBufLenTable[mSci2TxBufRefTrailingIndex] = 0;
+  970:      pfCallBack = maSci2TxBufRefTable[mSci2TxBufRefTrailingIndex].pfCallBack;
+  971:  
+  972:      if (pfCallBack) {
+  973:        /*Signal uart task that we got a callback to be executed*/
+  974:        TS_SendEvent(gUartTaskId, gTxSci2Event_c);
+  975:        /*add callback information to callback table*/
+  976:        maSci2TxCallbackTable[maSci2TxCallbackLeadingIndex].pfCallBack = pfCallBack;
+  977:        maSci2TxCallbackTable[maSci2TxCallbackLeadingIndex].pBuf = maSci2TxBufRefTable[mSci2TxBufRefTrailingIndex].pBuf;
+  978:        /*increment and wrap around leading index*/     
+  979:        if (++maSci2TxCallbackLeadingIndex >= NumberOfElements(maSci2TxBufRefTable)) {
+  980:          maSci2TxCallbackLeadingIndex = 0;
+  981:        }
+  982:      
+  983:      }
+  984:      /*Set Tx Complete flag*/
+  985:      Uart2_TxCompleteFlag = TRUE;
+  986:      
+  987:      /* Increment to the next buffer. */
+  988:      mSci2TxCurIndex = 0;
+  989:      if (++mSci2TxBufRefTrailingIndex >= NumberOfElements(maSci2TxBufRefTable)) {
+  990:        mSci2TxBufRefTrailingIndex = 0;
+  991:      }
+  992:  
+  993:      /* If there is no more data to send, turn off the transmit interrupt. */
+  994:      if (!maSci2TxBufLenTable[mSci2TxBufRefTrailingIndex]) {
+  995:        SCI2C2 &= ~mSCIxC2_TIE_c;
+  996:        }
+  997:      }
+  998:    }  
+  999:  
+ 1000:    __asm {
+ 1001:      PULH
+ 1002:    }
+ 1003:  }                                       /* Uart2_TxIsr() */
+ 1004:  #endif
+ 1005:  
+ 1006:  /*****************************************************************************/
+ 1007:  
+ 1008:  #endif /* gUart1_Enabled_d || gUart2_Enabled_d */
+ 1009:  #pragma CODE_SEG DEFAULT
+ 1010:  
+ 1011:  
+ 1012:  /* Initialize the uart task.*/
+ 1013:  void Uart_TaskInit(void)
+ 1014:  {
+ 1015:  #if gUart1_Enabled_d || gUart2_Enabled_d
+ 1016:    gUartTaskId = TS_CreateTask(gTsUartTaskPriority_c, Uart_Task);
+  0000 a603     [2]             LDA   #3
+  0002 87       [2]             PSHA  
+  0003 450000   [3]             LDHX  @Uart_Task
+  0006 89       [2]             PSHX  
+  0007 8b       [2]             PSHH  
+  0008 a600     [2]             LDA   @Uart_Task:PAGE
+  000a 87       [2]             PSHA  
+  000b ac000000 [8]             CALL  TS_CreateTask
+  000f a704     [2]             AIS   #4
+  0011 c70000   [4]             STA   gUartTaskId
+ 1017:  #endif
+ 1018:  }
+  0014 8d       [7]             RTC   
+ 1019:  
+ 1020:  void Uart1_EnableFlow(void)
+ 1021:    { 
+ 1022:  #if gUart1_Enabled_d && gUart1_EnableHWFlowControl_d  
+ 1023:      if(mUart1FlowDisableCounter)
+  0000 c60000   [4]             LDA   mUart1FlowDisableCounter
+  0003 2704     [3]             BEQ   L9 ;abs = 0009
+ 1024:      { 
+ 1025:          mUart1FlowDisableCounter--;
+  0005 450000   [3]             LDHX  @mUart1FlowDisableCounter
+  0008 7a       [4]             DEC   ,X
+  0009          L9:     
+ 1026:      }
+ 1027:      if(!mUart1FlowDisableCounter)
+  0009 c60000   [4]             LDA   mUart1FlowDisableCounter
+  000c 2602     [3]             BNE   L10 ;abs = 0010
+ 1028:      {
+ 1029:          gSCI1RTSPort_c &= ~gSCI1RTSPin_c;
+  000e 1506     [5]             BCLR  2,6
+  0010          L10:    
+ 1030:      }
+ 1031:  #endif
+ 1032:    }
+  0010 8d       [7]             RTC   
+ 1033:    
+ 1034:  void Uart1_DisableFlow(void)  
+ 1035:    { 
+ 1036:  #if gUart1_Enabled_d && gUart1_EnableHWFlowControl_d  
+ 1037:      gSCI1RTSPort_c |= gSCI1RTSPin_c;
+  0000 1406     [5]             BSET  2,6
+ 1038:      mUart1FlowDisableCounter++;
+  0002 450000   [3]             LDHX  @mUart1FlowDisableCounter
+  0005 7c       [4]             INC   ,X
+ 1039:  #endif
+ 1040:    }
+  0006 8d       [7]             RTC   
+ 1041:    
+ 1042:  void Uart2_EnableFlow(void)   
+ 1043:    { 
+ 1044:  #if gUart2_Enabled_d && gUart2_EnableHWFlowControl_d  
+ 1045:      if(mUart2FlowDisableCounter)
+ 1046:      { 
+ 1047:          mUart2FlowDisableCounter--;
+ 1048:      }
+ 1049:      if(!mUart2FlowDisableCounter)
+ 1050:      {
+ 1051:          gSCI2RTSPort_c &= ~gSCI2RTSPin_c;
+ 1052:      }
+ 1053:  #endif
+ 1054:    }
+  0000 8d       [7]             RTC   
+ 1055:    
+ 1056:  void Uart2_DisableFlow(void)  
+ 1057:    { 
+ 1058:  #if gUart2_Enabled_d && gUart2_EnableHWFlowControl_d  
+ 1059:      gSCI2RTSPort_c |= gSCI2RTSPin_c;
+ 1060:      mUart2FlowDisableCounter++;
+ 1061:  #endif
+ 1062:    }
+  0000 8d       [7]             RTC   
+ 1063:  
+ 1064:  /*****************************************************************************/
+ 1065:  

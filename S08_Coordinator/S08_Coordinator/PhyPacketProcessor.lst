@@ -1,0 +1,937 @@
+ANSI-C/cC++ Compiler for HC08 V-5.0.45 Build 14019, Jan 20 2014
+
+    1:  /************************************************************************************
+    2:  * MC1323X: Implements Packet Processor hardware access functionalities
+    3:  * Handle initializations
+    4:  *
+    5:  * (c) Copyright 2009, Freescale, Inc.  All rights reserved.
+    6:  *
+    7:  * No part of this document must be reproduced in any form - including copied,
+    8:  * transcribed, printed or by any electronic means - without specific written
+    9:  * permission from Freescale Semiconductor.
+   10:  *
+   11:  ************************************************************************************/
+   12:  
+   13:  
+   14:  /************************************************************************************
+   15:  *************************************************************************************
+   16:  * Includes
+   17:  *************************************************************************************
+   18:  ************************************************************************************/
+   19:  #include "EmbeddedTypes.h"
+   20:  #include "IoConfig.h"
+   21:  #include "IrqControlLib.h"
+   22:  #include "Phy.h"
+   23:  #include "PhyDebugMC1323X.h"
+   24:  #include "PlatformInit.h"
+   25:  
+   26:  
+   27:  /************************************************************************************
+   28:  *************************************************************************************
+   29:  * Private macros
+   30:  *************************************************************************************
+   31:  ************************************************************************************/
+   32:  
+   33:  // Address mode indentifiers. Used for both network and MAC interfaces
+   34:  #define gPhyAddrModeNoAddr_c        (0)
+   35:  #define gPhyAddrModeInvalid_c       (1)
+   36:  #define gPhyAddrMode16BitAddr_c     (2)
+   37:  #define gPhyAddrMode64BitAddr_c     (3)
+   38:  
+   39:  // CTL2 register settings for HW CCA types
+   40:  #define  PHY_PP_CCA_TYPE_LINEAR     (0<<3)
+   41:  #define  PHY_PP_CCA_TYPE_CCA        (1<<3) // default HW setting
+   42:  #define  PHY_PP_CCA_TYPE_ED         (2<<3)
+   43:  
+   44:  // PP_PHY_FRMREVTMR register settings for Event Timer prescaler
+   45:  #define  PHY_PP_TMR_PRESCALER_2US   (2<<5)
+   46:  #define  PHY_PP_TMR_PRESCALER_4US   (3<<5)
+   47:  #define  PHY_PP_TMR_PRESCALER_8US   (4<<5)
+   48:  #define  PHY_PP_TMR_PRESCALER_16US  (5<<5)
+   49:  #define  PHY_PP_TMR_PRESCALER_32US  (6<<5)
+   50:  #define  PHY_PP_TMR_PRESCALER_64US  (7<<5)
+   51:  
+   52:  #define PHY_RNG_DELAY 0x0271
+   53:  /***********************************************************************************/
+   54:  
+   55:  #ifdef MAC_PHY_DEBUG  
+   56:    #define  PP_PHY_CTL3_RX_WMRK_MSK_DEBUG   0
+   57:  #else
+   58:    #define  PP_PHY_CTL3_RX_WMRK_MSK_DEBUG   PP_PHY_CTL3_RX_WMRK_MSK_BIT
+   59:  #endif // MAC_PHY_DEBUG
+   60:  
+   61:  /************************************************************************************
+   62:  *************************************************************************************
+   63:  * Private prototypes
+   64:  *************************************************************************************
+   65:  ************************************************************************************/
+   66:  
+   67:  #ifdef MEMORY_MODEL_BANKED
+   68:  #pragma CODE_SEG __NEAR_SEG NON_BANKED
+   69:  #else
+   70:  #pragma CODE_SEG DEFAULT
+   71:  #endif /* MEMORY_MODEL_BANKED */
+   72:  
+   73:  extern void PhyPassRxParams(phyRxParams_t * pRxParams);
+   74:  
+   75:  /************************************************************************************
+   76:  *************************************************************************************
+   77:  * Private type definitions
+   78:  *************************************************************************************
+   79:  ************************************************************************************/
+   80:  
+   81:  /************************************************************************************
+   82:  *************************************************************************************
+   83:  * Public memory declarations
+   84:  *************************************************************************************
+   85:  ************************************************************************************/
+   86:  
+   87:  /************************************************************************************
+   88:  *************************************************************************************
+   89:  * Private memory declarations
+   90:  *************************************************************************************
+   91:  ************************************************************************************/
+   92:  
+   93:  /************************************************************************************
+   94:  *************************************************************************************
+   95:  * Public functions
+   96:  *************************************************************************************
+   97:  ************************************************************************************/
+   98:  
+   99:  volatile uint8_t i;
+  100:  void PhyInit(void)
+  101:  {
+  102:    PHY_DEBUG_LOG(PDBG_PHY_INIT);
+  103:    PhyPassRxParams(NULL);
+  0000 5f       [1]             CLRX  
+  0001 8c       [1]             CLRH  
+  0002 cd0000   [6]             JSR   PhyPassRxParams
+  104:  
+  105:    // reset the TRX logic
+  106:    IoIndirectWrite(PP_PHY_IAR_RESET, PP_PHY_IAR_BIT_TRCV_RST);
+  0005 a624     [2]             LDA   #36
+  0007 451856   [3]             LDHX  #6230
+  000a e705     [3]             STA   5,X
+  000c a680     [2]             LDA   #-128
+  000e e706     [3]             STA   6,X
+  107:  
+  108:    //  PP_PHY_CTL2 unmask global TRX interrupts, enable 16 bit mode for TC2 - TC2 prime EN,
+  109:    PP_PHY_CTL2 =    (PP_PHY_CTL2_TC2PRIME_EN_BIT | \
+  0010 6e0945   [4]             MOV   #9,69
+  110:                     (PP_PHY_CTL2_CCA_TYPE_MASK & PHY_PP_CCA_TYPE_CCA )) \
+  111:                  & ~(PP_PHY_CTL2_TRCV_MSK_BIT    | \
+  112:                      PP_PHY_CTL2_PANCORDNTR_BIT  | \
+  113:                      PP_PHY_CTL2_TC3TMOUT_BIT    | \
+  114:                      PP_PHY_CTL2_TMRLOAD_BIT     | \
+  115:                      PP_PHY_CTL2_PROMISCUOUS_BIT);
+  116:  
+  117:    // clear all PP IRQ bits to avoid unexpected interrupts immediately after init
+  118:    PP_PHY_STATUS1 =  PP_PHY_STATUS1_TMR4_IRQ | \
+  0013 6e0f4d   [4]             MOV   #15,77
+  119:                      PP_PHY_STATUS1_TMR3_IRQ | \
+  120:                      PP_PHY_STATUS1_TMR2_IRQ | \
+  121:                      PP_PHY_STATUS1_TMR1_IRQ;
+  122:  
+  123:    PP_PHY_STATUS2 =  PP_PHY_STATUS2_LO1UNLOCK_IRQ | \
+  0016 6e7f4e   [4]             MOV   #127,78
+  124:                      PP_PHY_STATUS2_FLTR_FAIL_IRQ | \
+  125:                      PP_PHY_STATUS2_RX_WMRK_IRQ   | \
+  126:                      PP_PHY_STATUS2_CCA_IRQ       | \
+  127:                      PP_PHY_STATUS2_RX_IRQ        | \
+  128:                      PP_PHY_STATUS2_TX_IRQ        | \
+  129:                      PP_PHY_STATUS2_SEQ_IRQ;
+  130:  
+  131:  
+  132:  #ifdef MAC_PHY_DEBUG  
+  133:    //  for debug purposes only - log all incoming SFD's
+  134:    PP_PHY_RXWTRMARK = 0;
+  135:  #endif // MAC_PHY_DEBUG
+  136:  
+  137:  
+  138:    //  PP_PHY_CTL1 default HW settings  + AUTOACK enabled
+  139:    PP_PHY_CTL1 =     PP_PHY_CTL1_AUTOACK_BIT   & \
+  0019 6e0844   [4]             MOV   #8,68
+  140:                    ~(PP_PHY_CTL1_TMRTRIGEN_BIT | \
+  141:                      PP_PHY_CTL1_SLOTTED_BIT   | \
+  142:                      PP_PHY_CTL1_CCABFRTX_BIT  | \
+  143:                      PP_PHY_CTL1_RXACKRQD_BIT  | \
+  144:                      PP_PHY_CTL1_XCVSEQ_MASK);
+  145:  
+  146:    //  PP_PHY_CTL3 : disable all interrupts, but RxWtrMark for debug purposes
+  147:    PP_PHY_CTL3  =    PP_PHY_CTL3_CRC_MSK_BIT       | \
+  001c 6eff46   [4]             MOV   #-1,70
+  148:                      PP_PHY_CTL3_CCA_MSK_BIT       | \
+  149:                      PP_PHY_CTL3_RX_WMRK_MSK_DEBUG | \
+  150:                      PP_PHY_CTL3_RX_MSK_BIT        | \
+  151:                      PP_PHY_CTL3_FLTR_FAIL_MSK_BIT | \
+  152:                      PP_PHY_CTL3_TX_MSK_BIT        | \
+  153:                      PP_PHY_CTL3_LO1UNLOCK_MSK_BIT | \
+  154:                      PP_PHY_CTL3_SEQ_MSK_BIT;
+  155:  
+  156:    //  PP_PHY_CTL4 : disable all timers and their interrupts
+  157:    PP_PHY_CTL4  =   (PP_PHY_CTL4_TMR4MSK_BIT     | \
+  001f 6ef047   [4]             MOV   #-16,71
+  158:                      PP_PHY_CTL4_TMR3MSK_BIT     | \
+  159:                      PP_PHY_CTL4_TMR2MSK_BIT     | \
+  160:                      PP_PHY_CTL4_TMR1MSK_BIT)    & \
+  161:                    ~(PP_PHY_CTL4_TMR4CMP_EN_BIT  | \
+  162:                      PP_PHY_CTL4_TMR3CMP_EN_BIT  | \
+  163:                      PP_PHY_CTL4_TMR2CMP_EN_BIT  | \
+  164:                      PP_PHY_CTL4_TMR1CMP_EN_BIT);
+  165:  
+  166:    //  PP_PHY_FRMREVTMR
+  167:    PP_PHY_FRMREVTMR = (PP_PHY_FRMREVTMR_TMPRSC_MASK & PHY_PP_TMR_PRESCALER_16US) | PP_PHY_FRMREVTMR_FRMVER_MASK;
+  0022 a6a3     [2]             LDA   #-93
+  0024 e701     [3]             STA   1,X
+  168:  
+  169:    PP_PHY_SCTL = ((0x0F << PP_PHY_SCTL_INDEX_POS) | \
+  0026 6ef848   [4]             MOV   #-8,72
+  170:                      PP_PHY_SCTL_ACK_FP_BIT)      & \
+  171:                    ~(PP_PHY_SCTL_INDEX_DIS_BIT    | \
+  172:                      PP_PHY_SCTL_INDEX_EN_BIT     | \
+  173:                      PP_PHY_SCTL_SRC_ADDR_EN_BIT);
+  174:  
+  175:    PP_PHY_RXFRMFLT = PP_PHY_RXFRMFLT_CMD_FT_BIT   | \
+  0029 a60b     [2]             LDA   #11
+  002b f7       [2]             STA   ,X
+  176:                      PP_PHY_RXFRMFLT_DATA_FT_BIT  | \
+  177:                      PP_PHY_RXFRMFLT_BEACON_FT_BIT;
+  178:  
+  179:  
+  180:  // BEGIN IFR OVERWRITES
+  181:  /***********************************************************************************/
+  182:  
+  183:    #if defined(PROCESSOR_MC13233C)
+  184:    // MC13233C v2.1 IFR emulation
+  185:    IoIndirectWrite(0x18, 0x48); //"cg_md_bw=1, cg_ct_force=8  (Project Sync 8875)"
+  186:    IoIndirectWrite(0x06, 0x06); //"lo1_vco_buff_en=1, lo1_vco_buff_boost=1"
+  187:    IoIndirectWrite(0x14, 0x75); //"ampmixer_iref=7,ampmixer_lobuf1_ibias=1,  ampmixer_lobuf1_vbias=1"
+  188:    IoIndirectWrite(0x1A, 0x49); //mixpad_sel=9
+  189:    IoIndirectWrite(0x3D, 0x07); //Increase RxACK Turnaround Time by 14 nS  (Project Sync 8949)
+  190:    IoIndirectWrite(0x1D, 0x40); //mic_early (enable VREGM simul with VREGA)
+  191:    IoIndirectWrite(0x0F, 0x15); // VREGM trim
+  192:    #endif
+  193:    
+  194:  
+  195:  #if defined(PROCESSOR_MC13238C)
+  196:    // set CIC_posedge bit
+  197:    // (already present in the MC13237C and MC13234C v1.1 IFR, not needed for MC13233C v2.1 IFR)
+  198:    IoIndirectWrite(0x33, 0x0C);
+  199:  #endif
+  200:  
+  201:    // Applicable for all MC1323x platforms; do not guard with #ifdefs
+  202:    IoIndirectWrite(0x61, 0x01); // set vrega_en_ovrd_en
+  002c a661     [2]             LDA   #97
+  002e e705     [3]             STA   5,X
+  0030 a601     [2]             LDA   #1
+  0032 e706     [3]             STA   6,X
+  203:    IoIndirectWrite(0x60, 0x01); // set vrega_en_ovrd
+  0034 ae60     [2]             LDX   #96
+  0036 cf185b   [4]             STX   6235
+  0039 c7185c   [4]             STA   6236
+  204:  
+  205:    //MC13233C v2.1 PSM manual calibration
+  206:    //200 us delay
+  207:    for(i=0;i<250;i++)
+  003c 4f       [1]             CLRA  
+  003d c70000   [4]             STA   i
+  0040          L40:    
+  0040 450000   [3]             LDHX  @i
+  0043 7c       [4]             INC   ,X
+  0044 c60000   [4]             LDA   i
+  0047 a1fa     [2]             CMP   #-6
+  0049 25f5     [3]             BCS   L40 ;abs = 0040
+  208:    {
+  209:      ;
+  210:    }
+  211:    IoIndirectWrite(0x10, 0x2F); // psm manual calibration
+  004b a610     [2]             LDA   #16
+  004d c7185b   [4]             STA   6235
+  0050 ae2f     [2]             LDX   #47
+  0052 cf185c   [4]             STX   6236
+  212:    IoIndirectWrite(0x10, 0x3F); // psm manual calibration
+  0055 c7185b   [4]             STA   6235
+  0058 a63f     [2]             LDA   #63
+  005a c7185c   [4]             STA   6236
+  213:    
+  214:  #if defined(PROCESSOR_MC13233C) || defined(PROCESSOR_MC13238C) 
+  215:    // Override Stage 2 Auto-RxAck Checking (Illegal Ack Frame Format in Sequence TR)
+  216:    // Do not filter ACKs based on frame version field.
+  217:    IoIndirectWrite(0x4A, 0x10);
+  218:  #endif
+  219:  
+  220:  // END IFR OVERWRITES
+  221:  /***********************************************************************************/
+  222:  
+  223:    (void)PhyPlmeSetCurrentChannelRequest(0x0B); //2405 MHz
+  005d a60b     [2]             LDA   #11
+  005f cd0000   [6]             JSR   PhyPlmeSetCurrentChannelRequest
+  224:    (void)PhyPlmeSetPwrLevelRequest(0x0C); //set the power level to 0dBm
+  0062 a60c     [2]             LDA   #12
+  0064 cd0000   [6]             JSR   PhyPlmeSetPwrLevelRequest
+  225:    (void)PhyPpSetCcaThreshold(0x00);
+  0067 4f       [1]             CLRA  
+  0068 cd0000   [6]             JSR   PhyPpSetCcaThreshold
+  226:  
+  227:  #if (gPpdMode_d != gPpdModeOFF_d)  
+  228:    PPD_InitPpdMode();
+  229:  #endif //gPpdMode_d             
+  230:    
+  231:    PP_PHY_MAXFRMLEN = 0x7F;
+  006b a67f     [2]             LDA   #127
+  006d c71855   [4]             STA   6229
+  232:  }
+  0070 81       [6]             RTS   
+  233:  
+  234:  /***********************************************************************************/
+  235:  
+  236:  void    PhyPpSetPromiscuous(bool_t mode)
+  237:  {
+  238:    PHY_DEBUG_LOG(PDBG_PP_SET_PROMISC);
+  239:    if(TRUE == mode)
+  0000 4b11     [4]             DBNZA L13 ;abs = 0013
+  240:    {
+  241:      PP_PHY_CTL2     |=   PP_PHY_CTL2_PROMISCUOUS_BIT;
+  0002 1245     [5]             BSET  1,69
+  242:      PP_PHY_RXFRMFLT |=   PP_PHY_RXFRMFLT_ACK_FT_BIT | PP_PHY_RXFRMFLT_NS_FT_BIT;
+  0004 c61856   [4]             LDA   6230
+  0007 aa14     [2]             ORA   #20
+  0009 c71856   [4]             STA   6230
+  243:  	PP_PHY_FRMREVTMR &= (~PP_PHY_FRMREVTMR_FRMVER_MASK);
+  000c c61857   [4]             LDA   6231
+  000f a4fc     [2]             AND   #-4
+  244:    }
+  0011 200d     [3]             BRA   L20 ;abs = 0020
+  0013          L13:    
+  245:    else
+  246:    {
+  247:      PP_PHY_CTL2     &=  ~PP_PHY_CTL2_PROMISCUOUS_BIT;
+  0013 1345     [5]             BCLR  1,69
+  248:      PP_PHY_RXFRMFLT &= ~(PP_PHY_RXFRMFLT_ACK_FT_BIT | PP_PHY_RXFRMFLT_NS_FT_BIT);
+  0015 451856   [3]             LDHX  #6230
+  0018 f6       [3]             LDA   ,X
+  0019 a4eb     [2]             AND   #-21
+  001b f7       [2]             STA   ,X
+  249:  	PP_PHY_FRMREVTMR |= PP_PHY_FRMREVTMR_FRMVER_MASK;
+  001c e601     [3]             LDA   1,X
+  001e aa03     [2]             ORA   #3
+  0020          L20:    
+  0020 c71857   [4]             STA   6231
+  250:  	
+  251:    }
+  252:  }
+  0023 81       [6]             RTS   
+  253:  
+  254:  /***********************************************************************************/
+  255:  
+  256:  
+  257:  void    PhyAbort(void)
+  258:  {
+  0000 a7fe     [2]             AIS   #-2
+  259:    uint8_t irqStatus;
+  260:    volatile uint8_t time = 0;
+  0002 95       [2]             TSX   
+  0003 7f       [4]             CLR   ,X
+  261:  #if (gPpdMode_d != gPpdModeOFF_d)      
+  262:    volatile uint8_t temp;
+  263:  #endif //(gPpdMode_d != gPpdModeOFF_d)    
+  264:    
+  265:    IrqControlLib_BackupIrqStatus(irqStatus);
+  0004 85       [1]             TPA   
+  0005 e701     [3]             STA   1,X
+  266:    IrqControlLib_DisableAllIrqs();
+  0007 9b       [1]             SEI   
+  267:  
+  268:    PHY_DEBUG_LOG(PDBG_PHY_ABORT);
+  269:  
+  270:  #if (gPpdMode_d != gPpdModeOFF_d)      
+  271:      // Pre-requisite of setting the HW sequencer to idle state
+  272:      temp = IoIndirectRead(0x17);
+  273:      IoIndirectWrite(0x17, 0x00);   //disable the PPD
+  274:  #endif //(gPpdMode_d != gPpdModeOFF_d)    
+  275:  
+  276:    
+  277:    // Disable BOTH timer trigger (for scheduled XCVSEQ) set XCVSEQ=0 to idle (abort)
+  278:    PP_PHY_CTL1   &=  ~(PP_PHY_CTL1_TMRTRIGEN_BIT);
+  0008 1f44     [5]             BCLR  7,68
+  279:  
+  280:  #if (gPpdMode_d != gPpdModeOFF_d)        
+  281:      IoIndirectWrite(0x17, temp); //restore the PPD mode
+  282:  #endif //(gPpdMode_d != gPpdModeOFF_d)        
+  283:  
+  284:    
+  285:    // Give the FSM enough time to start if it was triggered, due to TMR2 race condition
+  286:    time = PP_PHY_EVENTTMR0;
+  000a b653     [3]             LDA   83
+  000c f7       [2]             STA   ,X
+  000d          LD:     
+  287:    while((PP_PHY_EVENTTMR0 - time) < 2);
+  000d b653     [3]             LDA   83
+  000f f0       [3]             SUB   ,X
+  0010 a102     [2]             CMP   #2
+  0012 25f9     [3]             BCS   LD ;abs = 000d
+  288:  
+  289:  
+  290:  #if (gPpdMode_d != gPpdModeOFF_d)      
+  291:      // Pre-requisite of setting the HW sequencer to idle state
+  292:      temp = IoIndirectRead(0x17);
+  293:      IoIndirectWrite(0x17, 0x00);   //disable the PPD
+  294:  #endif //(gPpdMode_d != gPpdModeOFF_d)    
+  295:  
+  296:    // In case, due to race condition between abort and TMR2IRQ, sequence did start, abort again
+  297:    PP_PHY_CTL1   &=  ~(PP_PHY_CTL1_XCVSEQ_MASK);
+  0014 b644     [3]             LDA   68
+  0016 a4f8     [2]             AND   #-8
+  0018 b744     [3]             STA   68
+  001a          L1A:    
+  298:  
+  299:  
+  300:  #if (gPpdMode_d != gPpdModeOFF_d)        
+  301:      IoIndirectWrite(0x17, temp); //restore the PPD mode
+  302:  #endif //(gPpdMode_d != gPpdModeOFF_d)        
+  303:  
+  304:    // wait for Sequence Idle (if not already)    
+  305:    while (PP_PHY_FSM != 0);
+  001a c6185a   [4]             LDA   6234
+  001d 26fb     [3]             BNE   L1A ;abs = 001a
+  306:    
+  307:    // mask SEQ interrupt
+  308:    PP_PHY_CTL3   |=  PP_PHY_CTL3_SEQ_MSK_BIT;
+  001f 1046     [5]             BSET  0,70
+  309:    
+  310:    // stop timers
+  311:    PP_PHY_CTL2   &=  ~PP_PHY_CTL2_TC3TMOUT_BIT;
+  0021 1d45     [5]             BCLR  6,69
+  312:    PP_PHY_CTL4   &= ~(PP_PHY_CTL4_TMR3CMP_EN_BIT | PP_PHY_CTL4_TMR2CMP_EN_BIT);
+  0023 b647     [3]             LDA   71
+  0025 a4f9     [2]             AND   #-7
+  0027 b747     [3]             STA   71
+  313:    PP_PHY_CTL4   |=   PP_PHY_CTL4_TMR2MSK_BIT    | PP_PHY_CTL4_TMR3MSK_BIT;     // mask TMR2 and TMR3 interrupts
+  0029 b647     [3]             LDA   71
+  002b aa60     [2]             ORA   #96
+  002d b747     [3]             STA   71
+  314:    
+  315:    PhyPassRxParams(NULL); 
+  002f 5f       [1]             CLRX  
+  0030 8c       [1]             CLRH  
+  0031 cd0000   [6]             JSR   PhyPassRxParams
+  316:  
+  317:    // clear all PP IRQ bits to avoid unexpected interrupts
+  318:    PP_PHY_STATUS1  = PP_PHY_STATUS1;
+  0034 4e4d4d   [5]             MOV   77,77
+  319:    PP_PHY_STATUS2  = PP_PHY_STATUS2;
+  0037 4e4e4e   [5]             MOV   78,78
+  320:  
+  321:    IrqControlLib_RestoreIrqStatus(irqStatus);
+  003a 95       [2]             TSX   
+  003b e601     [3]             LDA   1,X
+  003d 84       [1]             TAP   
+  322:  }
+  003e a702     [2]             AIS   #2
+  0040 81       [6]             RTS   
+  323:  
+  324:  /***********************************************************************************/
+  325:  
+  326:  void    PhyPpSetPanId(uint8_t *pPanId)
+  327:  {
+  328:    PHY_DEBUG_LOG(PDBG_PP_SET_PANID);
+  329:  
+  330:  #ifdef PHY_PARAMETERS_VALIDATION
+  331:    if(NULL == pPanId)
+  332:    {
+  333:      return;
+  334:    }
+  335:  #endif // PHY_PARAMETERS_VALIDATION
+  336:  
+  337:    PP_PHY_PANIDH = pPanId[1];
+  0000 e601     [3]             LDA   1,X
+  0002 b75e     [3]             STA   94
+  338:    PP_PHY_PANIDL = pPanId[0];
+  0004 7e5f     [5]             MOV   X+,95
+  339:  }
+  0006 81       [6]             RTS   
+  340:  
+  341:  /***********************************************************************************/
+  342:  
+  343:  void    PhyPpSetShortAddr(uint8_t *pShortAddr)
+  344:  {
+  345:    PHY_DEBUG_LOG(PDBG_PP_SET_SHORTADDR);
+  346:    
+  347:  #ifdef PHY_PARAMETERS_VALIDATION
+  348:    if(NULL == pShortAddr)
+  349:    {
+  350:      return;
+  351:    }
+  352:  #endif // PHY_PARAMETERS_VALIDATION
+  353:  
+  354:    PP_PHY_SHRTADDRH = pShortAddr[1];
+  0000 e601     [3]             LDA   1,X
+  0002 b75c     [3]             STA   92
+  355:    PP_PHY_SHRTADDRL = pShortAddr[0];
+  0004 7e5d     [5]             MOV   X+,93
+  356:  }
+  0006 81       [6]             RTS   
+  357:  
+  358:  /***********************************************************************************/
+  359:  
+  360:  void    PhyPpSetLongAddr(uint8_t *pLongAddr)
+  361:  {
+  362:    PHY_DEBUG_LOG(PDBG_PP_SET_LONGADDR);
+  363:  
+  364:  #ifdef PHY_PARAMETERS_VALIDATION
+  365:    if(NULL == pLongAddr)
+  366:    {
+  367:      return;
+  368:    }
+  369:  #endif // PHY_PARAMETERS_VALIDATION
+  370:  
+  371:    PP_PHY_LONGADR0  = pLongAddr[0];
+  0000 f6       [3]             LDA   ,X
+  0001 c71854   [4]             STA   6228
+  372:    PP_PHY_LONGADR8  = pLongAddr[1];
+  0004 e601     [3]             LDA   1,X
+  0006 c71853   [4]             STA   6227
+  373:    PP_PHY_LONGADR16 = pLongAddr[2];
+  0009 e602     [3]             LDA   2,X
+  000b c71852   [4]             STA   6226
+  374:    PP_PHY_LONGADR24 = pLongAddr[3];
+  000e e603     [3]             LDA   3,X
+  0010 c71851   [4]             STA   6225
+  375:    PP_PHY_LONGADR32 = pLongAddr[4];
+  0013 e604     [3]             LDA   4,X
+  0015 c71850   [4]             STA   6224
+  376:    PP_PHY_LONGADR40 = pLongAddr[5];
+  0018 e605     [3]             LDA   5,X
+  001a c7184f   [4]             STA   6223
+  377:    PP_PHY_LONGADR48 = pLongAddr[6];
+  001d e606     [3]             LDA   6,X
+  001f c7184e   [4]             STA   6222
+  378:    PP_PHY_LONGADR56 = pLongAddr[7];
+  0022 e607     [3]             LDA   7,X
+  0024 c7184d   [4]             STA   6221
+  379:  }
+  0027 81       [6]             RTS   
+  380:  
+  381:  /***********************************************************************************/
+  382:  
+  383:  void    PhyPpSetMacRole(bool_t macRole)
+  384:  {
+  385:    PHY_DEBUG_LOG(PDBG_PP_SET_MACROLE);
+  386:    if(gMacRole_PanCoord_c == macRole)
+  0000 4b03     [4]             DBNZA L5 ;abs = 0005
+  387:    {
+  388:      PP_PHY_CTL2 |=  PP_PHY_CTL2_PANCORDNTR_BIT;
+  0002 1a45     [5]             BSET  5,69
+  389:    }
+  0004 81       [6]             RTS   
+  0005          L5:     
+  390:    else
+  391:    {
+  392:      PP_PHY_CTL2 &= ~PP_PHY_CTL2_PANCORDNTR_BIT;
+  0005 1b45     [5]             BCLR  5,69
+  393:    }
+  394:  }
+  0007 81       [6]             RTS   
+  395:  
+  396:  /***********************************************************************************/
+  397:  
+  398:  void    PhyPpSetCcaThreshold(uint8_t ccaThreshold)
+  399:  {
+  400:    PP_PHY_CCATHRSHD = ccaThreshold;
+  0000 c71858   [4]             STA   6232
+  401:  }
+  0003 81       [6]             RTS   
+  402:  
+  403:  /***********************************************************************************/
+  404:  
+  405:  bool_t  PhyPpIsTxAckDataPending(void)
+  406:  {
+  407:    if(PP_PHY_STATUS1 & PP_PHY_STATUS1_SRCADDR_BIT)
+  0000 0b4d03   [5]             BRCLR 5,77,L6 ;abs = 0006
+  408:    {
+  409:      return TRUE;
+  0003 a601     [2]             LDA   #1
+  0005 81       [6]             RTS   
+  0006          L6:     
+  410:    }
+  411:    return FALSE;
+  0006 4f       [1]             CLRA  
+  412:  }
+  0007 81       [6]             RTS   
+  413:  
+  414:  /***********************************************************************************/
+  415:  
+  416:  bool_t  PhyPpIsRxAckDataPending(void)
+  417:  {
+  418:    if(PP_PHY_STATUS2 & PP_PHY_STATUS2_FRPEND_BIT)
+  0000 0f4e03   [5]             BRCLR 7,78,L6 ;abs = 0006
+  419:    {
+  420:      return TRUE;
+  0003 a601     [2]             LDA   #1
+  0005 81       [6]             RTS   
+  0006          L6:     
+  421:    }
+  422:    return FALSE;
+  0006 4f       [1]             CLRA  
+  423:  }
+  0007 81       [6]             RTS   
+  424:  
+  425:  /***********************************************************************************/
+  426:  
+  427:  bool_t  PhyPpIsPollIndication(void)
+  428:  {
+  429:    if(PP_PHY_STATUS1 & PP_PHY_STATUS1_PI_BIT)
+  0000 094d03   [5]             BRCLR 4,77,L6 ;abs = 0006
+  430:    {
+  431:      return TRUE;
+  0003 a601     [2]             LDA   #1
+  0005 81       [6]             RTS   
+  0006          L6:     
+  432:    }
+  433:    return FALSE;
+  0006 4f       [1]             CLRA  
+  434:  }
+  0007 81       [6]             RTS   
+  435:  
+  436:  /***********************************************************************************/
+  437:  
+  438:  void    PhyPp_AddToIndirect(uint8_t index, uint8_t *pPanId, uint8_t *pAddr, uint8_t AddrMode)
+  439:  {
+  0000 89       [2]             PSHX  
+  0001 8b       [2]             PSHH  
+  0002 87       [2]             PSHA  
+  0003 a7fb     [2]             AIS   #-5
+  440:    uint16_t mAddrChecksum, tmp16;
+  441:    uint8_t  iAddr;
+  442:  
+  443:    PHY_DEBUG_LOG1(PDBG_PP_ADD_INDIRECT, index);
+  444:  
+  445:  #ifdef PHY_PARAMETERS_VALIDATION
+  446:    if((NULL == pPanId) || (NULL == pAddr))
+  447:    {
+  448:      return;
+  449:    }
+  450:    if( (gPhyAddrMode64BitAddr_c != AddrMode) && (gPhyAddrMode16BitAddr_c != AddrMode) )
+  451:    {
+  452:      return;
+  453:    }
+  454:  #endif // PHY_PARAMETERS_VALIDATION
+  455:  
+  456:    mAddrChecksum  =  * pPanId;
+  0005 9efe0b   [5]             LDHX  11,SP
+  0008 f6       [3]             LDA   ,X
+  0009 8c       [1]             CLRH  
+  000a 97       [1]             TAX   
+  000b 9eff01   [5]             STHX  1,SP
+  457:    mAddrChecksum |= (*(pPanId+1))<<8;
+  000e 9efe0b   [5]             LDHX  11,SP
+  0011 e601     [3]             LDA   1,X
+  0013 97       [1]             TAX   
+  0014 4f       [1]             CLRA  
+  0015 9eea02   [4]             ORA   2,SP
+  0018 9ee702   [4]             STA   2,SP
+  001b 9f       [1]             TXA   
+  001c 95       [2]             TSX   
+  001d fa       [3]             ORA   ,X
+  001e f7       [2]             STA   ,X
+  458:    if( gPhyAddrMode16BitAddr_c == AddrMode )
+  001f e605     [3]             LDA   5,X
+  0021 a102     [2]             CMP   #2
+  0023 2603     [3]             BNE   L28 ;abs = 0028
+  459:    {
+  460:      // chksum = (dstPANID + dstAddr[15:0]) % 65536
+  461:      iAddr = 1;
+  0025 a601     [2]             LDA   #1
+  462:    } 
+  0027 65       [3]             SKIP2 L2A ;abs = 002a
+  0028          L28:    
+  463:    else // 64 bit address mode
+  464:    {
+  465:      // chksum = (dstPANID + dstAddr[15: 0]) % 65536
+  466:      // chksum = (chksum   + dstAddr[31:15]) % 65536
+  467:      // chksum = (chksum   + dstAddr[47:32]) % 65536
+  468:      // chksum = (chksum   + dstAddr[63:48]) % 65536
+  469:      iAddr = 4;
+  0028 a604     [2]             LDA   #4
+  002a          L2A:    
+  002a e702     [3]             STA   2,X
+  002c          L2C:    
+  470:    }
+  471:  
+  472:    do
+  473:    {
+  474:      tmp16  =  * pAddr;
+  002c 9efe07   [5]             LDHX  7,SP
+  002f f6       [3]             LDA   ,X
+  0030 89       [2]             PSHX  
+  0031 8c       [1]             CLRH  
+  0032 97       [1]             TAX   
+  0033 9eff05   [5]             STHX  5,SP
+  475:      tmp16 |= (*(pAddr+1))<<8;
+  0036 9efe08   [5]             LDHX  8,SP
+  0039 e601     [3]             LDA   1,X
+  003b 97       [1]             TAX   
+  003c 4f       [1]             CLRA  
+  003d 9eea06   [4]             ORA   6,SP
+  0040 87       [2]             PSHA  
+  0041 9f       [1]             TXA   
+  0042 9eea06   [4]             ORA   6,SP
+  476:      mAddrChecksum += tmp16;
+  0045 87       [2]             PSHA  
+  0046 9ee602   [4]             LDA   2,SP
+  0049 9eeb05   [4]             ADD   5,SP
+  004c 9ee705   [4]             STA   5,SP
+  004f 86       [3]             PULA  
+  0050 9ee903   [4]             ADC   3,SP
+  0053 9ee703   [4]             STA   3,SP
+  477:      
+  478:      pAddr += 2;
+  0056 9eee02   [4]             LDX   2,SP
+  0059 af02     [2]             AIX   #2
+  005b 9eff09   [5]             STHX  9,SP
+  479:      iAddr--;
+  005e 95       [2]             TSX   
+  005f 6a04     [5]             DEC   4,X
+  480:    } while(iAddr != 0);
+  0061 a702     [2]             AIS   #2
+  0063 26c7     [3]             BNE   L2C ;abs = 002c
+  481:  
+  482:    PP_PHY_SCTL = ((index << PP_PHY_SCTL_INDEX_POS) | PP_PHY_SCTL_SRC_ADDR_EN_BIT) & ~(PP_PHY_SCTL_INDEX_DIS_BIT  |   PP_PHY_SCTL_INDEX_EN_BIT  | PP_PHY_SCTL_ACK_FP_BIT);
+  0065 e60e     [3]             LDA   14,X
+  0067 62       [1]             NSA   
+  0068 a4f0     [2]             AND   #-16
+  006a aa04     [2]             ORA   #4
+  006c b748     [3]             STA   72
+  483:    PP_PHY_SADRSUMD = mAddrChecksum;
+  006e 9efe01   [5]             LDHX  1,SP
+  0071 3549     [5]             STHX  73
+  484:    PP_PHY_SCTL = ((index << PP_PHY_SCTL_INDEX_POS) | PP_PHY_SCTL_SRC_ADDR_EN_BIT  |   PP_PHY_SCTL_INDEX_EN_BIT)  & ~(PP_PHY_SCTL_INDEX_DIS_BIT | PP_PHY_SCTL_ACK_FP_BIT);
+  0073 aa02     [2]             ORA   #2
+  0075 b748     [3]             STA   72
+  485:  }
+  0077 a708     [2]             AIS   #8
+  0079 81       [6]             RTS   
+  486:  
+  487:  /***********************************************************************************/
+  488:  
+  489:  void     PhyPp_RemoveFromIndirect(uint8_t index)
+  490:  {
+  491:    PHY_DEBUG_LOG1(PDBG_PP_REMOVE_INDIRECT, index);
+  492:    PP_PHY_SCTL = ((index << PP_PHY_SCTL_INDEX_POS) | PP_PHY_SCTL_SRC_ADDR_EN_BIT  |   PP_PHY_SCTL_INDEX_DIS_BIT) & ~(PP_PHY_SCTL_INDEX_EN_BIT  | PP_PHY_SCTL_ACK_FP_BIT);
+  0000 62       [1]             NSA   
+  0001 a4f0     [2]             AND   #-16
+  0003 aa05     [2]             ORA   #5
+  0005 b748     [3]             STA   72
+  493:  }
+  0007 81       [6]             RTS   
+  494:  
+  495:  /***********************************************************************************/
+  496:  
+  497:  uint8_t PhyPpReadLatestIndex(void)
+  498:  {
+  499:    uint8_t retVal;
+  500:    retVal = (PP_PHY_SCTL >> PP_PHY_SCTL_INDEX_POS);
+  0000 b648     [3]             LDA   72
+  0002 62       [1]             NSA   
+  0003 a40f     [2]             AND   #15
+  501:    PHY_DEBUG_LOG1(PDBG_PP_READ_LATEST_INDEX, retVal);
+  502:    return retVal;
+  503:  }
+  0005 81       [6]             RTS   
+  504:  
+  505:  /***********************************************************************************/
+  506:  
+  507:  void    PhyEnableBER(void)
+  508:  {
+  509:    uint8_t tmp = IoIndirectRead(PP_PHY_IAR_DIG_TESTMODE);
+  0000 a659     [2]             LDA   #89
+  0002 c7185b   [4]             STA   6235
+  0005 c6185c   [4]             LDA   6236
+  510:    IoIndirectWrite(PP_PHY_IAR_DIG_TESTMODE, tmp | PP_PHY_IAR_BIT_BER_EN);
+  0008 ae59     [2]             LDX   #89
+  000a cf185b   [4]             STX   6235
+  000d aa08     [2]             ORA   #8
+  000f c7185c   [4]             STA   6236
+  511:  }
+  0012 81       [6]             RTS   
+  512:  
+  513:  /***********************************************************************************/
+  514:  
+  515:  void    PhyDisableBER(void)
+  516:  {
+  517:    uint8_t tmp = IoIndirectRead(PP_PHY_IAR_DIG_TESTMODE);
+  0000 a659     [2]             LDA   #89
+  0002 c7185b   [4]             STA   6235
+  0005 c6185c   [4]             LDA   6236
+  518:    IoIndirectWrite(PP_PHY_IAR_DIG_TESTMODE, tmp & (~PP_PHY_IAR_BIT_BER_EN));
+  0008 ae59     [2]             LDX   #89
+  000a cf185b   [4]             STX   6235
+  000d a4f7     [2]             AND   #-9
+  000f c7185c   [4]             STA   6236
+  519:  }
+  0012 81       [6]             RTS   
+  520:  
+  521:  /***********************************************************************************/
+  522:  
+  523:  void PhyGetRandomNo(uint32_t *pRandomNo) {
+  0000 a7f3     [2]             AIS   #-13
+  524:        
+  525:    uint32_t startTime, endTime;
+  526:    uint8_t  *ptr = (uint8_t *)pRandomNo;
+  0002 9eff02   [5]             STHX  2,SP
+  527:    uint8_t  i = 4, iar60save, iar61save;
+  0005 a604     [2]             LDA   #4
+  0007 95       [2]             TSX   
+  0008 f7       [2]             STA   ,X
+  528:    
+  529:     //slightly alter the FRACL register for increasing the randomness
+  530:    PP_PHY_LO1FRACL ++;
+  0009 45184a   [3]             LDHX  #6218
+  000c 7c       [4]             INC   ,X
+  000d cd0096   [6]             JSR   L96 ;abs = 0096
+  531:    
+  532:    // backup 0x60 and 0x61 IARs
+  533:    iar60save = IoIndirectRead(0x60);
+  0010 45185b   [3]             LDHX  #6235
+  0013 e601     [3]             LDA   1,X
+  0015 9ee708   [4]             STA   8,SP
+  534:    iar61save = IoIndirectRead(0x61);
+  0018 a661     [2]             LDA   #97
+  001a f7       [2]             STA   ,X
+  001b ee01     [3]             LDX   1,X
+  001d 9eef09   [4]             STX   9,SP
+  535:    
+  536:  
+  537:     // Turn ON the override enable
+  538:    IoIndirectWrite(0x61, 0x07);
+  0020 c7185b   [4]             STA   6235
+  0023 a607     [2]             LDA   #7
+  0025 c7185c   [4]             STA   6236
+  0028 ad6c     [5]             BSR   L96 ;abs = 0096
+  539:     // override method
+  540:    IoIndirectWrite(0x60, 0x07);
+  002a a607     [2]             LDA   #7
+  002c c7185c   [4]             STA   6236
+  541:    
+  542:    PhyTimeReadClock(&startTime);        
+  002f 95       [2]             TSX   
+  0030 af09     [2]             AIX   #9
+  0032 cd0000   [6]             JSR   PhyTimeReadClock
+  0035          L35:    
+  543:    PhyTimeReadClock(&endTime);  
+  544:    
+  545:     // wait 10000 symbols
+  546:    while( ((endTime - startTime) & 0x00FFFFFF) < PHY_RNG_DELAY) {
+  547:      PhyTimeReadClock(&endTime);              
+  0035 95       [2]             TSX   
+  0036 af03     [2]             AIX   #3
+  0038 cd0000   [6]             JSR   PhyTimeReadClock
+  003b 95       [2]             TSX   
+  003c af09     [2]             AIX   #9
+  003e 89       [2]             PSHX  
+  003f 8b       [2]             PSHH  
+  0040 affa     [2]             AIX   #-6
+  0042 cd0000   [6]             JSR   _LSUB
+  0045 95       [2]             TSX   
+  0046 cd0000   [6]             JSR   _LAND_RC
+  0049 00ffffff         DC.L  16777215
+  004d 95       [2]             TSX   
+  004e cd0000   [6]             JSR   _LCMP_RC
+  0051 00000271         DC.L  625
+  0055 a708     [2]             AIS   #8
+  0057 25dc     [3]             BCS   L35 ;abs = 0035
+  0059 ad3b     [5]             BSR   L96 ;abs = 0096
+  548:    }
+  549:    
+  550:     // override method
+  551:    IoIndirectWrite(0x60, 0x03);  
+  005b a603     [2]             LDA   #3
+  005d c7185c   [4]             STA   6236
+  552:    
+  553:    PP_PHY_INDACCIDX = 0x0A;  
+  0060 a60a     [2]             LDA   #10
+  0062 c7185b   [4]             STA   6235
+  554:    while(i--) {
+  0065 200c     [3]             BRA   L73 ;abs = 0073
+  0067          L67:    
+  555:      *ptr++ = PP_PHY_INDACCREG;
+  0067 9efe02   [5]             LDHX  2,SP
+  006a c6185c   [4]             LDA   6236
+  006d f7       [2]             STA   ,X
+  006e af01     [2]             AIX   #1
+  0070 9eff02   [5]             STHX  2,SP
+  0073          L73:    
+  0073 95       [2]             TSX   
+  0074 f6       [3]             LDA   ,X
+  0075 97       [1]             TAX   
+  0076 4a       [1]             DECA  
+  0077 9ee701   [4]             STA   1,SP
+  007a 5d       [1]             TSTX  
+  007b 26ea     [3]             BNE   L67 ;abs = 0067
+  556:    }
+  557:    
+  558:    PP_PHY_LO1FRACL --;
+  007d 45184a   [3]             LDHX  #6218
+  0080 7a       [4]             DEC   ,X
+  0081 ad13     [5]             BSR   L96 ;abs = 0096
+  559:    
+  560:    //restore IARs 0x60 and 0x61
+  561:    IoIndirectWrite(0x60, iar60save);
+  0083 95       [2]             TSX   
+  0084 e607     [3]             LDA   7,X
+  0086 c7185c   [4]             STA   6236
+  562:    IoIndirectWrite(0x61, iar61save);
+  0089 a661     [2]             LDA   #97
+  008b c7185b   [4]             STA   6235
+  008e e608     [3]             LDA   8,X
+  0090 c7185c   [4]             STA   6236
+  563:  }
+  0093 a70d     [2]             AIS   #13
+  0095 81       [6]             RTS   
+  0096          L96:    
+  0096 a660     [2]             LDA   #96
+  0098 c7185b   [4]             STA   6235
+  009b 81       [6]             RTS   
+  564:  
+  565:  /***********************************************************************************/
+  566:  
+  567:  void    PhyEnableTxNoModulation(void)
+  568:  {
+  569:    uint8_t tmp = IoIndirectRead(0x13);
+  0000 a613     [2]             LDA   #19
+  0002 c7185b   [4]             STA   6235
+  0005 c6185c   [4]             LDA   6236
+  570:    IoIndirectWrite(0x13, tmp | 0x80);
+  0008 ae13     [2]             LDX   #19
+  000a cf185b   [4]             STX   6235
+  000d aa80     [2]             ORA   #-128
+  000f c7185c   [4]             STA   6236
+  571:  }
+  0012 81       [6]             RTS   
+  572:  
+  573:  /***********************************************************************************/
+  574:  
+  575:  void    PhyDisableTxNoModulation(void)
+  576:  {
+  577:    uint8_t tmp = IoIndirectRead(0x13);
+  0000 a613     [2]             LDA   #19
+  0002 c7185b   [4]             STA   6235
+  0005 c6185c   [4]             LDA   6236
+  578:    IoIndirectWrite(0x13, tmp & 0x7F);
+  0008 ae13     [2]             LDX   #19
+  000a cf185b   [4]             STX   6235
+  000d a47f     [2]             AND   #127
+  000f c7185c   [4]             STA   6236
+  579:  }
+  0012 81       [6]             RTS   
+  580:  
+  581:  /***********************************************************************************/
+  582:  
+  583:  /************************************************************************************
+  584:  *************************************************************************************
+  585:  * Module debug stuff
+  586:  *************************************************************************************
+  587:  ************************************************************************************/
+  588:  
+  589:  #pragma CODE_SEG DEFAULT
+  590:  

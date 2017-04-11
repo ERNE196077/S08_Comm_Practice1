@@ -1,0 +1,886 @@
+ANSI-C/cC++ Compiler for HC08 V-5.0.45 Build 14019, Jan 20 2014
+
+    1:  /*****************************************************************************
+    2:  * IIC Serial Port implementation.
+    3:  *
+    4:  * (c) Copyright 2008, Freescale, Inc. All rights reserved.
+    5:  *
+    6:  *
+    7:  * No part of this document must be reproduced in any form - including copied,
+    8:  * transcribed, printed or by any electronic means - without specific written
+    9:  * permission from Freescale Semiconductor.
+   10:  *
+   11:  *****************************************************************************/
+   12:  
+   13:  #include "EmbeddedTypes.h"
+   14:  #include "IIC.h"
+   15:  #include "IIC_Interface.h"
+   16:  #include "IoConfig.h"
+   17:  #include "IrqControlLib.h"
+   18:  
+   19:  #ifndef gMacStandAlone_d
+   20:  #define gMacStandAlone_d 0
+   21:  #endif
+   22:  
+   23:  #if gMacStandAlone_d
+   24:    #include "Mac_Globals.h"
+   25:  #endif
+   26:  
+   27:  /*Set the IIC task Priority  */
+   28:  #ifndef gTsI2CTaskPriority_c
+   29:  #define gTsI2CTaskPriority_c             0x05
+   30:  #endif 
+   31:  
+   32:  /*****************************************************************************
+   33:  ******************************************************************************
+   34:  * Private macros
+   35:  ******************************************************************************
+   36:  *****************************************************************************/
+   37:  
+   38:  #if gIIC_Slave_TxDataAvailableSignal_Enable_c
+   39:  
+   40:  /* Verify if there is data to be received from the Slave */
+   41:  #define IIC_IsTxDataAvailable()  ( (gIIC_TxDataAvailablePortDataReg_c & gIIC_TxDataAvailablePinMask_c) == 0)
+   42:  #endif
+   43:  /*****************************************************************************
+   44:  ******************************************************************************
+   45:  * Private type definitions
+   46:  ******************************************************************************
+   47:  *****************************************************************************/
+   48:  /* The transmit code keeps a circular list of buffers to be sent */
+   49:  typedef struct IIcTxBufRef_tag {
+   50:    unsigned char const *pBuf;
+   51:    void (*pfCallBack)(unsigned char const *pBuf);
+   52:  } IIcTxBufRef_t;
+   53:  
+   54:  typedef enum
+   55:    {
+   56:      mIIC_OpType_Tx_c,
+   57:      mIIC_OpType_Rx_c
+   58:    }iicOpType_t;
+   59:  
+   60:  typedef struct iicMasterOp_tag {
+   61:    iicOpType_t iicOpType;
+   62:    uint8_t *pBuf;
+   63:    uint8_t bufLen;
+   64:  } iicMasterOp_t;
+   65:  
+   66:  /*****************************************************************************
+   67:  ******************************************************************************
+   68:  * Public memory definitions
+   69:  ******************************************************************************
+   70:  *****************************************************************************/
+   71:  #if gIIC_Enabled_d
+   72:  /* ID for IIC task */
+   73:           tsTaskID_t   gIIcTaskId;
+   74:  volatile index_t      mIIcRxBufferByteCount;
+   75:  
+   76:  #endif
+   77:  
+   78:  
+   79:  /*****************************************************************************
+   80:  ******************************************************************************
+   81:  * Private memory definitions
+   82:  ******************************************************************************
+   83:  *****************************************************************************/
+   84:  #if gIIC_Enabled_d
+   85:  /* The leading index is the next position to store a buffer reference.
+   86:      The trailing index is the buffer currently being transmitted.
+   87:      Using a separate table for the buffer lengths reduces code size */    
+   88:  static IIcTxBufRef_t  maIIcTxBufRefTable[gIIC_SlaveTransmitBuffersNo_c];
+   89:  static index_t        maIIcTxBufLenTable[gIIC_SlaveTransmitBuffersNo_c];
+   90:  static index_t        mIIcTxCurIndex;
+   91:  static index_t        mIIcTxBufRefLeadingIndex;    /* Post-increment. */
+   92:  static index_t        mIIcTxBufRefTrailingIndex;   /* Post-increment. */
+   93:  
+   94:  /* Callback table and index pointers */
+   95:  static IIcTxBufRef_t  maIIcTxCallbackTable[gIIC_SlaveTransmitBuffersNo_c];
+   96:  static index_t        maIIcTxCallbackLeadingIndex   = 0; 
+   97:  static index_t        maIIcTxCallbackTrailingIndex  = 0; 
+   98:  
+   99:  /* I2C module has a small local circular Rx buffer to store data until the
+  100:      application can retrieve it. In addition to the leading and trailing
+  101:      indexes, the Rx code keeps a count of the number of bytes in the buffer. */
+  102:  static uint8_t        maIIcRxBuf[gIIC_SlaveReceiveBufferSize_c];
+  103:  static index_t        mIIcRxBufLeadingIndex;       /* Post-increment. */
+  104:  static index_t        mIIcRxBufTrailingIndex;      /* Post-increment. */
+  105:  /* Local variable to keep the I2C Rx callback provided by the application */
+  106:  static void           (*pfIIcSlaveRxCallBack)(void);
+  107:  static void           (*pfIIcMasterRxCallBack)(bool_t status);
+  108:  static void           (*pfIIcMasterTxCallBack)(bool_t status);
+  109:  static iicMasterOp_t   mIICMasterOp;
+  110:  
+  111:  #endif
+  112:  
+  113:  /*****************************************************************************
+  114:  ******************************************************************************
+  115:  * Private prototypes
+  116:  ******************************************************************************
+  117:  *****************************************************************************/
+  118:  #if(gIIC_Enabled_d)
+  119:    static void IIC_TaskInit(void);
+  120:    static void IIC_SendNextByte(void);
+  121:    static void IIC_ModuleAddressedByMaster(void);
+  122:  #endif
+  123:  
+  124:  /*****************************************************************************
+  125:  ******************************************************************************
+  126:  * Public functions
+  127:  ******************************************************************************
+  128:  *****************************************************************************/
+  129:  
+  130:  /*****************************************************************************
+  131:  *   IIC_ModuleInit 
+  132:  *
+  133:  *   Initializes the I2C module 
+  134:  ******************************************************************************/
+  135:  void IIC_ModuleInit(void)
+  136:  {
+  137:  #if gIIC_Enabled_d  
+  138:    /* Configure the I2C hardware peripheral */
+  139:    mIIC_C_c = mIICC_Reset_c;
+  140:    /* Clear the I2C Rx software buffer */
+  141:    mIIcRxBufLeadingIndex = mIIcRxBufTrailingIndex = mIIcRxBufferByteCount = 0;
+  142:    pfIIcSlaveRxCallBack = NULL;
+  143:    pfIIcMasterTxCallBack = pfIIcMasterRxCallBack = NULL;
+  144:    #if  gIIC_Slave_TxDataAvailableSignal_Enable_c
+  145:  /* Configure as output the GPIO that will be used to signal to the host that
+  146:       the blackBox I2C slave device has data to be transmitted */
+  147:  /* Signal to the host that there are no data available to be read */     
+  148:    gIIC_TxDataAvailablePortDataReg_c |= gIIC_TxDataAvailablePinMask_c; 
+  149:    gIIC_TxDataAvailablePortDDirReg_c |= gIIC_TxDataAvailablePinMask_c;
+  150:  #endif
+  151:  
+  152:    mIIC_S_c = mIICS_Init_c;   
+  153:    mIIC_A_c = (gIIC_DefaultSlaveAddress_c << 1);
+  154:    mIIC_F_c = gIIC_DefaultBaudRate_c;
+  155:  #if defined(PROCESSOR_MC1323X)  
+  156:    IIC1C2 = mIICxC2_Init_c; 
+  157:  #endif
+  158:   /* Create I2C module main task */
+  159:    IIC_TaskInit();
+  160:    mIIC_C_c = mIICC_Init_c;
+  161:  
+  162:  #endif  
+  163:  }
+  0000 8d       [7]             RTC   
+  164:  
+  165:  
+  166:  
+  167:  
+  168:  /*****************************************************************************
+  169:  *   IIC_ModuleUninit 
+  170:  *
+  171:  *   Resets the I2C module.
+  172:  ******************************************************************************/
+  173:  void IIC_ModuleUninit(void)
+  174:  {
+  175:  #if gIIC_Enabled_d
+  176:    mIIC_C_c = mIICC_Reset_c;
+  177:    
+  178:    /* Destroy the IIC task */
+  179:    if(gIIcTaskId != gTsInvalidTaskID_c)
+  180:    {
+  181:      TS_DestroyTask(gIIcTaskId);  
+  182:    }
+  183:  #endif
+  184:  }
+  0000 8d       [7]             RTC   
+  185:  /*****************************************************************************
+  186:  *   IIC_SetBaudRate 
+  187:  *
+  188:  *   Resets the I2C module.
+  189:  ******************************************************************************/
+  190:  bool_t IIC_SetBaudRate(uint8_t baudRate)
+  191:  {
+  192:  #if gIIC_Enabled_d
+  193:     if(mIIC_S_c & mIICS_BUSY_c)
+  194:      {
+  195:       return FALSE; 
+  196:      }
+  197:     mIIC_F_c = baudRate;
+  198:     return TRUE;
+  199:  #else
+  200:    {
+  201:     (void)baudRate;
+  202:     return FALSE; 
+  0000 4f       [1]             CLRA  
+  203:    }
+  204:  #endif
+  205:  }
+  0001 8d       [7]             RTC   
+  206:  
+  207:  
+  208:  /*****************************************************************************
+  209:  *   IIC_SetSlaveAddress 
+  210:  *
+  211:  *   Sets the slave address of the I2C module.
+  212:  ******************************************************************************/
+  213:  bool_t IIC_SetSlaveAddress(uint8_t slaveAddress)
+  214:  {
+  0000 87       [2]             PSHA  
+  215:    /* Check if the I2C address is valid */
+  216:    if((slaveAddress > 0x7f) || 
+  0001 a17f     [2]             CMP   #127
+  0003 220e     [3]             BHI   L13 ;abs = 0013
+  217:       (((slaveAddress & 0x78) == 0) && ((slaveAddress & 0x07) != 0)) || 
+  0005 a578     [2]             BIT   #120
+  0007 2604     [3]             BNE   LD ;abs = 000d
+  0009 a507     [2]             BIT   #7
+  000b 2606     [3]             BNE   L13 ;abs = 0013
+  000d          LD:     
+  218:       ((slaveAddress & 0x78) == 0x78))
+  000d a478     [2]             AND   #120
+  000f a178     [2]             CMP   #120
+  0011 2603     [3]             BNE   L16 ;abs = 0016
+  0013          L13:    
+  219:    {
+  220:      return FALSE;
+  0013 4f       [1]             CLRA  
+  221:    }
+  222:    {
+  223:      mIIC_A_c = (slaveAddress << 1);
+  224:      return TRUE;
+  225:    }
+  226:  }
+  0014 8a       [3]             PULH  
+  0015 8d       [7]             RTC   
+  0016          L16:    
+  0016 95       [2]             TSX   
+  0017 f6       [3]             LDA   ,X
+  0018 48       [1]             LSLA  
+  0019 b76a     [3]             STA   106
+  001b a601     [2]             LDA   #1
+  001d 8a       [3]             PULH  
+  001e 8d       [7]             RTC   
+  227:  
+  228:  
+  229:  /*****************************************************************************
+  230:  *   IIC_BusRecovery 
+  231:  *
+  232:  *   Resets the I2C module.
+  233:  ******************************************************************************/
+  234:  void IIC_BusRecovery(void)
+  235:  {
+  236:  #if gIIC_Enabled_d
+  237:     uint8_t iicControlReg;
+  238:     iicControlReg = mIIC_C_c;
+  239:     mIIC_C_c = mIICC_Reset_c;
+  240:     mIIC_C_c = mIICC_MST_c;
+  241:     mIIC_C_c |= mIICC_IICEN_c;
+  242:     mIIC_S_c = mIICS_Init_c;
+  243:     mIIC_D_c;
+  244:     while((mIIC_S_c & mIICS_IICIF_c) == 0);
+  245:     mIIC_C_c &= ~mIICC_MST_c;
+  246:     mIIC_S_c = mIICS_Init_c;
+  247:     mIIC_C_c = iicControlReg;
+  248:     
+  249:  #endif
+  250:  }
+  0000 8d       [7]             RTC   
+  251:  
+  252:  
+  253:  /*****************************************************************************
+  254:  *   IIC_SetRxCallBack 
+  255:  *
+  256:  *   Sets a pointer to the function to be called whenever a byte is received.
+  257:  *   If the pointer is set to NULL clear the Rx buffer.
+  258:  ******************************************************************************/
+  259:  void IIC_SetSlaveRxCallBack(void (*pfCallBack)(void))
+  260:  {
+  261:  #if !gIIC_Enabled_d
+  262:    (void) pfCallBack;
+  263:  #else
+  264:    pfIIcSlaveRxCallBack = pfCallBack;
+  265:  #endif
+  266:  }
+  0000 8d       [7]             RTC   
+  267:  
+  268:  
+  269:  /*****************************************************************************
+  270:  *   IIC_Transmit_Slave 
+  271:  *
+  272:  *   Begin transmitting size bytes of data from *pBuffer.
+  273:  *   Returns FALSE if there are no more slots in the buffer reference table.
+  274:  ******************************************************************************/
+  275:  bool_t IIC_Transmit_Slave(uint8_t const *pBuf, index_t bufLen, void (*pfCallBack)(uint8_t const *pBuf)) 
+  276:  {
+  277:  #if !gIIC_Enabled_d
+  278:    (void) pBuf;
+  279:    (void) bufLen;
+  280:    (void) pfCallBack;
+  281:  #else
+  282:    /* Handle empty buffers. */
+  283:    if (!bufLen) 
+  284:     {
+  285:      if(pfCallBack)
+  286:       {
+  287:        (*pfCallBack)(pBuf);  
+  288:       }
+  289:      return TRUE;
+  290:     }
+  291:  
+  292:    /* Room for one more? */
+  293:    if (maIIcTxBufLenTable[mIIcTxBufRefLeadingIndex]) 
+  294:    {
+  295:      return FALSE;
+  296:    }
+  297:  
+  298:    maIIcTxBufRefTable[mIIcTxBufRefLeadingIndex].pBuf = pBuf;
+  299:    maIIcTxBufRefTable[mIIcTxBufRefLeadingIndex].pfCallBack = pfCallBack;
+  300:    /* This has to be last, in case the Tx ISR finishes with the previous */
+  301:    /* buffer while this function is executing. */
+  302:    maIIcTxBufLenTable[mIIcTxBufRefLeadingIndex] = bufLen;
+  303:  
+  304:    if (++mIIcTxBufRefLeadingIndex >= NumberOfElements(maIIcTxBufRefTable)) 
+  305:    {
+  306:      mIIcTxBufRefLeadingIndex = 0;
+  307:    }
+  308:    
+  309:  #if gIIC_Slave_TxDataAvailableSignal_Enable_c 
+  310:    /* Signal to host that there are data to receive */
+  311:    IIC_TxDataAvailable(TRUE);
+  312:  #endif
+  313:    
+  314:  #endif  
+  315:    
+  316:    return TRUE;
+  0000 a601     [2]             LDA   #1
+  317:  } 
+  0002 8d       [7]             RTC   
+  318:  /*****************************************************************************
+  319:  *   IIC_Transmit_Master 
+  320:  *
+  321:  *   Begin transmitting size bytes of data from *pBuffer.
+  322:  *   Returns FALSE if there are no more slots in the buffer reference table.
+  323:  ******************************************************************************/
+  324:  bool_t IIC_Transmit_Master(uint8_t const *pBuf, index_t bufLen, uint8_t destAddress, void (*pfCallBack)(bool_t status)) 
+  325:  {
+  326:  #if !gIIC_Enabled_d
+  327:    (void) pBuf;
+  328:    (void) bufLen;
+  329:    (void) destAddress;
+  330:    (void) pfCallBack;
+  331:  #else
+  332:    /* Handle empty buffers. */
+  333:    if (!bufLen) 
+  334:     {
+  335:      if(pfCallBack)
+  336:       {
+  337:        (*pfCallBack)(TRUE);  
+  338:       }
+  339:      return TRUE;
+  340:     }
+  341:     destAddress <<= 1;
+  342:     if(destAddress == mIIC_A_c)
+  343:      {
+  344:      return FALSE;
+  345:      }
+  346:     // pfIIcMasterTxCallBack is reset by IIC task after the callback is called
+  347:     //if pfIIcMasterTxCallBack is != 0 it means that the previous callback didn't run yet  
+  348:     if(pfIIcMasterTxCallBack) 
+  349:      {
+  350:        return FALSE;
+  351:      }
+  352:     if(mIIC_S_c & mIICS_BUSY_c)
+  353:      {
+  354:       return FALSE; 
+  355:      }
+  356:      mIICMasterOp.iicOpType = mIIC_OpType_Tx_c;
+  357:      mIICMasterOp.pBuf = (uint8_t*)pBuf;
+  358:      mIICMasterOp.bufLen = bufLen;
+  359:      pfIIcMasterTxCallBack = pfCallBack;
+  360:      
+  361:      mIIC_C_c |= (mIICC_MST_c | mIICC_TX_c);// start condition
+  362:      mIIC_D_c = destAddress; // address the slave for writting
+  363:    
+  364:    
+  365:  #endif  
+  366:    
+  367:    return TRUE;
+  0000 a601     [2]             LDA   #1
+  368:  } 
+  0002 8d       [7]             RTC   
+  369:  
+  370:  /*****************************************************************************
+  371:  *   IIC_Receive_Master 
+  372:  *
+  373:  *   Begin transmitting size bytes of data from *pBuffer.
+  374:  *   Returns FALSE if there are no more slots in the buffer reference table.
+  375:  ******************************************************************************/
+  376:  bool_t IIC_Receive_Master(uint8_t *pBuf, index_t bufLen, uint8_t destAddress, void (*pfCallBack)(bool_t status)) 
+  377:  {
+  378:  #if !gIIC_Enabled_d
+  379:    (void) pBuf;
+  380:    (void) bufLen;
+  381:    (void) destAddress;
+  382:    (void) pfCallBack;
+  383:  #else
+  384:    /* Handle empty buffers. */
+  385:    if (!bufLen) 
+  386:     {
+  387:      if(pfCallBack)
+  388:       {
+  389:        (*pfCallBack)(TRUE);  
+  390:       }
+  391:      return TRUE;
+  392:     }
+  393:     destAddress <<= 1;
+  394:     if(destAddress == mIIC_A_c)
+  395:      {
+  396:      return FALSE;
+  397:      }
+  398:     // pfIIcMasterTxCallBack is reset by IIC task after the callback is called
+  399:     //if pfIIcMasterTxCallBack is != 0 it means that the previous callback didn't run yet  
+  400:     if(pfIIcMasterRxCallBack) 
+  401:      {
+  402:        return FALSE;
+  403:      }
+  404:     if(mIIC_S_c & mIICS_BUSY_c)
+  405:      {
+  406:       return FALSE; 
+  407:      }
+  408:      mIICMasterOp.iicOpType = mIIC_OpType_Rx_c;
+  409:      mIICMasterOp.pBuf = pBuf;
+  410:      mIICMasterOp.bufLen = bufLen;
+  411:      pfIIcMasterRxCallBack = pfCallBack;
+  412:      
+  413:      mIIC_C_c |= (mIICC_MST_c | mIICC_TX_c);// start condition
+  414:      mIIC_D_c = destAddress  | 0x1; // address the slave for reading
+  415:  #endif  
+  416:    
+  417:    return TRUE;
+  0000 a601     [2]             LDA   #1
+  418:  } 
+  0002 8d       [7]             RTC   
+  419:  
+  420:  /*****************************************************************************
+  421:  *   IIC_IsSlaveTxActive 
+  422:  *
+  423:  *   Returns TRUE if there is still data to be transmitted to the master.
+  424:  *   Returns FALSE if nothing left to transmit.
+  425:  ******************************************************************************/
+  426:  bool_t IIC_IsSlaveTxActive(void) 
+  427:  {
+  428:  #if !gIIC_Enabled_d
+  429:    return FALSE;
+  0000 4f       [1]             CLRA  
+  430:  #else  
+  431:    return (maIIcTxBufLenTable[mIIcTxBufRefTrailingIndex] != 0) || ((mIIC_S_c & mIICS_BUSY_c));
+  432:  #endif  
+  433:  }
+  0001 8d       [7]             RTC   
+  434:  
+  435:  /*****************************************************************************
+  436:  *   IIC_TxDataAvailable 
+  437:  *
+  438:  *   Depending on bool parameter master will be signaled that need to read data from slave
+  439:  ******************************************************************************/
+  440:  void IIC_TxDataAvailable(bool_t bIsAvailable)
+  441:  {
+  442:  #if gIIC_Slave_TxDataAvailableSignal_Enable_c
+  443:    if(bIsAvailable) 
+  444:      {
+  445:       gIIC_TxDataAvailablePortDataReg_c &= ~(gIIC_TxDataAvailablePinMask_c); 
+  446:      }
+  447:    else
+  448:      {
+  449:       gIIC_TxDataAvailablePortDataReg_c |= gIIC_TxDataAvailablePinMask_c; 
+  450:      }
+  451:  #else
+  452:  (void)bIsAvailable;
+  453:  #endif    
+  454:  }
+  0000 8d       [7]             RTC   
+  455:  
+  456:  /*****************************************************************************
+  457:  *   IIC_GetByteFromRxBuffer 
+  458:  *
+  459:  *   Retrieves a byte from the driver's Rx buffer and store it at *pDst.
+  460:  *   Return TRUE if a byte was retrieved; FALSE if the Rx buffer is empty.
+  461:  ******************************************************************************/
+  462:  bool_t IIC_GetByteFromRxBuffer(unsigned char *pDst)
+  463:  {
+  464:  #if !gIIC_Enabled_d
+  465:    (void) pDst;
+  466:  #else
+  467:    /* Temp storage for I2C control register */
+  468:    uint8_t iicControlReg;
+  469:    
+  470:    if (!mIIcRxBufferByteCount) 
+  471:      return FALSE;
+  472:    IrqControlLib_PushIrqStatus();
+  473:    IrqControlLib_DisableAllIrqs();
+  474:    iicControlReg = mIIC_C_c;
+  475:    mIIC_C_c &= ~mIICC_IICIE_c;
+  476:    IrqControlLib_PullIrqStatus();
+  477:    *pDst = maIIcRxBuf[mIIcRxBufTrailingIndex];
+  478:    if (++mIIcRxBufTrailingIndex >= sizeof(maIIcRxBuf)) {
+  479:      mIIcRxBufTrailingIndex = 0;
+  480:    }
+  481:    --mIIcRxBufferByteCount;
+  482:    mIIC_C_c = iicControlReg;
+  483:   #endif  
+  484:  
+  485:    return TRUE;
+  0000 a601     [2]             LDA   #1
+  486:  }
+  0002 8d       [7]             RTC   
+  487:  
+  488:  
+  489:  
+  490:  
+  491:  /*****************************************************************************
+  492:  *   IIC_Task 
+  493:  *
+  494:  *   Main task of the I2C module 
+  495:  ******************************************************************************/
+  496:  void IIC_Task(event_t events)
+  497:  {
+  498:  #if !gIIC_Enabled_d
+  499:    (void) events;
+  500:  #else
+  501:  
+  502:    void (*pfCallBack)(uint8_t const *pBuf);
+  503:  
+  504:    if (events & gIIC_Event_SlaveRx_c)
+  505:    {
+  506:      pfIIcSlaveRxCallBack();
+  507:    }
+  508:  
+  509:    if (events & gIIC_Event_SlaveTx_c)
+  510:    {
+  511:      /* Tx call back event received - run through the callback table and execute any
+  512:           pending Callbacks */
+  513:      while (maIIcTxCallbackLeadingIndex != maIIcTxCallbackTrailingIndex)
+  514:      {
+  515:         pfCallBack = maIIcTxCallbackTable[maIIcTxCallbackTrailingIndex].pfCallBack;
+  516:        /* Call calback with buffer info as parameter */
+  517:        (*pfCallBack)(maIIcTxCallbackTable[maIIcTxCallbackTrailingIndex].pBuf);
+  518:        /* Increment and wrap around trailing index */
+  519:        if (++maIIcTxCallbackTrailingIndex >= NumberOfElements(maIIcTxCallbackTable))
+  520:        {
+  521:          maIIcTxCallbackTrailingIndex = 0;
+  522:        }
+  523:      }
+  524:    }
+  525:    
+  526:    if (events & gIIC_Event_MasterRxFail_c)
+  527:      {
+  528:       (*pfIIcMasterRxCallBack)(FALSE); 
+  529:       pfIIcMasterRxCallBack = NULL;
+  530:      }
+  531:    if (events & gIIC_Event_MasterRxSuccess_c)
+  532:      {
+  533:       (*pfIIcMasterRxCallBack)(TRUE); 
+  534:       pfIIcMasterRxCallBack = NULL;
+  535:      }    
+  536:    if (events & gIIC_Event_MasterTxFail_c)  
+  537:      {
+  538:        (*pfIIcMasterTxCallBack)(FALSE);
+  539:        pfIIcMasterTxCallBack = NULL;
+  540:      }
+  541:    if (events & gIIC_Event_MasterTxSuccess_c)  
+  542:      {
+  543:        (*pfIIcMasterTxCallBack)(TRUE);
+  544:        pfIIcMasterTxCallBack = NULL;
+  545:      }    
+  546:  #endif  
+  547:  } 
+  0000 8d       [7]             RTC   
+  548:  
+  549:  
+  550:  /*****************************************************************************
+  551:  *  IIC_Isr
+  552:  *
+  553:  *  I2C Interrupt Service Routine.
+  554:  ******************************************************************************/
+  555:  /* Place it in NON_BANKED memory */
+  556:  #ifdef MEMORY_MODEL_BANKED
+  557:  #pragma CODE_SEG __NEAR_SEG NON_BANKED
+  558:  #else
+  559:  #pragma CODE_SEG DEFAULT
+  560:  #endif /* MEMORY_MODEL_BANKED */
+  561:  
+  562:  INTERRUPT_KEYWORD void IIC_Isr(void)
+  563:  {
+  564:  
+  565:  #if gIIC_Enabled_d
+  566:  
+  567:    /* Clear the interrupt request */
+  568:    mIIC_S_c |= mIICS_IICIF_c;
+  569:    /* Check arbitration  and slave addressing*/
+  570:    if (mIIC_S_c & (mIICS_ARBL_c | mIICS_IAAS_c ))
+  571:    {
+  572:      if (mIIC_S_c & mIICS_IAAS_c)
+  573:        {
+  574:        /* Check if I2C module was addressed for read or for write */
+  575:        if(mIIC_S_c & mIICS_SRW_c)
+  576:          {
+  577:           /* Configure I2C module for Tx operation.Writing to IICxC register also clears IAAS bit */
+  578:           mIIC_C_c |= mIICC_TX_c;
+  579:           /* Send next byte from the current Tx buffer */
+  580:           IIC_SendNextByte();
+  581:          }
+  582:        else
+  583:          {
+  584:           /* Configure I2C module for Rx operation.Writing to IICxC register also clears IAAS bit */
+  585:           mIIC_C_c &= ~(mIICC_TX_c | mIICC_TXAK_c);
+  586:           mIIC_D_c;
+  587:          }
+  588:  
+  589:        }
+  590:      if(mIIC_S_c & mIICS_ARBL_c)
+  591:        {
+  592:        /* Arbitration lost */
+  593:         mIIC_S_c |= mIICS_ARBL_c;    
+  594:         
+  595:         if(mIICMasterOp.iicOpType == mIIC_OpType_Tx_c)
+  596:          {
+  597:           if(pfIIcMasterTxCallBack)
+  598:            {
+  599:             TS_SendEvent(gIIcTaskId, gIIC_Event_MasterTxFail_c); 
+  600:            }
+  601:            
+  602:          }
+  603:         else
+  604:          {
+  605:          if(pfIIcMasterRxCallBack)
+  606:            {
+  607:            TS_SendEvent(gIIcTaskId, gIIC_Event_MasterRxFail_c);    
+  608:            }
+  609:          
+  610:          }
+  611:        }
+  612:    }
+  613:    else
+  614:    {
+  615:      /* Arbitration okay
+  616:         Check addressing */
+  617:    if(mIIC_C_c & mIICC_MST_c)/* Master mode */
+  618:      {
+  619:       if(mIIC_C_c & mIICC_TX_c)
+  620:        {
+  621:          if(mIIC_S_c & mIICS_RXAK_c)// No ack received
+  622:            {
+  623:              mIIC_C_c &= ~(mIICC_MST_c | mIICC_TX_c);
+  624:              if(mIICMasterOp.iicOpType == mIIC_OpType_Tx_c)	// Tx
+  625:                {
+  626:                if(pfIIcMasterTxCallBack)
+  627:                 {
+  628:                  TS_SendEvent(gIIcTaskId, gIIC_Event_MasterTxFail_c); 
+  629:                 }
+  630:                }
+  631:              else	// Rx
+  632:                {
+  633:                if(pfIIcMasterRxCallBack)
+  634:                 {
+  635:                  TS_SendEvent(gIIcTaskId, gIIC_Event_MasterRxFail_c);    
+  636:                 }
+  637:                }
+  638:            }
+  639:          else	// Ack received
+  640:            {
+  641:              if(mIICMasterOp.iicOpType == mIIC_OpType_Rx_c)	// Rx
+  642:                {
+  643:                mIIC_C_c &= ~(mIICC_TX_c | mIICC_TXAK_c);
+  644:                if(mIICMasterOp.bufLen-- == 1)  
+  645:                  {
+  646:                   mIIC_C_c |= mIICC_TXAK_c;
+  647:                  }
+  648:                mIIC_D_c;  
+  649:                }
+  650:              else	// Tx
+  651:                {
+  652:                 if(mIICMasterOp.bufLen)
+  653:                  {
+  654:                   mIIC_D_c =  *mIICMasterOp.pBuf++ ;
+  655:                   mIICMasterOp.bufLen--;
+  656:                  }
+  657:                 else
+  658:                  {
+  659:                   mIIC_C_c &= ~(mIICC_MST_c | mIICC_TX_c); 
+  660:                   if(pfIIcMasterTxCallBack)
+  661:                    {
+  662:                     TS_SendEvent(gIIcTaskId, gIIC_Event_MasterTxSuccess_c); 
+  663:                    }
+  664:                   
+  665:                  }
+  666:                }
+  667:            }
+  668:        }
+  669:       else// (mIIC_C_c & mIICC_TX_c) == 0       
+  670:        {
+  671:         if(mIICMasterOp.bufLen == 0)   
+  672:          {
+  673:          mIIC_C_c &= ~mIICC_MST_c;   
+  674:          if(pfIIcMasterRxCallBack)
+  675:            {
+  676:             TS_SendEvent(gIIcTaskId, gIIC_Event_MasterRxSuccess_c); 
+  677:            }
+  678:          }
+  679:         else if(mIICMasterOp.bufLen-- == 1)  
+  680:          {
+  681:           mIIC_C_c |= mIICC_TXAK_c;
+  682:          }
+  683:         *mIICMasterOp.pBuf++ = mIIC_D_c;
+  684:          
+  685:        }
+  686:       
+  687:      }
+  688:      
+  689:    else   /* slave mode*/
+  690:      {
+  691:      if (mIIC_C_c & mIICC_TX_c)
+  692:        {
+  693:          /* IIC has Tx a byte to master. Check if ack was received */
+  694:          if (mIIC_S_c & mIICS_RXAK_c)
+  695:          {
+  696:            /* No ack received. Switch back to receive mode */
+  697:            mIIC_C_c &= ~mIICC_TX_c;
+  698:            mIIC_D_c;
+  699:          }
+  700:          else
+  701:          {
+  702:            /* Ack received. Send next byte */
+  703:            IIC_SendNextByte();
+  704:          }
+  705:        }
+  706:      else
+  707:        {
+  708:          /* Put the received byte in the buffer */
+  709:          if(pfIIcSlaveRxCallBack)
+  710:            {
+  711:            maIIcRxBuf[mIIcRxBufLeadingIndex] = mIIC_D_c;
+  712:  
+  713:            if (++mIIcRxBufLeadingIndex >= sizeof(maIIcRxBuf)) 
+  714:              {
+  715:              mIIcRxBufLeadingIndex = 0;
+  716:              }
+  717:  
+  718:            if (mIIcRxBufferByteCount < sizeof(maIIcRxBuf)) 
+  719:              {
+  720:              ++mIIcRxBufferByteCount;
+  721:              }
+  722:            else
+  723:              {
+  724:               if (++mIIcRxBufTrailingIndex >= sizeof(maIIcRxBuf)) 
+  725:                 {
+  726:                  mIIcRxBufTrailingIndex = 0;
+  727:                 }
+  728:              }
+  729:              
+  730:          /* Let the application know a byte has been received. */
+  731:            TS_SendEvent(gIIcTaskId, gIIC_Event_SlaveRx_c);
+  732:              
+  733:            }
+  734:          else
+  735:            {
+  736:             mIIC_D_c; 
+  737:            }
+  738:        }  
+  739:      }/* Data transfer.Check if it is a Tx or Rx operation */
+  740:        
+  741:      
+  742:    }
+  743:    
+  744:  #endif  
+  745:  }
+  0000 80       [9]             RTI   
+  746:  #pragma CODE_SEG DEFAULT           
+  747:  
+  748:  
+  749:  /*****************************************************************************
+  750:  ******************************************************************************
+  751:  * Private functions
+  752:  ******************************************************************************
+  753:  *****************************************************************************/
+  754:  
+  755:  #if gIIC_Enabled_d
+  756:  
+  757:  /*****************************************************************************
+  758:  *   IIC_TaskInit 
+  759:  *
+  760:  *   Creates the I2C module task
+  761:  ******************************************************************************/
+  762:  static void IIC_TaskInit(void)
+  763:  {
+  764:    gIIcTaskId = TS_CreateTask(gTsI2CTaskPriority_c, IIC_Task);
+  765:  }                                       
+  766:  
+  767:  /*****************************************************************************
+  768:  *   IIC_SendNextByte 
+  769:  *
+  770:  *   Send next byte of information from the Tx buffer
+  771:  ******************************************************************************/
+  772:  static void IIC_SendNextByte (void)
+  773:  {
+  774:    void (*pfCallBack)(unsigned char const *pBuf);
+  775:    
+  776:    /* The HCS08 does not save H on interrupt. */
+  777:    __asm 
+  778:    {
+  779:      PSHH
+  780:    }
+  781:  
+  782:    
+  783:  #if gIIC_Slave_TxDataAvailableSignal_Enable_c  
+  784:    if(IIC_IsTxDataAvailable())
+  785:  #else
+  786:    if(maIIcTxBufLenTable[mIIcTxBufRefTrailingIndex])  
+  787:  #endif  
+  788:    {
+  789:      /* Write a byte. */
+  790:      mIIC_D_c = maIIcTxBufRefTable[mIIcTxBufRefTrailingIndex].pBuf[mIIcTxCurIndex];
+  791:  
+  792:      /* Finished with this buffer? */
+  793:      if (++mIIcTxCurIndex >= maIIcTxBufLenTable[mIIcTxBufRefTrailingIndex]) 
+  794:      {
+  795:  
+  796:        /* Mark this one as done, and call the callback. */
+  797:        maIIcTxBufLenTable[mIIcTxBufRefTrailingIndex] = 0;
+  798:        pfCallBack = maIIcTxBufRefTable[mIIcTxBufRefTrailingIndex].pfCallBack;
+  799:        if (pfCallBack)
+  800:        {
+  801:          /* Signal the IIC task that we got a callback to be executed */
+  802:          TS_SendEvent(gIIcTaskId, gIIC_Event_SlaveTx_c);
+  803:          /* Add callback information to the callback table */
+  804:          maIIcTxCallbackTable[maIIcTxCallbackLeadingIndex].pfCallBack = pfCallBack;
+  805:          maIIcTxCallbackTable[maIIcTxCallbackLeadingIndex].pBuf = maIIcTxBufRefTable[mIIcTxBufRefTrailingIndex].pBuf;
+  806:          /* Increment and wrap around the leading index */
+  807:          if (++maIIcTxCallbackLeadingIndex >= NumberOfElements(maIIcTxCallbackTable)) {
+  808:            maIIcTxCallbackLeadingIndex = 0;
+  809:          }
+  810:        
+  811:        }
+  812:        /* Increment to the next buffer. */
+  813:        mIIcTxCurIndex = 0;
+  814:        if (++mIIcTxBufRefTrailingIndex >= NumberOfElements(maIIcTxBufRefTable)) 
+  815:        {
+  816:          mIIcTxBufRefTrailingIndex = 0;
+  817:        }
+  818:  
+  819:  #if gIIC_Slave_TxDataAvailableSignal_Enable_c        
+  820:        /* If there is no more data to send, turn off the transmit interrupt. */
+  821:        if (!maIIcTxBufLenTable[mIIcTxBufRefTrailingIndex]) 
+  822:        {
+  823:          /* Signal to host that there are no more data to receive */
+  824:          IIC_TxDataAvailable(FALSE);
+  825:        }
+  826:  #endif      
+  827:      }
+  828:    }
+  829:    else
+  830:    {
+  831:      /* Write a byte. */
+  832:      mIIC_D_c = 0;
+  833:    }
+  834:    __asm 
+  835:    {
+  836:      PULH
+  837:    }
+  838:  }
+  839:  
+  840:  
+  841:  
+  842:  #endif

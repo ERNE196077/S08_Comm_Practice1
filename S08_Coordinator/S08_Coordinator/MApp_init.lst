@@ -1,0 +1,373 @@
+ANSI-C/cC++ Compiler for HC08 V-5.0.45 Build 14019, Jan 20 2014
+
+    1:  /*****************************************************************************
+    2:  * Applications' initialization module
+    3:  *
+    4:  * (c) Copyright 2006, Freescale, Inc. All rights reserved.
+    5:  *
+    6:  *
+    7:  * No part of this document must be reproduced in any form - including copied,
+    8:  * transcribed, printed or by any electronic means - without specific written
+    9:  * permission from Freescale Semiconductor Romania A/S.
+   10:  *
+   11:  *****************************************************************************/
+   12:  
+   13:  #include "EmbeddedTypes.h"
+   14:  #include "Mapp_init.h"
+   15:  #include "Mac_Globals.h"
+   16:  #include "MacInit.h"
+   17:  #include "NVM_Interface.h"
+   18:  #include "Uart_Interface.h"
+   19:  #ifdef PROCESSOR_MC13238C
+   20:    #include "CDC_Interface.h"
+   21:    #include "USB_Interface.h"
+   22:  #endif
+   23:  #if gZtcIncluded_d
+   24:  #include "ZTCInterface.h"
+   25:  #endif /* gZtcIncluded_d */
+   26:  
+   27:  /************************************************************************************
+   28:  *************************************************************************************
+   29:  * Private macros
+   30:  *************************************************************************************
+   31:  ************************************************************************************/
+   32:  
+   33:  
+   34:  /************************************************************************************
+   35:  *************************************************************************************
+   36:  * Private prototypes
+   37:  *************************************************************************************
+   38:  ************************************************************************************/
+   39:  
+   40:  void IdleTask(event_t event);
+   41:  void AppTask(event_t events);
+   42:  tsTaskID_t gAppTaskID_c;
+   43:  
+   44:  /************************************************************************************
+   45:  *************************************************************************************
+   46:  * Private type definitions
+   47:  *************************************************************************************
+   48:  ************************************************************************************/
+   49:  
+   50:  /************************************************************************************
+   51:  *************************************************************************************
+   52:  * Private memory declarations
+   53:  *************************************************************************************
+   54:  ************************************************************************************/
+   55:  
+   56:  extern uint8_t aExtendedAddress[8];
+   57:  extern uint8_t gState;
+   58:  
+   59:  #if gNvStorageIncluded_d
+   60:  static bool_t receiverOn;
+   61:  #endif
+   62:  /************************************************************************************
+   63:  *************************************************************************************
+   64:  * Public functions
+   65:  *************************************************************************************
+   66:  ************************************************************************************/
+   67:  extern void MacPhyInit_WriteExtAddress(uint8_t *pExtendedAddress);
+   68:  
+   69:  /*****************************************************************************
+   70:  * main function
+   71:  *
+   72:  * Interface assumptions:
+   73:  * 
+   74:  * Return value:
+   75:  * None
+   76:  *****************************************************************************/
+   77:  
+   78:   void main(void)
+   79:   {
+   80:   #ifdef BOOTLOADER_ENABLED	
+   81:    NVM_FindNVRAM();
+   82:   #endif	
+   83:   
+   84:    /* Interrupts should already be off. This is probably redundant. */
+   85:    IrqControlLib_DisableAllIrqs();
+  0000 9b       [1]             SEI   
+   86:    Platform_Init();    // Init platform
+  0001 ac000000 [8]             CALL  Platform_Init
+   87:    Init_802_15_4();
+  0005 ac000000 [8]             CALL  Init_802_15_4
+   88:  
+   89:    TS_Init();  
+  0009 ac000000 [8]             CALL  TS_Init
+   90:    TMR_Init();                          /* Init the kernel. */
+  000d ac000000 [8]             CALL  TMR_Init
+   91:    NvModuleInit();
+   92:    Uart_ModuleInit();
+  0011 ac000000 [8]             CALL  Uart_ModuleInit
+   93:    #ifdef PROCESSOR_MC13238C
+   94:      USB_Init();
+   95:      (void)CDC_ModuleInit();
+   96:    #endif
+   97:    MacInit();
+  0015 ac000000 [8]             CALL  MacInit
+   98:    #if gZtcIncluded_d
+   99:    Ztc_TaskInit();
+  100:    #endif /* gZtcIncluded_d */ 
+  101:  
+  102:    /*initialize the application*/
+  103:   
+  104:    gAppTaskID_c = TS_CreateTask(gTsAppTaskPriority_c, AppTask);
+  0019 a680     [2]             LDA   #-128
+  001b 87       [2]             PSHA  
+  001c 450000   [3]             LDHX  @AppTask
+  001f 89       [2]             PSHX  
+  0020 8b       [2]             PSHH  
+  0021 a600     [2]             LDA   @AppTask:PAGE
+  0023 87       [2]             PSHA  
+  0024 ac000000 [8]             CALL  TS_CreateTask
+  0028 a704     [2]             AIS   #4
+  002a c70000   [4]             STA   gAppTaskID_c
+  105:   
+  106:    MApp_init();
+  002d ac000000 [8]             CALL  MApp_init
+  107:    /*do not allow the device to enter sleep mode*/
+  108:    PWR_DisallowDeviceToSleep();   
+  0031 ac000000 [8]             CALL  PWR_DisallowDeviceToSleep
+  109:    /*All LED's are switched OFF*/
+  110:    Led1Off();
+  0035 1000     [5]             BSET  0,0
+  111:    Led2Off();
+  0037 1800     [5]             BSET  4,0
+  112:    Led3Off();
+  0039 1006     [5]             BSET  0,6
+  113:    Led4Off();
+  003b 1206     [5]             BSET  1,6
+  114:    /* if the board is mc13213 SRB or NCB turn on LED5 */
+  115:    #if (gTargetMC13213SRB_d == 1) || (gTargetMC13213NCB_d == 1) || ((gTarget_UserDefined_d == 1) && (!defined(PROCESSOR_MC1323X)) && (!defined(PROCESSOR_QE128)))
+  116:      Led5On();
+  117:    #endif
+  118:    
+  119:    /* Start the task scheduler. Does not return. */
+  120:    TS_Scheduler(); 
+  003d ac000000 [8]             CALL  TS_Scheduler
+  121:   
+  122:  }
+  0041 8d       [7]             RTC   
+  123:  
+  124:  
+  125:  #if gNvStorageIncluded_d
+  126:  
+  127:  void BUtl_SetReceiverOff(void)
+  128:  {
+  129:   /* This function is called by the NVM component at the start of the NV operation */
+  130:   mlmeMessage_t msg;	  
+  131:   bool_t value; 
+  132:   /* get the receiver state */
+  133:   
+  134:   msg.msgType = gMlmeGetReq_c;
+  135:   msg.msgData.getReq.pibAttribute = gMPibRxOnWhenIdle_c;
+  136:   msg.msgData.getReq.pibAttributeValue = &value; 
+  137:   (void)MSG_Send(NWK_MLME, &msg);
+  138:   
+  139:   if(value)
+  140:   {
+  141:    /* Turn off the receiver during NVM operation */
+  142:    receiverOn = TRUE;
+  143:    
+  144:    value = FALSE;
+  145:    msg.msgType = gMlmeSetReq_c;
+  146:    msg.msgData.setReq.pibAttribute = gMPibRxOnWhenIdle_c;
+  147:    msg.msgData.setReq.pibAttributeValue = &value;
+  148:    (void)MSG_Send(NWK_MLME, &msg);
+  149:   }
+  150:   else
+  151:   {
+  152:    /* Receiver already turned off */
+  153:    receiverOn = FALSE;
+  154:   }
+  155:   
+  156:  }
+  157:  
+  158:  void BUtl_SetReceiverOn(void)
+  159:  {
+  160:   /* This function is called by the NVM component at the end of the NV operation */
+  161:   mlmeMessage_t msg;	  
+  162:   bool_t value = TRUE;
+  163:   if(receiverOn == TRUE)
+  164:   {  
+  165:    /* Restore receiver state */
+  166:    msg.msgType = gMlmeSetReq_c;
+  167:    msg.msgData.setReq.pibAttribute = gMPibRxOnWhenIdle_c;
+  168:    msg.msgData.setReq.pibAttributeValue = &value;
+  169:    (void)MSG_Send(NWK_MLME, &msg);
+  170:   } 
+  171:  }
+  172:  
+  173:  #endif
+  174:  
+  175:  /*****************************************************************************
+  176:  * Entry point to the idle task
+  177:  *
+  178:  * Interface assumptions:
+  179:  * Cannot use any call by which this task has to be suspended.This task should
+  180:  * always be ready to run if there are no other tasks in the system
+  181:  * 
+  182:  * Return value:
+  183:  * None
+  184:  *****************************************************************************/
+  185:  
+  186:  void IdleTask(event_t events)
+  187:  {
+  188:    /* Just to avoid the compiler warning */
+  189:    (void)events;
+  190:  
+  191:   #if gNvStorageIncluded_d
+  192:    /* Process NV Storage save-on-idle and save-on-count requests. */
+  193:    NvIdle();
+  194:   #endif
+  195:  
+  196:      
+  197:    #if (gLpmIncluded_d == 1)
+  198:    /*Low power management*/
+  199:      if(PWR_CheckIfDeviceCanGoToSleep())    
+  200:        PWR_EnterLowPower();
+  201:    #endif /*gLpmIncluded_d*/         
+  202:      
+  203:  }
+  0000 8d       [7]             RTC   
+  204:  
+  205:  
+  206:  /*****************************************************************************
+  207:  * Initialize the MAC 64 bit address
+  208:  *
+  209:  * Interface assumptions:
+  210:  * None
+  211:  * 
+  212:  * Return value:
+  213:  * None
+  214:  *****************************************************************************/
+  215:  void Init_MacExtendedAddress( void ) 
+  216:  {
+  0000 a7f8     [2]             AIS   #-8
+  217:  
+  218:    uint8_t tempExtAddress[8]= {mDefaultValueOfExtendedAddress_c};
+  0002 a6c4     [2]             LDA   #-60
+  0004 95       [2]             TSX   
+  0005 f7       [2]             STA   ,X
+  0006 a6ff     [2]             LDA   #-1
+  0008 e701     [3]             STA   1,X
+  000a e702     [3]             STA   2,X
+  000c e703     [3]             STA   3,X
+  000e e704     [3]             STA   4,X
+  0010 e705     [3]             STA   5,X
+  0012 e706     [3]             STA   6,X
+  0014 e707     [3]             STA   7,X
+  219:    /*Check if Extended address is already generated(if the Extended Address 
+  220:    is All "0xFF", it means that no extended address is genereted);If not set
+  221:    it to the value chosen by application layer*/
+  222:    if((aExtendedAddress[0] & aExtendedAddress[1]
+  0016 c60000   [4]             LDA   aExtendedAddress
+  0019 c40001   [4]             AND   aExtendedAddress:1
+  001c c40002   [4]             AND   aExtendedAddress:2
+  001f c40003   [4]             AND   aExtendedAddress:3
+  0022 c40004   [4]             AND   aExtendedAddress:4
+  0025 c40005   [4]             AND   aExtendedAddress:5
+  0028 c40006   [4]             AND   aExtendedAddress:6
+  002b c40007   [4]             AND   aExtendedAddress:7
+  002e 4c       [1]             INCA  
+  002f 2604     [3]             BNE   L35 ;abs = 0035
+  223:      & aExtendedAddress[2] & aExtendedAddress[3]
+  224:      & aExtendedAddress[4] & aExtendedAddress[5]
+  225:      & aExtendedAddress[6] & aExtendedAddress[7]) 
+  226:      == 0xFF) 
+  227:      {
+  228:      /*Set the Extended Address From the App*/
+  229:        MacPhyInit_WriteExtAddress(tempExtAddress);
+  0031 ac000000 [8]             CALL  MacPhyInit_WriteExtAddress
+  0035          L35:    
+  230:      }
+  231:  }
+  0035 a708     [2]             AIS   #8
+  0037 8d       [7]             RTC   
+  232:  
+  233:  /******************************************************************************
+  234:  * BeeAppAssert
+  235:  *
+  236:  * Something failed in the stack or app that can't recover. Stop here. Mostly
+  237:  * used during debug phase of product. Could be used
+  238:  ******************************************************************************/
+  239:  void BeeAppAssert
+  240:    (
+  241:    assertCode_t code /* IN: why the assert failed */
+  242:    )
+  243:  {
+  0000 8b       [2]             PSHH  
+  244:    volatile bool_t waitForever = code; /* just set to anything non-zero */
+  0001 95       [2]             TSX   
+  0002 f7       [2]             STA   ,X
+  0003          L3:     
+  245:    
+  246:    while (waitForever)
+  0003 7d       [3]             TST   ,X
+  0004 26fd     [3]             BNE   L3 ;abs = 0003
+  247:      { }
+  248:  }
+  0006 8a       [3]             PULH  
+  0007 8d       [7]             RTC   
+  249:  
+  250:  /******************************************************************************
+  251:  * Swap2Bytes - needed for ZTC
+  252:  *
+  253:  * Swaps two bytes
+  254:  ******************************************************************************/
+  255:  uint16_t Swap2Bytes(uint16_t iOldValue)
+  256:  {
+  0000 a7fe     [2]             AIS   #-2
+  257:    uint16_t iValue;
+  258:  
+  259:    iValue = ((uint8_t *)&iOldValue)[1] << 8;
+  260:    iValue += ((uint8_t *)&iOldValue)[0];
+  0002 8b       [2]             PSHH  
+  0003 9eef02   [4]             STX   2,SP
+  0006 95       [2]             TSX   
+  0007 6f02     [5]             CLR   2,X
+  0009 86       [3]             PULA  
+  000a e702     [3]             STA   2,X
+  261:  
+  262:    return iValue;
+  000c 9efe01   [5]             LDHX  1,SP
+  263:  }
+  000f a702     [2]             AIS   #2
+  0011 8d       [7]             RTC   
+  264:  
+  265:  /******************************************************************************
+  266:  * Swap4Bytes - needed for ZTC
+  267:  *
+  268:  * Swaps two bytes
+  269:  ******************************************************************************/
+  270:  uint32_t Swap4Bytes(uint32_t iOldValue)
+  271:  {
+  0000 a7fc     [2]             AIS   #-4
+  272:    uint32_t iValue;
+  273:  
+  274:    ((uint8_t*)&iValue)[0] = ((uint8_t *)&iOldValue)[3];
+  0002 95       [2]             TSX   
+  0003 e60a     [3]             LDA   10,X
+  0005 f7       [2]             STA   ,X
+  275:    ((uint8_t*)&iValue)[1] = ((uint8_t *)&iOldValue)[2];
+  0006 e609     [3]             LDA   9,X
+  0008 e701     [3]             STA   1,X
+  276:    ((uint8_t*)&iValue)[2] = ((uint8_t *)&iOldValue)[1];
+  000a e608     [3]             LDA   8,X
+  000c e702     [3]             STA   2,X
+  277:    ((uint8_t*)&iValue)[3] = ((uint8_t *)&iOldValue)[0];
+  000e e607     [3]             LDA   7,X
+  0010 e703     [3]             STA   3,X
+  278:  
+  279:    return iValue;
+  0012 9efe0c   [5]             LDHX  12,SP
+  0015 89       [2]             PSHX  
+  0016 8b       [2]             PSHH  
+  0017 95       [2]             TSX   
+  0018 af02     [2]             AIX   #2
+  001a a604     [2]             LDA   #4
+  001c cd0000   [6]             JSR   _COPY
+  280:  }
+  001f a704     [2]             AIS   #4
+  0021 8d       [7]             RTC   
+  281:  /*******************************************************************************/
+  282:  

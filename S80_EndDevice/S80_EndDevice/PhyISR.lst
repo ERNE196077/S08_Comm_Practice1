@@ -1,0 +1,849 @@
+ANSI-C/cC++ Compiler for HC08 V-5.0.45 Build 14019, Jan 20 2014
+
+    1:  /************************************************************************************
+    2:  * MC1323X: This module is the PHY layer MC1323X (interrupt) handlers
+    3:  *
+    4:  * (c) Copyright 2009, Freescale, Inc.  All rights reserved.
+    5:  *
+    6:  * No part of this document must be reproduced in any form - including copied,
+    7:  * transcribed, printed or by any electronic means - without specific written
+    8:  * permission from Freescale Semiconductor.
+    9:  *
+   10:  ************************************************************************************/
+   11:  
+   12:  
+   13:  /************************************************************************************
+   14:  *************************************************************************************
+   15:  * Includes
+   16:  *************************************************************************************
+   17:  ************************************************************************************/
+   18:  
+   19:  #include "EmbeddedTypes.h"
+   20:  #include "IrqControlLib.h"
+   21:  #include "IoConfig.h"
+   22:  #include "Phy.h"
+   23:  #include "PhyDebugMC1323X.h"
+   24:  #include "PlatformInit.h"
+   25:  
+   26:  /************************************************************************************
+   27:  *************************************************************************************
+   28:  * Public memory declarations
+   29:  *************************************************************************************
+   30:  ************************************************************************************/
+   31:  
+   32:  uint8_t mPhyLastRxLQI;
+   33:  extern uint8_t gRxTxPacketCnt;
+   34:  
+   35:  /************************************************************************************
+   36:  *************************************************************************************
+   37:  * Private constants
+   38:  *************************************************************************************
+   39:  ************************************************************************************/
+   40:  
+   41:  
+   42:  /************************************************************************************
+   43:  *************************************************************************************
+   44:  * Private memory declarations
+   45:  *************************************************************************************
+   46:  ************************************************************************************/
+   47:  
+   48:  static phyRxParams_t * mpRxParams = NULL;
+   49:  
+   50:  /************************************************************************************
+   51:  *************************************************************************************
+   52:  * Private prototypes
+   53:  *************************************************************************************
+   54:  ************************************************************************************/
+   55:  
+   56:  /* Place it in NON_BANKED memory */
+   57:  #ifdef MEMORY_MODEL_BANKED
+   58:  #pragma CODE_SEG __NEAR_SEG NON_BANKED
+   59:  #else
+   60:  #pragma CODE_SEG DEFAULT
+   61:  #endif /* MEMORY_MODEL_BANKED */
+   62:  
+   63:  static void    PhyISR_SeqCleanup(void);
+   64:  static void    PhyISR_TimeoutCleanup(void);
+   65:  static uint8_t Phy_LqiConvert(void);
+   66:  static uint8_t Phy_GetEnergyLevel(void);
+   67:  
+   68:  
+   69:  /************************************************************************************
+   70:  *************************************************************************************
+   71:  * Public functions
+   72:  *************************************************************************************
+   73:  ************************************************************************************/
+   74:  
+   75:  uint8_t PhyGetLastRxLqiValue(void)
+   76:  {
+   77:    return mPhyLastRxLQI;
+  0000 c60000   [4]             LDA   mPhyLastRxLQI
+   78:  }
+  0003 81       [6]             RTS   
+   79:  
+   80:  /************************************************************************************
+   81:  *************************************************************************************
+   82:  * Private functions
+   83:  *************************************************************************************
+   84:  ************************************************************************************/
+   85:  // Needed to initialize Timer1 vector
+   86:  void DummyIsr(void)
+   87:  {
+   88:    ;
+   89:  }
+  0000 81       [6]             RTS   
+   90:  
+   91:  void (*pTimer1Isr)(void) = DummyIsr; // Makes it possible to dynamically change interrupt vector for testing!
+   92:  
+   93:  /***********************************************************************************/
+   94:  void PhyPassRxParams(phyRxParams_t * pRxParam)
+   95:  {
+   96:    mpRxParams = pRxParam;
+  0000 960000   [5]             STHX  mpRxParams
+   97:  }
+  0003 81       [6]             RTS   
+   98:  
+   99:  /***********************************************************************************/
+  100:  
+  101:  static void PhyISR_SeqCleanup(void)
+  102:  {
+  103:    PP_PHY_STATUS1 =  PP_PHY_STATUS1_TMR3_IRQ | PP_PHY_STATUS1_TMR2_IRQ;
+  0000 6e064d   [4]             MOV   #6,77
+  104:    PP_PHY_STATUS2 =  PP_PHY_STATUS2_CCA_IRQ  | PP_PHY_STATUS2_RX_IRQ | PP_PHY_STATUS2_TX_IRQ | PP_PHY_STATUS2_SEQ_IRQ | PP_PHY_STATUS2_LO1UNLOCK_IRQ | PP_PHY_STATUS2_FLTR_FAIL_IRQ | PP_PHY_STATUS2_RX_WMRK_IRQ;
+  0003 6e7f4e   [4]             MOV   #127,78
+  105:    PP_PHY_CTL4   &= ~PP_PHY_CTL4_TMR3MSK_BIT; // unmask TMR3 interrupt
+  0006 1d47     [5]             BCLR  6,71
+  106:    PP_PHY_CTL3   |=  PP_PHY_CTL3_SEQ_MSK_BIT | PP_PHY_CTL3_TX_MSK_BIT | PP_PHY_CTL3_RX_MSK_BIT | PP_PHY_CTL3_CCA_MSK_BIT; // mask SEQ, RX, TX and CCA interrupts
+  0008 b646     [3]             LDA   70
+  000a aa0f     [2]             ORA   #15
+  000c b746     [3]             STA   70
+  107:  }
+  000e 81       [6]             RTS   
+  108:  
+  109:  /***********************************************************************************/
+  110:  
+  111:  static void PhyISR_TimeoutCleanup(void)
+  112:  {
+  113:    PP_PHY_STATUS1 =  PP_PHY_STATUS1_TMR3_IRQ | PP_PHY_STATUS1_TMR2_IRQ;
+  0000 6e064d   [4]             MOV   #6,77
+  114:    PP_PHY_STATUS2 =  PP_PHY_STATUS2_CCA_IRQ  | PP_PHY_STATUS2_RX_IRQ | PP_PHY_STATUS2_TX_IRQ | PP_PHY_STATUS2_SEQ_IRQ | PP_PHY_STATUS2_LO1UNLOCK_IRQ | PP_PHY_STATUS2_FLTR_FAIL_IRQ | PP_PHY_STATUS2_RX_WMRK_IRQ;
+  0003 6e7f4e   [4]             MOV   #127,78
+  115:    PP_PHY_CTL3   |=  PP_PHY_CTL3_SEQ_MSK_BIT | PP_PHY_CTL3_TX_MSK_BIT | PP_PHY_CTL3_RX_MSK_BIT | PP_PHY_CTL3_CCA_MSK_BIT; // mask SEQ, RX, TX and CCA interrupts
+  0006 b646     [3]             LDA   70
+  0008 aa0f     [2]             ORA   #15
+  000a b746     [3]             STA   70
+  116:    PP_PHY_CTL2   &= ~PP_PHY_CTL2_TC3TMOUT_BIT;
+  000c 1d45     [5]             BCLR  6,69
+  117:    PP_PHY_CTL4   &= ~PP_PHY_CTL4_TMR3CMP_EN_BIT;
+  000e 1547     [5]             BCLR  2,71
+  118:    PP_PHY_CTL4   |=  PP_PHY_CTL4_TMR3MSK_BIT; // mask TMR3 interrupt
+  0010 1c47     [5]             BSET  6,71
+  119:  }
+  0012 81       [6]             RTS   
+  120:  
+  121:  /***********************************************************************************/
+  122:  
+  123:  static uint8_t Phy_LqiConvert(void)
+  124:  {
+  125:    uint8_t     linkQuality = PP_PHY_CCAFNL;
+  0000 be50     [3]             LDX   80
+  126:    
+  127:  #ifndef gLQIMappingForRF4CE_c
+  128:    // Recalculate the link quality to conform with other link quality measures
+  129:    // Make dynamics of the energy level vary from 0x00-0xff
+  130:    if (linkQuality > 190) {
+  0002 a3be     [2]             CPX   #-66
+  0004 2302     [3]             BLS   L8 ;abs = 0008
+  131:      linkQuality = 190; //190 = -95dBm as floor (translates to 0x00)
+  132:    }
+  0006 aebe     [2]             LDX   #-66
+  0008          L8:     
+  133:    
+  134:    if (linkQuality < 54) {
+  0008 a336     [2]             CPX   #54
+  000a 2402     [3]             BCC   LE ;abs = 000e
+  135:        linkQuality = 54; //54 = -27 dBm as top (saturation)
+  136:      }
+  000c ae36     [2]             LDX   #54
+  000e          LE:     
+  137:    linkQuality = 190 - linkQuality;
+  000e a6be     [2]             LDA   #-66
+  0010 89       [2]             PSHX  
+  0011 95       [2]             TSX   
+  0012 f0       [3]             SUB   ,X
+  138:    linkQuality = linkQuality + (linkQuality >> 1) + (linkQuality >> 2) + (linkQuality >> 3); // equivalent with multiply by 1.875
+  0013 f7       [2]             STA   ,X
+  0014 44       [1]             LSRA  
+  0015 fb       [3]             ADD   ,X
+  0016 fe       [3]             LDX   ,X
+  0017 54       [1]             LSRX  
+  0018 54       [1]             LSRX  
+  0019 87       [2]             PSHA  
+  001a 9f       [1]             TXA   
+  001b 95       [2]             TSX   
+  001c fb       [3]             ADD   ,X
+  001d ee01     [3]             LDX   1,X
+  001f 54       [1]             LSRX  
+  0020 54       [1]             LSRX  
+  0021 54       [1]             LSRX  
+  0022 9ee702   [4]             STA   2,SP
+  0025 9f       [1]             TXA   
+  0026 95       [2]             TSX   
+  0027 eb01     [3]             ADD   1,X
+  139:  #else // gLQIMappingForRF4CE_c
+  140:    linkQuality = 255 - linkQuality;
+  141:  #endif // gLQIMappingForRF4CE_c
+  142:    
+  143:    /* Save LQI value for ZTC */
+  144:    mPhyLastRxLQI = linkQuality;
+  0029 c70000   [4]             STA   mPhyLastRxLQI
+  145:    
+  146:    return linkQuality;
+  002c a702     [2]             AIS   #2
+  147:  }
+  002e 81       [6]             RTS   
+  148:  
+  149:  /************************************************************************************
+  150:  * Get and convert energyLevel
+  151:  *
+  152:  * ED returns values between -75 dBm to about -11.5 dBm which are represented by decimal
+  153:  * values 150 and 23 respectively.
+  154:  *
+  155:  ************************************************************************************/
+  156:  
+  157:  static uint8_t Phy_GetEnergyLevel(void)
+  158:  {
+  159:    uint8_t   energyLevel = PP_PHY_CCAFNL;
+  0000 be50     [3]             LDX   80
+  160:  
+  161:    // Make dynamics of the energy level vary from 0x00-0xff
+  162:    if (energyLevel > 150)
+  0002 a396     [2]             CPX   #-106
+  0004 2302     [3]             BLS   L8 ;abs = 0008
+  163:    {
+  164:      energyLevel = 150; //150 = -75dBm as floor (translates to 0x00)
+  165:    }
+  0006 ae96     [2]             LDX   #-106
+  0008          L8:     
+  166:  
+  167:    if (energyLevel < 48)
+  0008 a330     [2]             CPX   #48
+  000a 2402     [3]             BCC   LE ;abs = 000e
+  168:      {
+  169:        energyLevel = 48; //48 = -24 dBm as top (saturation)
+  170:      }
+  000c ae30     [2]             LDX   #48
+  000e          LE:     
+  171:    energyLevel = 150 - energyLevel;  // 150 = -75dBm as floor (translates to 0xFF)
+  000e a696     [2]             LDA   #-106
+  0010 89       [2]             PSHX  
+  0011 95       [2]             TSX   
+  0012 f0       [3]             SUB   ,X
+  172:    
+  173:    // Stretch the range from 150 to 48 to a range from 0x00 to 0xFF
+  174:    energyLevel = (energyLevel << 1) + (energyLevel >> 1); // equivalent with multiplication by 2.5
+  0013 97       [1]             TAX   
+  0014 48       [1]             LSLA  
+  0015 54       [1]             LSRX  
+  0016 9ee701   [4]             STA   1,SP
+  0019 9f       [1]             TXA   
+  001a 95       [2]             TSX   
+  001b fb       [3]             ADD   ,X
+  175:  
+  176:    return energyLevel;
+  001c 8a       [3]             PULH  
+  177:  }
+  001d 81       [6]             RTS   
+  178:  
+  179:  /***********************************************************************************/
+  180:  
+  181:  INTERRUPT_KEYWORD void PhyHandlerTx_ISR(void)
+  182:  {
+  0000 8b       [2]             PSHH  
+  0001 a7fe     [2]             AIS   #-2
+  183:    uint8_t xcvseqCopy, status2Copy;
+  184:    
+  185:  #if (gPpdMode_d != gPpdModeOFF_d) 
+  186:    volatile uint8_t temp;
+  187:  #endif //(gPpdMode_d != gPpdModeOFF_d  
+  188:    PHY_DEBUG_LOG(PDBG_TX_VECT_INTERRUPT);
+  189:  
+  190:    status2Copy     =  PP_PHY_STATUS2 & (PP_PHY_STATUS2_SEQ_IRQ | PP_PHY_STATUS2_LO1UNLOCK_IRQ);
+  0003 b64e     [3]             LDA   78
+  0005 a441     [2]             AND   #65
+  0007 95       [2]             TSX   
+  0008 f7       [2]             STA   ,X
+  191:    xcvseqCopy      =  PhyGetSeqState();        // read XCVSEQ
+  0009 b644     [3]             LDA   68
+  000b a407     [2]             AND   #7
+  000d e701     [3]             STA   1,X
+  192:  
+  193:    IrqControlLib_DisableMC1323xIrq();
+  000f 1e45     [5]             BSET  7,69
+  194:    IrqControlLib_EnableAllIrqs();
+  0011 9a       [1]             CLI   
+  195:  
+  196:    if(status2Copy & PP_PHY_STATUS2_LO1UNLOCK_IRQ)
+  0012 f6       [3]             LDA   ,X
+  0013 a540     [2]             BIT   #64
+  0015 270b     [3]             BEQ   L22 ;abs = 0022
+  197:    {
+  198:      #ifdef PHY_ISR_HOOKS
+  199:      PhyPlmeUnlockTx();
+  200:      #endif // PHY_ISR_HOOKS
+  201:      PhyISR_SeqCleanup();
+  0017 cd0000   [6]             JSR   PhyISR_SeqCleanup
+  001a ad77     [5]             BSR   L93 ;abs = 0093
+  202:  #if (gPpdMode_d != gPpdModeOFF_d)    
+  203:      //PPD Mode is enabled
+  204:      IoIndirectWrite(0x63, 10);        //forces cg_en low
+  205:      temp = IoIndirectRead(0x63);      //this is a delay step
+  206:      temp = IoIndirectRead(0x63);      //this is a delay step        
+  207:      IoIndirectWrite(0x63, 0x00);      //releases cg_en
+  208:  #endif //(gPpdMode_d != gPpdModeOFF_d)        
+  209:      PHY_DEBUG_LOG(PDBG_SYNC_LOSS_INDICATION);
+  210:      
+  211:      PP_PHY_CTL1    &= ~PP_PHY_CTL1_XCVSEQ_MASK; // set the PHY sequencer back to IDLE
+  212:      
+  213:      PhyPlmeSyncLossIndication();
+  001c cd0000   [6]             JSR   PhyPlmeSyncLossIndication
+  214:      
+  215:      IrqControlLib_DisableAllIrqs();
+  001f 9b       [1]             SEI   
+  216:      IrqControlLib_EnableMC1323xIrq();
+  217:         
+  218:      return;
+  0020 206b     [3]             BRA   L8D ;abs = 008d
+  0022          L22:    
+  219:    }
+  220:    
+  221:    if(PP_PHY_STATUS1 &  PP_PHY_STATUS1_TMR3_IRQ)  
+  0022 054d0b   [5]             BRCLR 2,77,L30 ;abs = 0030
+  222:    {
+  223:     PhyISR_TimeoutCleanup();
+  0025 cd0000   [6]             JSR   PhyISR_TimeoutCleanup
+  0028 ad69     [5]             BSR   L93 ;abs = 0093
+  224:     PHY_DEBUG_LOG(PDBG_TIMEOUT_INDICATION);
+  225:     //PPD Mode is enabled
+  226:  #if (gPpdMode_d != gPpdModeOFF_d)      
+  227:      // set the HW sequencer to idle state
+  228:      temp = IoIndirectRead(0x17);
+  229:      IoIndirectWrite(0x17, 0x00);   //disable the PPD
+  230:  #endif //(gPpdMode_d == gPpdModeOFF_d)            
+  231:      PP_PHY_CTL1    &= ~PP_PHY_CTL1_XCVSEQ_MASK; // set the PHY sequencer back to IDLE    
+  232:  #if (gPpdMode_d != gPpdModeOFF_d)        
+  233:      IoIndirectWrite(0x17, temp); //restore the PPD mode
+  234:  #endif //(gPpdMode_d != gPpdModeOFF_d) 
+  235:  
+  236:     PhyTimeRxTimeoutIndication();
+  002a cd0000   [6]             JSR   PhyTimeRxTimeoutIndication
+  237:     
+  238:     IrqControlLib_DisableAllIrqs();
+  002d 9b       [1]             SEI   
+  239:     IrqControlLib_EnableMC1323xIrq();
+  240:  
+  241:     return;
+  002e 205d     [3]             BRA   L8D ;abs = 008d
+  0030          L30:    
+  0030 ad61     [5]             BSR   L93 ;abs = 0093
+  242:    }   
+  243:  
+  244:    //PPD Mode Abort
+  245:     //PPD Mode is enabled
+  246:  #if (gPpdMode_d != gPpdModeOFF_d)      
+  247:      // set the HW sequencer to idle state
+  248:      temp = IoIndirectRead(0x17);
+  249:      IoIndirectWrite(0x17, 0x00);   //disable the PPD
+  250:  #endif //(gPpdMode_d != gPpdModeOFF_d)            
+  251:      PP_PHY_CTL1    &= ~PP_PHY_CTL1_XCVSEQ_MASK; // set the PHY sequencer back to IDLE    
+  252:  #if (gPpdMode_d != gPpdModeOFF_d)        
+  253:      IoIndirectWrite(0x17, temp); //restore the PPD mode
+  254:  #endif //(gPpdMode_d != gPpdModeOFF_d) 
+  255:    
+  256:    PHY_DEBUG_LOG1(PDBG_SEQ_IRQ, xcvseqCopy);
+  257:  
+  258:    switch(xcvseqCopy)
+  0032 95       [2]             TSX   
+  0033 e601     [3]             LDA   1,X
+  0035 410206   [4]             CBEQA #2,L3E ;abs = 003e
+  0038 a104     [2]             CMP   #4
+  003a 264a     [3]             BNE   L86 ;abs = 0086
+  003c 2015     [3]             BRA   L53 ;abs = 0053
+  003e          L3E:    
+  259:    {
+  260:      case gTX_c:   
+  261:                    PhyISR_SeqCleanup();
+  003e cd0000   [6]             JSR   PhyISR_SeqCleanup
+  262:                      
+  263:                    if(( PP_PHY_STATUS1 & PP_PHY_STATUS1_CCA_BIT ) && (PP_PHY_CTL1 & PP_PHY_CTL1_CCABFRTX_BIT))
+  0041 0d4d0a   [5]             BRCLR 6,77,L4E ;abs = 004e
+  0044 0b4407   [5]             BRCLR 5,68,L4E ;abs = 004e
+  264:                    {
+  265:                      PHY_DEBUG_LOG(PDBG_CCA_CONFIRM_BUSY);
+  266:                      PhyPlmeCcaConfirm(gChannelBusy_c);
+  0047 a601     [2]             LDA   #1
+  0049 cd0000   [6]             JSR   PhyPlmeCcaConfirm
+  267:                    }
+  004c 2032     [3]             BRA   L80 ;abs = 0080
+  004e          L4E:    
+  268:                    else
+  269:                    {
+  270:                      PHY_DEBUG_LOG(PDBG_DATA_CONFIRM);
+  271:                      PhyPdDataConfirm();
+  004e cd0000   [6]             JSR   PhyPdDataConfirm
+  272:                    }
+  273:                    
+  274:                    gRxTxPacketCnt++;
+  275:                    
+  276:                    break;
+  0051 202d     [3]             BRA   L80 ;abs = 0080
+  0053          L53:    
+  277:      
+  278:      case gTR_c:   
+  279:                    PhyISR_SeqCleanup();   
+  0053 cd0000   [6]             JSR   PhyISR_SeqCleanup
+  280:                    
+  281:                    if(( PP_PHY_STATUS1 & PP_PHY_STATUS1_CCA_BIT ) && (PP_PHY_CTL1 & PP_PHY_CTL1_CCABFRTX_BIT))
+  0056 0d4d0a   [5]             BRCLR 6,77,L63 ;abs = 0063
+  0059 0b4407   [5]             BRCLR 5,68,L63 ;abs = 0063
+  282:                    {
+  283:                        PHY_DEBUG_LOG(PDBG_CCA_CONFIRM_BUSY);
+  284:                        PhyPlmeCcaConfirm(gChannelBusy_c);
+  005c a601     [2]             LDA   #1
+  005e cd0000   [6]             JSR   PhyPlmeCcaConfirm
+  285:                    }
+  0061 201d     [3]             BRA   L80 ;abs = 0080
+  0063          L63:    
+  286:                    else
+  287:                    {
+  288:                        if(NULL != mpRxParams)
+  0063 320000   [5]             LDHX  mpRxParams
+  0066 2715     [3]             BEQ   L7D ;abs = 007d
+  289:                        {
+  290:                           *((uint8_t*)&(mpRxParams->timeStamp)+3) = PP_PHY_TIMESTMP0;
+  0068 b656     [3]             LDA   86
+  006a e703     [3]             STA   3,X
+  291:                           *((uint8_t*)&(mpRxParams->timeStamp)+2) = PP_PHY_TIMESTMP8;
+  006c b655     [3]             LDA   85
+  006e e702     [3]             STA   2,X
+  292:                           *((uint8_t*)&(mpRxParams->timeStamp)+1) = PP_PHY_TIMESTMP16;
+  0070 b654     [3]             LDA   84
+  0072 e701     [3]             STA   1,X
+  293:                           *((uint8_t*)&(mpRxParams->timeStamp)+0) = 0;
+  0074 7f       [4]             CLR   ,X
+  294:                           mpRxParams->linkQuality = Phy_LqiConvert();
+  0075 cd0000   [6]             JSR   Phy_LqiConvert
+  0078 320000   [5]             LDHX  mpRxParams
+  007b e704     [3]             STA   4,X
+  007d          L7D:    
+  295:                        }
+  296:                      
+  297:                        PHY_DEBUG_LOG(PDBG_DATA_CONFIRM);
+  298:                        PhyPdDataConfirm();
+  007d cd0000   [6]             JSR   PhyPdDataConfirm
+  0080          L80:    
+  299:                    }                    
+  300:  
+  301:                    gRxTxPacketCnt++;
+  0080 450000   [3]             LDHX  @gRxTxPacketCnt
+  0083 7c       [4]             INC   ,X
+  302:                    
+  303:                    break;
+  0084 2006     [3]             BRA   L8C ;abs = 008c
+  0086          L86:    
+  304:                    
+  305:      default:      PhyISR_SeqCleanup();
+  0086 cd0000   [6]             JSR   PhyISR_SeqCleanup
+  306:                    PHY_DEBUG_LOG(PDBG_SYNC_LOSS_INDICATION);
+  307:                    PhyPlmeSyncLossIndication();
+  0089 cd0000   [6]             JSR   PhyPlmeSyncLossIndication
+  008c          L8C:    
+  308:                    break;
+  309:    }
+  310:    
+  311:    IrqControlLib_DisableAllIrqs();
+  008c 9b       [1]             SEI   
+  008d          L8D:    
+  312:    IrqControlLib_EnableMC1323xIrq();
+  008d 1f45     [5]             BCLR  7,69
+  313:    
+  314:  }
+  008f a702     [2]             AIS   #2
+  0091 8a       [3]             PULH  
+  0092 80       [9]             RTI   
+  0093          L93:    
+  0093 b644     [3]             LDA   68
+  0095 a4f8     [2]             AND   #-8
+  0097 b744     [3]             STA   68
+  0099 81       [6]             RTS   
+  315:  
+  316:  /***********************************************************************************/
+  317:  
+  318:  INTERRUPT_KEYWORD void PhyHandlerRx_ISR(void)
+  319:  {
+  0000 8b       [2]             PSHH  
+  0001 a7fe     [2]             AIS   #-2
+  320:    uint8_t xcvseqCopy, status2Copy;
+  321:    
+  322:  #if (gPpdMode_d != gPpdModeOFF_d)  
+  323:    volatile uint8_t temp;
+  324:  #endif //(gPpdMode_d != gPpdModeOFF_d)
+  325:    PHY_DEBUG_LOG(PDBG_RX_VECT_INTERRUPT);
+  326:  
+  327:    status2Copy     =  PP_PHY_STATUS2 & (PP_PHY_STATUS2_SEQ_IRQ | PP_PHY_STATUS2_LO1UNLOCK_IRQ);
+  0003 b64e     [3]             LDA   78
+  0005 a441     [2]             AND   #65
+  0007 95       [2]             TSX   
+  0008 f7       [2]             STA   ,X
+  328:    xcvseqCopy      =  PhyGetSeqState();        // read XCVSEQ
+  0009 b644     [3]             LDA   68
+  000b a407     [2]             AND   #7
+  000d e701     [3]             STA   1,X
+  329:  
+  330:  #if !gDisallowInterruptsDuringRX_d   
+  331:    IrqControlLib_DisableMC1323xIrq();
+  000f 1e45     [5]             BSET  7,69
+  332:    IrqControlLib_EnableAllIrqs();
+  0011 9a       [1]             CLI   
+  333:  #endif
+  334:  
+  335:    if(status2Copy & PP_PHY_STATUS2_LO1UNLOCK_IRQ)
+  0012 f6       [3]             LDA   ,X
+  0013 a540     [2]             BIT   #64
+  0015 270b     [3]             BEQ   L22 ;abs = 0022
+  336:    {
+  337:      #ifdef PHY_ISR_HOOKS
+  338:      PhyPlmeUnlockRx();
+  339:      #endif // PHY_ISR_HOOKS
+  340:      PhyISR_SeqCleanup();
+  0017 cd0000   [6]             JSR   PhyISR_SeqCleanup
+  001a ad7d     [5]             BSR   L99 ;abs = 0099
+  341:      //PPD Mode is enabled
+  342:  #if (gPpdMode_d != gPpdModeOFF_d)        
+  343:      IoIndirectWrite(0x63, 10);        //forces cg_en low
+  344:      temp = IoIndirectRead(0x63); //this is a delay step
+  345:      temp = IoIndirectRead(0x63); //this is a delay step        
+  346:      IoIndirectWrite(0x63, 0x00);      //releases cg_en
+  347:  #endif //(gPpdMode_d != gPpdModeOFF_d)    
+  348:      
+  349:      PHY_DEBUG_LOG(PDBG_SYNC_LOSS_INDICATION);
+  350:      PP_PHY_CTL1    &= ~PP_PHY_CTL1_XCVSEQ_MASK; // set the PHY sequencer back to IDLE        
+  351:      PhyPlmeSyncLossIndication();
+  001c cd0000   [6]             JSR   PhyPlmeSyncLossIndication
+  352:  
+  353:  #if !gDisallowInterruptsDuringRX_d
+  354:      IrqControlLib_DisableAllIrqs();
+  001f 9b       [1]             SEI   
+  355:      IrqControlLib_EnableMC1323xIrq();
+  356:  #endif
+  357:  
+  358:      return;
+  0020 2071     [3]             BRA   L93 ;abs = 0093
+  0022          L22:    
+  359:    }
+  360:    
+  361:    if(PP_PHY_STATUS1 &  PP_PHY_STATUS1_TMR3_IRQ)
+  0022 054d0b   [5]             BRCLR 2,77,L30 ;abs = 0030
+  362:    {
+  363:     PhyISR_TimeoutCleanup();  
+  0025 cd0000   [6]             JSR   PhyISR_TimeoutCleanup
+  0028 ad6f     [5]             BSR   L99 ;abs = 0099
+  364:     PHY_DEBUG_LOG(PDBG_TIMEOUT_INDICATION);
+  365:     //PPD Mode is enabled
+  366:  #if (gPpdMode_d != gPpdModeOFF_d)      
+  367:      // set the HW sequencer to idle state
+  368:      temp = IoIndirectRead(0x17);
+  369:      IoIndirectWrite(0x17, 0x00);   //disable the PPD
+  370:  #endif //(gPpdMode_d != gPpdModeOFF_d)            
+  371:      PP_PHY_CTL1    &= ~PP_PHY_CTL1_XCVSEQ_MASK; // set the PHY sequencer back to IDLE    
+  372:  #if (gPpdMode_d != gPpdModeOFF_d)        
+  373:      IoIndirectWrite(0x17, temp); //restore the PPD mode
+  374:  #endif //(gPpdMode_d != gPpdModeOFF_d) 
+  375:       
+  376:     
+  377:     PhyTimeRxTimeoutIndication();
+  002a cd0000   [6]             JSR   PhyTimeRxTimeoutIndication
+  378:  
+  379:  #if !gDisallowInterruptsDuringRX_d
+  380:     IrqControlLib_DisableAllIrqs();
+  002d 9b       [1]             SEI   
+  381:     IrqControlLib_EnableMC1323xIrq();
+  382:  #endif
+  383:  
+  384:     return;
+  002e 2063     [3]             BRA   L93 ;abs = 0093
+  0030          L30:    
+  0030 ad67     [5]             BSR   L99 ;abs = 0099
+  385:    }  
+  386:    
+  387:     //PPD Mode is enabled
+  388:  #if (gPpdMode_d != gPpdModeOFF_d)      
+  389:      // set the HW sequencer to idle state
+  390:      temp = IoIndirectRead(0x17);
+  391:      IoIndirectWrite(0x17, 0x00);   //disable the PPD
+  392:  #endif //(gPpdMode_d != gPpdModeOFF_d)            
+  393:      PP_PHY_CTL1    &= ~PP_PHY_CTL1_XCVSEQ_MASK; // set the PHY sequencer back to IDLE    
+  394:  #if (gPpdMode_d != gPpdModeOFF_d)        
+  395:      IoIndirectWrite(0x17, temp); //restore the PPD mode
+  396:  #endif //(gPpdMode_d != gPpdModeOFF_d) 
+  397:    
+  398:  
+  399:    PHY_DEBUG_LOG1(PDBG_SEQ_IRQ, xcvseqCopy);
+  400:  
+  401:    switch(xcvseqCopy)
+  0032 95       [2]             TSX   
+  0033 e601     [3]             LDA   1,X
+  0035 a105     [2]             CMP   #5
+  0037 2253     [3]             BHI   L8C ;abs = 008c
+  0039 41012a   [4]             CBEQA #1,L66 ;abs = 0066
+  003c 410306   [4]             CBEQA #3,L45 ;abs = 0045
+  003f a105     [2]             CMP   #5
+  0041 2649     [3]             BNE   L8C ;abs = 008c
+  0043 2018     [3]             BRA   L5D ;abs = 005d
+  0045          L45:    
+  402:    {
+  403:      case gCCA_c:  // verify the presence of irqs: CCA - yes, SEQ - yes, UNLOCK - no
+  404:                    PhyISR_SeqCleanup();
+  0045 cd0000   [6]             JSR   PhyISR_SeqCleanup
+  405:                    if( (PP_PHY_CTL2 & PP_PHY_CTL2_CCA_TYPE_MASK) == (gCcaED_c << PP_PHY_CTL2_CCA_TYPE_POS) )
+  0048 b645     [3]             LDA   69
+  004a a518     [2]             BIT   #24
+  004c 2608     [3]             BNE   L56 ;abs = 0056
+  406:                    {
+  407:                     // Ed
+  408:                     PhyPlmeEdConfirm(Phy_GetEnergyLevel());
+  004e cd0000   [6]             JSR   Phy_GetEnergyLevel
+  0051 cd0000   [6]             JSR   PhyPlmeEdConfirm
+  409:                    } 
+  0054 203c     [3]             BRA   L92 ;abs = 0092
+  0056          L56:    
+  410:                    else
+  411:                    {
+  412:                     // CCA
+  413:                     if( PP_PHY_STATUS1 & PP_PHY_STATUS1_CCA_BIT )
+  0056 0d4d07   [5]             BRCLR 6,77,L60 ;abs = 0060
+  414:                     {                      
+  415:                         PHY_DEBUG_LOG(PDBG_CCA_CONFIRM_BUSY);
+  416:                         PhyPlmeCcaConfirm(gChannelBusy_c);
+  0059 a601     [2]             LDA   #1
+  417:                     }
+  005b 2004     [3]             BRA   L61 ;abs = 0061
+  005d          L5D:    
+  418:                     else
+  419:                     {
+  420:                         PHY_DEBUG_LOG(PDBG_CCA_CONFIRM_IDLE);
+  421:                         PhyPlmeCcaConfirm(gChannelIdle_c);
+  422:                     }
+  423:                    }                    
+  424:                    break;
+  425:      case gCCCA_c: 
+  426:                    PhyISR_SeqCleanup();
+  005d cd0000   [6]             JSR   PhyISR_SeqCleanup
+  0060          L60:    
+  427:                    PHY_DEBUG_LOG(PDBG_CCA_CONFIRM_IDLE);
+  428:                    PhyPlmeCcaConfirm(gChannelIdle_c);
+  0060 4f       [1]             CLRA  
+  0061          L61:    
+  0061 cd0000   [6]             JSR   PhyPlmeCcaConfirm
+  0064 202c     [3]             BRA   L92 ;abs = 0092
+  0066          L66:    
+  429:                    
+  430:                    break;
+  431:      case gRX_c:   
+  432:                    PhyISR_SeqCleanup();
+  0066 cd0000   [6]             JSR   PhyISR_SeqCleanup
+  433:  
+  434:                    if(NULL != mpRxParams)
+  0069 320000   [5]             LDHX  mpRxParams
+  006c 2715     [3]             BEQ   L83 ;abs = 0083
+  435:                    {
+  436:                          *((uint8_t*)&(mpRxParams->timeStamp)+3) = PP_PHY_TIMESTMP0;
+  006e b656     [3]             LDA   86
+  0070 e703     [3]             STA   3,X
+  437:                          *((uint8_t*)&(mpRxParams->timeStamp)+2) = PP_PHY_TIMESTMP8;
+  0072 b655     [3]             LDA   85
+  0074 e702     [3]             STA   2,X
+  438:                          *((uint8_t*)&(mpRxParams->timeStamp)+1) = PP_PHY_TIMESTMP16;
+  0076 b654     [3]             LDA   84
+  0078 e701     [3]             STA   1,X
+  439:                          *((uint8_t*)&(mpRxParams->timeStamp)+0) = 0;
+  007a 7f       [4]             CLR   ,X
+  440:                          mpRxParams->linkQuality = Phy_LqiConvert();
+  007b cd0000   [6]             JSR   Phy_LqiConvert
+  007e 320000   [5]             LDHX  mpRxParams
+  0081 e704     [3]             STA   4,X
+  0083          L83:    
+  441:                    }
+  442:                    
+  443:                    PHY_DEBUG_LOG(PDBG_DATA_INDICATION);
+  444:                    PhyPdDataIndication();
+  0083 cd0000   [6]             JSR   PhyPdDataIndication
+  445:                    
+  446:                    gRxTxPacketCnt++;
+  0086 450000   [3]             LDHX  @gRxTxPacketCnt
+  0089 7c       [4]             INC   ,X
+  447:                    
+  448:                    break;
+  008a 2006     [3]             BRA   L92 ;abs = 0092
+  008c          L8C:    
+  449:                    
+  450:      default:      PhyISR_SeqCleanup();
+  008c cd0000   [6]             JSR   PhyISR_SeqCleanup
+  451:                    PHY_DEBUG_LOG(PDBG_SYNC_LOSS_INDICATION);
+  452:                    PhyPlmeSyncLossIndication();
+  008f cd0000   [6]             JSR   PhyPlmeSyncLossIndication
+  0092          L92:    
+  453:                    break;
+  454:    }
+  455:  
+  456:  #if !gDisallowInterruptsDuringRX_d
+  457:    IrqControlLib_DisableAllIrqs();
+  0092 9b       [1]             SEI   
+  0093          L93:    
+  458:    IrqControlLib_EnableMC1323xIrq();
+  0093 1f45     [5]             BCLR  7,69
+  459:  #endif
+  460:  }
+  0095 a702     [2]             AIS   #2
+  0097 8a       [3]             PULH  
+  0098 80       [9]             RTI   
+  0099          L99:    
+  0099 b644     [3]             LDA   68
+  009b a4f8     [2]             AND   #-8
+  009d b744     [3]             STA   68
+  009f 81       [6]             RTS   
+  461:  
+  462:  /***********************************************************************************/
+  463:  
+  464:  INTERRUPT_KEYWORD void PhyHandlerTmr_ISR(void)
+  465:  {
+  0000 8b       [2]             PSHH  
+  466:  
+  467:  #if (gPpdMode_d != gPpdModeOFF_d)    
+  468:    volatile uint8_t temp;
+  469:  #endif //(gPpdMode_d != gPpdModeOFF_d)    
+  470:    
+  471:    IrqControlLib_DisableMC1323xIrq();
+  0001 1e45     [5]             BSET  7,69
+  472:    IrqControlLib_EnableAllIrqs();
+  0003 9a       [1]             CLI   
+  473:    
+  474:   
+  475:    PHY_DEBUG_LOG(PDBG_TIMERS_VECT_INTERRUPT);
+  476:    
+  477:    // TMR2 IRQ servicing - start event
+  478:    if(PP_PHY_STATUS1 & PP_PHY_STATUS1_TMR2_IRQ)
+  0004 034d0c   [5]             BRCLR 1,77,L13 ;abs = 0013
+  479:    {
+  480:      PP_PHY_CTL1    &= ~PP_PHY_CTL1_TMRTRIGEN_BIT;
+  0007 1f44     [5]             BCLR  7,68
+  481:      PP_PHY_CTL4    &= ~PP_PHY_CTL4_TMR2CMP_EN_BIT;
+  0009 1347     [5]             BCLR  1,71
+  482:      PP_PHY_CTL4    |=  PP_PHY_CTL4_TMR2MSK_BIT; // mask TMR2 interrupt
+  000b 1a47     [5]             BSET  5,71
+  483:      PP_PHY_STATUS1  =  PP_PHY_STATUS1_TMR2_IRQ;
+  000d 6e024d   [4]             MOV   #2,77
+  484:      PHY_DEBUG_LOG(PDBG_START_INDICATION);
+  485:      PhyTimeStartEventIndication();
+  0010 cd0000   [6]             JSR   PhyTimeStartEventIndication
+  0013          L13:    
+  486:    }
+  487:  
+  488:    // TMR3 IRQ servicing - timeout event
+  489:    if(PP_PHY_STATUS1 & PP_PHY_STATUS1_TMR3_IRQ)
+  0013 054d12   [5]             BRCLR 2,77,L28 ;abs = 0028
+  490:    {
+  491:      PP_PHY_CTL2    &= ~PP_PHY_CTL2_TC3TMOUT_BIT;
+  0016 1d45     [5]             BCLR  6,69
+  492:      PP_PHY_CTL4    &= ~PP_PHY_CTL4_TMR3CMP_EN_BIT;
+  0018 1547     [5]             BCLR  2,71
+  493:      PP_PHY_CTL4    |=  PP_PHY_CTL4_TMR3MSK_BIT; // mask TMR3 interrupt
+  001a 1c47     [5]             BSET  6,71
+  494:      PP_PHY_STATUS1  =  PP_PHY_STATUS1_TMR3_IRQ;
+  001c 6e044d   [4]             MOV   #4,77
+  495:      PHY_DEBUG_LOG(PDBG_TIMEOUT_INDICATION);
+  496:  
+  497:      //PPD Mode is enabled
+  498:  #if (gPpdMode_d != gPpdModeOFF_d)        
+  499:      IoIndirectWrite(0x63, 10);        //forces cg_en low
+  500:      temp = IoIndirectRead(0x63); //this is a delay step
+  501:      temp = IoIndirectRead(0x63); //this is a delay step        
+  502:      IoIndirectWrite(0x63, 0x00);      //releases cg_en
+  503:  #endif //(gPpdMode_d != gPpdModeOFF_d)    
+  504:  
+  505:      /* Ensure that we're not issuing TimeoutIndication while the Automated sequence is still in progress */
+  506:      /* TMR3 can expire during R-T turnaround for example, case in which the sequence is not interrupted */
+  507:      if(gIdle_c == PhyGetSeqState())
+  001f b644     [3]             LDA   68
+  0021 a507     [2]             BIT   #7
+  0023 2603     [3]             BNE   L28 ;abs = 0028
+  508:      {      
+  509:       PhyTimeRxTimeoutIndication();
+  0025 cd0000   [6]             JSR   PhyTimeRxTimeoutIndication
+  0028          L28:    
+  510:      }
+  511:    }
+  512:    
+  513:      // TMR1 IRQ servicing
+  514:    if(PP_PHY_STATUS1 & PP_PHY_STATUS1_TMR1_IRQ)
+  0028 014d14   [5]             BRCLR 0,77,L3F ;abs = 003f
+  515:    {
+  516:      PP_PHY_CTL4    &= ~PP_PHY_CTL4_TMR1CMP_EN_BIT; 
+  002b 1147     [5]             BCLR  0,71
+  517:      PP_PHY_CTL4    |=  PP_PHY_CTL4_TMR1MSK_BIT; // mask TMR1 interrupt
+  002d 1847     [5]             BSET  4,71
+  518:      PP_PHY_STATUS1 = PP_PHY_STATUS1_TMR1_IRQ;
+  002f 6e014d   [4]             MOV   #1,77
+  519:       
+  520:      pTimer1Isr();
+  0032 320001   [5]             LDHX  pTimer1Isr:1
+  0035 c60000   [4]             LDA   pTimer1Isr
+  0038 8b       [2]             PSHH  
+  0039 8b       [2]             PSHH  
+  003a 8b       [2]             PSHH  
+  003b ac000000 [8]             CALL  _CALL_STAR08_FAR
+  003f          L3F:    
+  521:    }
+  522:    
+  523:    // TMR4 IRQ servicing
+  524:    if(PP_PHY_STATUS1 & PP_PHY_STATUS1_TMR4_IRQ)
+  003f 074d03   [5]             BRCLR 3,77,L45 ;abs = 0045
+  525:    {
+  526:       PP_PHY_STATUS1 = PP_PHY_STATUS1_TMR4_IRQ;
+  0042 6e084d   [4]             MOV   #8,77
+  0045          L45:    
+  527:    }
+  528:    IrqControlLib_DisableAllIrqs();
+  0045 9b       [1]             SEI   
+  529:    IrqControlLib_EnableMC1323xIrq();
+  0046 1f45     [5]             BCLR  7,69
+  530:  
+  531:  }
+  0048 8a       [3]             PULH  
+  0049 80       [9]             RTI   
+  532:  
+  533:  /***********************************************************************************/
+  534:  
+  535:  INTERRUPT_KEYWORD void PhyHandlerRxWtrmrk_ISR(void)
+  536:  {
+  0000 8b       [2]             PSHH  
+  537:    PHY_DEBUG_LOG(PDBG_WTRMRK_VECT_INTERRUPT);
+  538:    if(PP_PHY_STATUS2 & PP_PHY_STATUS2_RX_WMRK_IRQ)
+  0001 094e03   [5]             BRCLR 4,78,L7 ;abs = 0007
+  539:    {
+  540:      PP_PHY_STATUS2  =  PP_PHY_STATUS2_RX_WMRK_IRQ;  // clear RX_WMRK_IRQ bit
+  0004 6e104e   [4]             MOV   #16,78
+  0007          L7:     
+  541:      #ifdef PHY_ISR_HOOKS
+  542:      PhyPlmeRxSfdDetect();
+  543:      #endif //  PHY_ISR_HOOKS
+  544:    }
+  545:  }
+  0007 8a       [3]             PULH  
+  0008 80       [9]             RTI   
+  546:  
+  547:  /***********************************************************************************/
+  548:  
+  549:  #pragma CODE_SEG DEFAULT
+  550:  
+  551:  

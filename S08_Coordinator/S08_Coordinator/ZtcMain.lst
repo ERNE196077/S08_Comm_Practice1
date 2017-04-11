@@ -1,0 +1,1993 @@
+ANSI-C/cC++ Compiler for HC08 V-5.0.45 Build 14019, Jan 20 2014
+
+    1:  /******************************************************************************
+    2:  * Implementation of the ZigBee Test Client.
+    3:  * ZTC task public functions, and various internals.
+    4:  *
+    5:  * Copyright (c) 2008, Freescale, Inc.  All rights reserved.
+    6:  *
+    7:  *
+    8:  * No part of this document must be reproduced in any form - including copied,
+    9:  * transcribed, printed or by any electronic means - without specific written
+   10:  * permission from Freescale Semiconductor.
+   11:  *
+   12:  ******************************************************************************/
+   13:  
+   14:  #include "EmbeddedTypes.h"
+   15:  
+   16:  #include "MsgSystem.h"
+   17:  #include "FunctionLib.h"
+   18:  #include "PublicConst.h"
+   19:  #include "TS_Interface.h"
+   20:  #include "NVM_Interface.h"
+   21:  #include "NV_Flash.h"
+   22:  #include "NV_FlashHAL.h"
+   23:  #include "NV_Data.h"
+   24:  
+   25:  #include "PWRLib.h"
+   26:  #include "PublicConst.h"
+   27:  
+   28:  #include "Uart_Interface.h"
+   29:  
+   30:  #include "ZtcInterface.h"
+   31:  #include "ZtcPrivate.h"
+   32:  #include "ZtcClientCommunication.h"
+   33:  #include "ZtcMsgTypeInfo.h"
+   34:  #include "ZtcSAPHandlerInfo.h"
+   35:  #include "ZtcCopyData.h"
+   36:  
+   37:  #include "SPI_Interface.h"
+   38:  #include "IIC_Interface.h"
+   39:  #include "CDC_Interface.h"
+   40:  #include "ApplicationConf.h"
+   41:  
+   42:  #ifdef gZtcOtapSupport_d
+   43:    #include "OtapSupport.h"
+   44:    #include "Eeprom.h"
+   45:  #endif
+   46:  
+   47:  #if gMacStandAlone_d
+   48:  #include "Mac_Globals.h"
+   49:  #endif
+   50:  
+   51:  #if (gLpmIncluded_d == 1)
+   52:    #include "PWR_Interface.h"
+   53:  #endif
+   54:  
+   55:  #include "Phy.h"
+   56:  
+   57:  /******************************************************************************
+   58:  *******************************************************************************
+   59:  * Private type definitions
+   60:  *******************************************************************************
+   61:  ******************************************************************************/
+   62:  
+   63:  /* Format of the messages echanged between Ztc and the SAP Handlers.
+   64:   *
+   65:   * *warning* All of the SAP Handlers receive a sapHandlerMsg_t, containing a
+   66:   * msgType.
+   67:   * The AFDE -> APP and APP -> AFDE SAP Handler send back only raw data,
+   68:   * without a msgType, to ZTC_TaskEventMonitor().
+   69:   * All other SAP Handlers send back a sapHandlerMsg_t *with* a msgType.
+   70:   */
+   71:   
+   72:  typedef struct sapHandlerMsgHdr_tag {
+   73:    ztcMsgType_t msgType;
+   74:  } sapHandlerMsgHdr_t;
+   75:  
+   76:  #ifndef gMAC2006_d
+   77:   #define mSapHandlerMsgTotalLen_c    144
+   78:   #define mMaxPacketSize_c            144
+   79:  #else
+   80:   #define mSapHandlerMsgTotalLen_c    155  // Security material added (securityLevel, keyIdMode, keySource, keyIndex)
+   81:   #define mMaxPacketSize_c            155
+   82:  #endif //gMAC2006_d
+   83:  
+   84:  typedef union sapHandlerMsg_tag {
+   85:    uint8_t raw[mSapHandlerMsgTotalLen_c];
+   86:    struct {
+   87:      sapHandlerMsgHdr_t header;
+   88:      uint8_t payload[mSapHandlerMsgTotalLen_c - sizeof(sapHandlerMsgHdr_t)];
+   89:    } structured;
+   90:  } sapHandlerMsg_t;
+   91:  
+   92:  /* Permissions Configuration Table. */
+   93:  #if (gZtcIncluded_d && (gStandardSecurity_d || gHighSecurity_d) && gApsMaxEntriesForPermissionsTable_c)
+   94:  typedef struct ztcPermissionsTable_tag {
+   95:    index_t count;                                /* Number of entries in table. */
+   96:    permissionsTable_t table[(sizeof(clientPacket_t) - sizeof(clientPacketHdr_t))
+   97:                      / sizeof(permissionsTable_t)];     /* First entry of variable-length table. */
+   98:  } ztcPermissionsTable_t;
+   99:  #endif  /* (gZtcIncluded_d && (gStandardSecurity_d || gHighSecurity_d) && gApsMaxEntriesForPermissionsTable_c) */
+  100:  
+  101:  #ifndef PROCESSOR_MC1323X
+  102:  typedef struct ztcAbelWrite_tag {
+  103:    uint8_t  abelReg;
+  104:    uint16_t value;
+  105:  } ztcAbelWrite_t;
+  106:  #endif /* PROCESSOR_MC1323X */
+  107:  
+  108:  /* a single fragment as seen by ZTC */
+  109:  typedef struct apsdeFragment_tag {
+  110:    uint8_t iBlockNumber;
+  111:    uint8_t iMoreBlocks;
+  112:    uint8_t iLength;
+  113:    uint8_t aData[1];
+  114:  } apsdeFragment_t;
+  115:  
+  116:  typedef struct ztcWakeUpConfig_tag
+  117:  {
+  118:   uint8_t selectedKBPin; /* Mask for selecting the pin */
+  119:   uint8_t detectionEdge; /* The selected edge when MCU should wake up; 
+  120:                             0x00 - wake up MCU on falling edges;
+  121:                             0x01 - wake up MCU on rising edges */
+  122:   bool_t  signalWhenWakeUpFlag; /* Flag used to send or not a WakeUp.Ind message */
+  123:   uint8_t prevPinLevel; /* Keep track of previous pin level */
+  124:  }ztcWakeUpConfig_t;
+  125:  
+  126:  /* Only KB4-KB7 can wake up the MCU on both (rising or falling) edges.
+  127:     KB3-KB0 can only wake up the MCU on falling edges. */
+  128:  #define mRisingEdgesPinsMask_c  0xF0
+  129:  /* detectionEdge == 0x01, MCU is waking up on rising edges
+  130:     detectionEdge == 0x00, MCU is waking up on falling edges */
+  131:  #define mFallingEdges_c  0x00
+  132:  #define mRisingEdges_c   0x01 
+  133:  
+  134:  
+  135:  /******************************************************************************
+  136:  *******************************************************************************
+  137:  * Private prototypes
+  138:  *******************************************************************************
+  139:  ******************************************************************************/
+  140:  
+  141:  static void pktFromMsgAsync(uint8_t const *pMsgFromSAPHandler,
+  142:                              ztcSAPHandlerInfo_t const *pSrcSAPInfo,
+  143:                              ztcMsgTypeInfo_t const *pSrcMsgTypeInfo);
+  144:  
+  145:  static void pktFromMsgSync(uint8_t const *pMsgFromSAPHandler,
+  146:                             ztcSAPHandlerInfo_t const *pSrcSAPInfo,
+  147:                             ztcMsgTypeInfo_t const *pSrcMsgTypeInfo,
+  148:                             uint8_t const srcStatus);
+  149:  
+  150:  static void ZtcReq_Handler(void);
+  151:  
+  152:  static void CheckZtcBufferStatus(void); 
+  153:  
+  154:  static void ZtcApsde_Handler(void);
+  155:  
+  156:  #if (gLpmIncluded_d == 1)
+  157:  static void ZtcMsgWakeUpInd(void);
+  158:  #endif /* #if gLpmIncluded_d */ 
+  159:  
+  160:  /******************************************************************************
+  161:  *******************************************************************************
+  162:  * Private memory declarations
+  163:  *******************************************************************************
+  164:  ******************************************************************************/
+  165:  
+  166:  /* fragmentation fields */
+  167:  extern uint8_t giFragmentedPreAcked;
+  168:  /* Variable to store the BlackBox configuration parameters */
+  169:  extern const blackBoxCommConfig_t blackBoxCommConfig;
+  170:  /* Used to recognize monitor copies of messages that Ztc sent to other code. */
+  171:  #if gZtcIncluded_d
+  172:  static bool_t mMsgOriginIsZtc;
+  173:  extern uint8_t gZDOJoinMode;
+  174:  #endif
+  175:  
+  176:  #if gZtcErrorReporting_d
+  177:  /* Set to TRUE when ZtcError() is called. */
+  178:  static bool_t mZtcErrorReported;
+  179:  #endif
+  180:  
+  181:  #if (gLpmIncluded_d == 1)
+  182:  static ztcWakeUpConfig_t  ztcWakeUpConfig = 
+  183:                               {
+  184:                                 0x00, /* Wake up pin is NOT selected */ 
+  185:                                 mFallingEdges_c, /* Wake up the MCU on falling edges */
+  186:                                 FALSE, /* WakeUp.Ind message is NOT sent when wake up */ 
+  187:                                 0xff  /* No previous pin level was detected */
+  188:                               };
+  189:  #endif /* gLpmIncluded_d */
+  190:  
+  191:  #if (gZtcIncluded_d && defined(gZtcOtapSupport_d))
+  192:  
+  193:  /* OTAP variables */
+  194:  uint8_t  gOtapMode = gDoNotUseExternalMemoryForOtaUpdate_c;
+  195:  bool_t   mUpgradeInProgress    = FALSE;
+  196:  uint32_t gImageOffset = 0;
+  197:  
+  198:  /* OTAP function pointers */
+  199:  uint8_t (*pfOtapSetModeCallback)(uint8_t mode) = NULL;
+  200:  uint8_t (*pfOtapPushImageChunkCallback)(uint8_t* buffer, uint8_t len) = NULL;
+  201:  void (*pfOtapQueryImageReqCallback)(uint8_t* buffer, uint8_t len) = NULL;
+  202:  #endif
+  203:  
+  204:  /******************************************************************************
+  205:  *******************************************************************************
+  206:  * Public memory definitions
+  207:  *******************************************************************************
+  208:  ******************************************************************************/
+  209:  
+  210:  /* The rest of BeeStack can set this pointer to allow handling of messages
+  211:   * from the external client that have opcode groups not normally
+  212:   * recognized by Ztc.
+  213:   */
+  214:  #if gZtcIncluded_d
+  215:  gpfTestClientToApplication_t gpfTestClientToApplicationFuncPtr = NULL;
+  216:  #endif
+  217:  
+  218:  #if gZtcIncluded_d
+  219:  tsTaskID_t gZTCTaskID;
+  220:  #endif
+  221:  
+  222:  extern char __SEG_START_SSTACK[];
+  223:  extern char __SEG_END_SSTACK[];
+  224:  extern char __SEG_END_NV_CODE_BUFFER[];
+  225:  
+  226:  /******************************************************************************
+  227:  *******************************************************************************
+  228:  * Public functions
+  229:  *******************************************************************************
+  230:  ******************************************************************************/
+  231:  
+  232:  #ifdef PROCESSOR_MC1323X   
+  233:    extern  void MacPhyInit_WriteExtAddress(uint8_t *pExtendedAddress);
+  234:  #endif //PROCESSOR_MC1323X   
+  235:  /* Main routine for the ZTC task.
+  236:   *
+  237:   * Ztc only understands one event, which signals that the UART/SPI ISR has received
+  238:   * an octet from a local communication port (e.g. serial port or USB).
+  239:   *
+  240:   * Note that no messages are ever sent to the Ztc task.
+  241:   *
+  242:   * The event flags are cleared by the kernel.
+  243:   *
+  244:   * Note that the ISR declares an event for every octet, so this routine is
+  245:   * often called before there is enough of a packet received from the external
+  246:   * client to process.
+  247:   *
+  248:   * Once a complete and well formed packet has arrived, copy to a SAP Handler
+  249:   * message, with whatever changes are needed to the format of the data, and
+  250:   * forward it to the SAP Handler.
+  251:   *
+  252:   * The SAP Handler will eventually call ZTC_TaskEventMonitor() to record the
+  253:   * SAP Handler's receipt of a message.
+  254:   */
+  255:  void Ztc_Task(event_t events) {
+  256:  #if !gZtcIncluded_d
+  257:    (void) events;
+  258:  #else
+  259:    sapHandlerMsg_t *pMsgToSAPHandler;
+  260:    ztcMsgTypeInfo_t const *pMsgTypeInfo;
+  261:    ztcOpcodeGroup_t opcodeGroup;
+  262:    ztcSAPHandlerInfo_t const *pSAPInfo;
+  263:    ztcFmtInfo_t const *pFmtInfo;
+  264:    index_t dstDataLen;
+  265:    pZtcMsgFromPkt_t pCopyFunc;
+  266:    uint8_t status;
+  267:  
+  268:    (void) events;
+  269:  
+  270:    /* Do we have a complete packet? */
+  271:    if (!ZtcReadPacketFromClient()) {
+  272:      CheckZtcBufferStatus();
+  273:      return;
+  274:    }
+  275:  
+  276:  #if gZtcErrorReporting_d
+  277:    mZtcErrorReported = FALSE;
+  278:  #endif
+  279:  
+  280:    opcodeGroup = gZtcPacketFromClient.structured.header.opcodeGroup;
+  281:  
+  282:    /* *warning* ZtcReq_Handler() depends on it's input data being in the */
+  283:    /* global gZtcPacketFromClient, and it modifies gZtcPacketToClient. */
+  284:    if (opcodeGroup == gZtcReqOpcodeGroup_c) {
+  285:      ZtcReq_Handler();
+  286:      CheckZtcBufferStatus();
+  287:      return;
+  288:    }
+  289:  
+  290:    /* special fragmented APSDE commands */
+  291:  #if (gFragmentationCapability_d)
+  292:    if (opcodeGroup == gAfApsdeOpcodeGroup_c && 
+  293:        gZtcPacketFromClient.structured.header.msgType != gApsdeDataReqMsgType_d)
+  294:    {
+  295:      ZtcApsde_Handler();
+  296:      CheckZtcBufferStatus();
+  297:      return;
+  298:    }
+  299:  #endif
+  300:  
+  301:    pSAPInfo = pZtcSAPInfoFromOpcodeGroup(opcodeGroup);
+  302:  
+  303:    /* If this is a recognized opcode group, but one which has been disabled */
+  304:    /* by an option setting, let the user know. Otherwise, Test Tool users */
+  305:    /* may wonder why they are not getting any responses to valid requests. */
+  306:  #if gZtcErrorReporting_d
+  307:    if (pSAPInfo == gZtcIsDisabledOpcodeGroup_c) {
+  308:      ZtcError(gZtcOpcodeGroupIsDisabled_c);
+  309:      CheckZtcBufferStatus();
+  310:      return;
+  311:    }
+  312:  #endif
+  313:  
+  314:    /* If the opcode group is not familiar, call a general purpose hook. */
+  315:    if (!pSAPInfo) {
+  316:      if (gpfTestClientToApplicationFuncPtr) {
+  317:        (*gpfTestClientToApplicationFuncPtr)((void *) gZtcPacketFromClient.raw);
+  318:      } else {
+  319:        ZtcError(gZtcUnknownOpcodeGroup_c);
+  320:      }
+  321:      CheckZtcBufferStatus();
+  322:      return;
+  323:    }
+  324:  
+  325:    /* The client has sent a well formed packet, with a known opcode group. */
+  326:    pMsgTypeInfo = pZtcMsgTypeInfoFromMsgType(pSAPInfo->pMsgTypeTable,
+  327:                                              *(pSAPInfo->pMsgTypeTableLen),
+  328:                                              gZtcPacketFromClient.structured.header.msgType);
+  329:    if (!pMsgTypeInfo) {
+  330:      ZtcError(gZtcUnknownOpcode_c);
+  331:      CheckZtcBufferStatus();
+  332:      return;
+  333:    }
+  334:  
+  335:    /* The size of the destination message isn't known yet, so allocate */
+  336:    /* a large message. */
+  337:    pMsgToSAPHandler = (sapHandlerMsg_t *) MSG_Alloc(sizeof(sapHandlerMsg_t));
+  338:  
+  339:    if (!pMsgToSAPHandler) {
+  340:      ZtcError(gZtcOutOfMessages_c);
+  341:      CheckZtcBufferStatus();
+  342:      return;
+  343:    }
+  344:  
+  345:    /* Copy the content of the packet to the SAP Handler message, changing */
+  346:    /* formats as necessary. */
+  347:    pFmtInfo = &(maZtcFmtInfoTable[ZtcMsgGetFmt(pMsgTypeInfo->flagAndFormat)]);
+  348:    pCopyFunc = maMsgFromPktFunctionTable[ZtcGetMsgFromPktFuncIndex(pFmtInfo->copyFunctionIndexes)];
+  349:  
+  350:    dstDataLen = (*pCopyFunc)(pMsgToSAPHandler->structured.payload,
+  351:                              sizeof(pMsgToSAPHandler->structured.payload),
+  352:                              gZtcPacketFromClient.structured.payload,
+  353:                              gZtcPacketFromClient.structured.header.len,
+  354:                              pFmtInfo->msgFromPktParametersIndex);
+  355:  
+  356:    if (dstDataLen == gTooBig_c) {
+  357:      MSG_Free(pMsgToSAPHandler);
+  358:      ZtcError(gZtcTooBig_c);
+  359:      CheckZtcBufferStatus();
+  360:      return;
+  361:    }
+  362:  
+  363:    /* mMsgOriginIsZtc lets ZTC_TaskEventMonitor() know that this message */
+  364:    /* originated with Ztc. */
+  365:    pMsgToSAPHandler->structured.header.msgType = gZtcPacketFromClient.structured.header.msgType;
+  366:    mMsgOriginIsZtc = TRUE;
+  367:    status = (pSAPInfo->pSAPHandler)(pMsgToSAPHandler);
+  368:    mMsgOriginIsZtc = FALSE;
+  369:  
+  370:    /* SAP Handlers don't free buffers that contain synchronous messages. */
+  371:    if (ZtcMsgGetFlg(pMsgTypeInfo->flagAndFormat) == gZtcMsgFlagSync_c) {
+  372:      #if gSAPMessagesEnableMlme_d
+  373:        /* For a MLME.Reset request synchronous message, the memory pool is re-initiated and
+  374:           all allocated messages are deallocated. Because of this, we don't need 
+  375:           to free the allocated message. */
+  376:        if ((opcodeGroup != gNwkMlmeOpcodeGroup_c)||(pMsgTypeInfo->msgType != gMlmeResetReq_c)) {
+  377:      #endif
+  378:          MSG_Free(pMsgToSAPHandler);
+  379:      #if gSAPMessagesEnableMlme_d
+  380:        }
+  381:      #endif
+  382:    } else if (status != gZbSuccess_c) {
+  383:      /* This is an async message, and the SAP Handler is unhappy. Synthesize */
+  384:      /* a confirmation message containing the status, and send it back to the */
+  385:      /* external client. This is the SAP Handler's issue, not a ZtcError(). */
+  386:      
+  387:      ZTCQueue_QueueToTestClient(&status, pSAPInfo->converseOpcodeGroup, pMsgTypeInfo->cnfType, sizeof(status));
+  388:    }
+  389:    CheckZtcBufferStatus();
+  390:  #endif                                  /* #if !gZtcIncluded_d #else */
+  391:  }                                       /* Ztc_Task() */
+  0000 8d       [7]             RTC   
+  392:  
+  393:  /****************************************************************************/
+  394:  
+  395:  /* Initialization routine for the ZTC task. Called once by the kernel at */
+  396:  /* startup. */
+  397:  #if gZtcIncluded_d
+  398:  void ZtcRxCallBack(void) {
+  399:    SendEventToZTC();
+  400:  }
+  401:  #endif
+  402:  
+  403:  void Ztc_TaskInit(void) {
+  404:  #if gZtcIncluded_d
+  405:    
+  406:    #if defined(gSPIInterface_d)
+  407:    
+  408:      spiConfig_t mSpiConfig;
+  409:         
+  410:      /* Initialize the SPI module */
+  411:      SPI_Init();
+  412:      
+  413:      /* Prepare the SPI module in slave mode */
+  414:      /* SPI_SCI bridge has the same configuration in master mode*/
+  415:      mSpiConfig.devMode      = gSPI_SlaveMode_c;
+  416:      mSpiConfig.baudRate     = blackBoxCommConfig.spiBaudRate;
+  417:      mSpiConfig.clockPol     = gSPI_ActiveHighPolarity_c;
+  418:      mSpiConfig.clockPhase   = gSPI_EvenEdgeShifting_c;
+  419:      mSpiConfig.bitwiseShift = gSPI_MsbFirst_c;
+  420:      mSpiConfig.s3Wire       = gSPI_FullDuplex_c;
+  421:      
+  422:      /* Apply configuration to the SPI module */
+  423:      SPI_SetConfig(mSpiConfig);
+  424:  
+  425:      /* Set call back */  
+  426:      SPI_SetSlaveRxCallBack(ZtcRxCallBack);
+  427:           
+  428:    #elif defined(gI2CInterface_d)
+  429:    
+  430:      IIC_ModuleInit();
+  431:      
+  432:      (void)IIC_SetBaudRate(blackBoxCommConfig.iicBaudRate);
+  433:      
+  434:      (void)IIC_SetSlaveAddress(blackBoxCommConfig.iicSlaveAddress);
+  435:      
+  436:      IIC_SetSlaveRxCallBack(ZtcRxCallBack);
+  437:    
+  438:    #elif defined(gSCIInterface_d) 
+  439:  
+  440:      UartX_SetBaud(blackBoxCommConfig.uartBaudRate);
+  441:      
+  442:      UartX_SetRxCallBack(ZtcRxCallBack);
+  443:    
+  444:    #else 
+  445:    
+  446:      CDC_SetRxCallBack(ZtcRxCallBack);
+  447:    
+  448:    #endif
+  449:  
+  450:    gZTCTaskID = TS_CreateTask(gTsZTCTaskPriority_c, Ztc_Task);
+  451:  #endif
+  452:  }                                       /* Ztc_TaskInit() */
+  0000 8d       [7]             RTC   
+  453:  
+  454:  /****************************************************************************/
+  455:  
+  456:  /* Send an arbitrary event from an application to the external client. The
+  457:   * data, opcode group and message type can be anything.
+  458:   */
+  459:  void ZTCQueue_QueueToTestClient
+  460:    (
+  461:    uint8_t const *const pData,
+  462:    uint8_t const opcodeGroup,
+  463:    uint8_t const msgType,
+  464:    uint8_t const dataLen
+  465:    )
+  466:  {
+  467:  #if !gZtcIncluded_d
+  468:    (void) pData;
+  469:    (void) opcodeGroup;
+  470:    (void) msgType;
+  471:    (void) dataLen;
+  472:  #else
+  473:  
+  474:  #if gZtcErrorReporting_d
+  475:    mZtcErrorReported = FALSE;
+  476:  #endif
+  477:  
+  478:    if (dataLen > sizeof(gZtcPacketToClient.structured.payload)) {
+  479:      ZtcError(gZtcAppMsgTooBig_c);
+  480:      return;
+  481:    }
+  482:  
+  483:    if (mZtcPacketToClientIsBusy) {
+  484:      return;
+  485:    }
+  486:  
+  487:    gZtcPacketToClient.structured.header.opcodeGroup = opcodeGroup;
+  488:    gZtcPacketToClient.structured.header.msgType = msgType;
+  489:    gZtcPacketToClient.structured.header.len = dataLen;
+  490:  
+  491:    FLib_MemCpy(gZtcPacketToClient.structured.payload, (void *) pData, dataLen);
+  492:    ZtcWritePacketToClient(sizeof(gZtcPacketToClient.structured.header) + dataLen);
+  493:  #endif                                  /* #if !gZtcIncluded_d #else */
+  494:  }                                       /* ZTCQueue_QueueToTestClient() */
+  0000 8d       [7]             RTC   
+  495:  
+  496:  /****************************************************************************/
+  497:  
+  498:  /* Called by other functions in BeeStack, generally SAP Handlers.
+  499:   * A message is passing through the SAP Handler, and it is letting us know.
+  500:   * A SAP Handler can receive a message from a BeeStack layer, or from Ztc.
+  501:   * The SAP Handler doesn't know the origin, and calls this function
+  502:   * regardless.
+  503:   *
+  504:   * If the message is async and it was sent to the SAP Handler by Ztc,
+  505:   * ignore it.
+  506:   *
+  507:   * If the message is async and it was not sent to the SAP Handler by Ztc,
+  508:   * forward a copy to the external client.
+  509:   *
+  510:   * Sync messages are always responses to requests. The origin of the request
+  511:   * (Ztc or other BeeStack code) does not matter; this routine will only see
+  512:   * the response, not the request.
+  513:   * Alter the opcode group to make the message look like it is coming from
+  514:   * the converse of the SAP Handler that actually sent it here, and change
+  515:   * the message type to the type of the corresponding response. Forward the
+  516:   * edited message to the external client.
+  517:   *
+  518:   * Note that the message from the SAP Handler is sent to the external client
+  519:   * directly from here, eliminating the need for logic to queue more than
+  520:   * one packet.
+  521:   */
+  522:  void ZTC_TaskEventMonitor
+  523:    (
+  524:    ztcIntSAPId_t const srcIntSAPId,
+  525:    uint8_t *pMsgFromSAPHandler,
+  526:    clientPacketStatus_t const srcStatus
+  527:    )
+  528:  {
+  529:  #if (!gZtcIncluded_d || (defined(gZtcOtapSupport_d) && (!gUpgradeImageOnCurrentDevice_d)))
+  530:    (void) srcIntSAPId;
+  531:    (void) pMsgFromSAPHandler;
+  532:    (void) srcStatus;
+  533:  #else
+  534:    ztcMsgTypeInfo_t const *pSrcMsgTypeInfo;
+  535:    ztcSAPHandlerInfo_t const *pSrcSAPInfo;
+  536:  
+  537:  #if gZtcErrorReporting_d
+  538:    /* Sync messages might be originated by Ztc_Task(), which already set this */
+  539:    /* once. Setting it again here could lead to reporting two errors. Since */
+  540:    /* are likely to be errors in different contexts, this isn't generally a */
+  541:    /* problem. */
+  542:    mZtcErrorReported = FALSE;
+  543:  #endif
+  544:  
+  545:    pSrcSAPInfo = pZtcSAPInfoFromIntSAPId(srcIntSAPId);
+  546:    if (!pSrcSAPInfo) {
+  547:      /* Calling ZtcError() here might just annoy the user, repeatedly */
+  548:      /* sending an error message about something they already know. */
+  549:      return;
+  550:    }
+  551:  
+  552:    ZtcPrint(FALSE, &srcStatus, sizeof(srcStatus));
+  553:    ZtcPrint(FALSE, &pMsgFromSAPHandler, sizeof(pMsgFromSAPHandler));
+  554:    ZtcPrint(FALSE, &pSrcSAPInfo->opcodeGroup, sizeof(pSrcSAPInfo->opcodeGroup));
+  555:    ZtcPrint(TRUE,  pMsgFromSAPHandler, 32);
+  556:  
+  557:    if (maZtcSAPModeTable[pSrcSAPInfo->modeIndex] == gZtcSAPModeDisable_c) {
+  558:      return;
+  559:    }
+  560:  
+  561:    pSrcMsgTypeInfo = pZtcMsgTypeInfoFromMsgType(pSrcSAPInfo->pMsgTypeTable,
+  562:                                                 *pSrcSAPInfo->pMsgTypeTableLen,
+  563:                                                 ((sapHandlerMsg_t *) pMsgFromSAPHandler)->structured.header.msgType);
+  564:    if (!pSrcMsgTypeInfo) {
+  565:      /* Calling ZtcError() here might just annoy the user, repeatedly */
+  566:      /* sending an error message about something they already know. */
+  567:      return;
+  568:    }
+  569:  
+  570:    if (mZtcPacketToClientIsBusy) {
+  571:      return;
+  572:    }
+  573:  
+  574:    if (ZtcMsgGetFlg(pSrcMsgTypeInfo->flagAndFormat) == gZtcMsgFlagAsync_c) {
+  575:      pktFromMsgAsync(pMsgFromSAPHandler, pSrcSAPInfo, pSrcMsgTypeInfo);
+  576:    } else {
+  577:      pktFromMsgSync(pMsgFromSAPHandler, pSrcSAPInfo, pSrcMsgTypeInfo, srcStatus);
+  578:    }
+  579:  #endif  /* #if !gZtcIncluded_d #else */
+  580:  }  /* ZTC_TaskEventMonitor() */
+  0000 8d       [7]             RTC   
+  581:  
+  582:  /****************************************************************************/
+  583:  
+  584:  #if gZtcIncluded_d
+  585:  void pktFromMsgAsync
+  586:  (
+  587:  	uint8_t const *pMsgFromSAPHandler,
+  588:  	ztcSAPHandlerInfo_t const *pSrcSAPInfo,
+  589:  	ztcMsgTypeInfo_t const *pSrcMsgTypeInfo
+  590:  )
+  591:  {
+  592:  	index_t dstDataLen;
+  593:  	pZtcPktFromMsg_t pCopyFunc;
+  594:  	ztcFmtInfo_t const *pFmtInfo;
+  595:  	nwkMessage_t *pMsg=NULL; /* MAC Confirm/Indication data type */
+  596:  
+  597:  	/* If this message is originated in Ztc, ignore it. */
+  598:  	if (mMsgOriginIsZtc)
+  599:  		return;
+  600:  
+  601:   	(void)pMsg; /* Set stub the pointer used for the Queue */
+  602:    	pFmtInfo = &(maZtcFmtInfoTable[ZtcMsgGetFmt(pSrcMsgTypeInfo->flagAndFormat)]);
+  603:  	  pCopyFunc = maPktFromMsgFunctionTable[ZtcGetPktFromMsgFuncIndex(pFmtInfo->copyFunctionIndexes)];
+  604:  
+  605:  	  /* Copy the payload from the message to the client packet. */
+  606:  	  dstDataLen = (*pCopyFunc)(gZtcPacketToClient.structured.payload,
+  607:  		  												sizeof(gZtcPacketToClient.structured.payload),
+  608:  			  											((sapHandlerMsg_t *) pMsgFromSAPHandler)->structured.payload,
+  609:  				  										pSrcMsgTypeInfo->len,
+  610:  					  									pFmtInfo->pktFromMsgParametersIndex);  
+  611:  
+  612:  	/* If the SAP Handler that sent the message here is in hook mode, dequeue */
+  613:  	/* the message and clear the event to prevent the message from reaching the */
+  614:  	/* destination SAP Handler. */
+  615:  	if (maZtcSAPModeTable[pSrcSAPInfo->modeIndex] == gZtcSAPModeHook_c)
+  616:  	{
+  617:  		if (pSrcSAPInfo->pMsgQueue)
+  618:  		{
+  619:  			/* If there is a Message in the Queue, then pint to it */
+  620:  			pMsg = MSG_DeQueue(pSrcSAPInfo->pMsgQueue);
+  621:  
+  622:  			/* The MAC Layer has some exceptions in some message that need to free some internal memory */
+  623:  			if (pSrcSAPInfo->opcodeGroup == gMlmeNwkOpcodeGroup_c) /* If the message came from MAC layer */
+  624:  			{
+  625:  				if (pSrcMsgTypeInfo->msgType == gNwkScanCnf_c) /* If the messaage is a ScanRequest */
+  626:  				{
+  627:  					if (pMsg->msgData.scanCnf.resList.pPanDescriptorBlocks->descriptorList) /* If the internal list of the scan has somem data or point to some place */
+  628:  						/* Free the internal list comming in the the Scan from the MAC (second block) */
+  629:  						if(pMsg->msgData.scanCnf.resList.pPanDescriptorBlocks->pNext)
+  630:  						  MSG_Free(pMsg->msgData.scanCnf.resList.pPanDescriptorBlocks->pNext);
+  631:  						/* Free the internal list comming in the the Scan from the MAC (first block) */
+  632:  						MSG_Free(pMsg->msgData.scanCnf.resList.pPanDescriptorBlocks);
+  633:  				}
+  634:  				if (pSrcMsgTypeInfo->msgType == gNwkBeaconNotifyInd_c) /* If The messge is a Beacon Notify Indiction it has  messge allocated inside the message already allocted */
+  635:  				{
+  636:  					if (pMsg->msgData.beaconNotifyInd.pBufferRoot)
+  637:  						MSG_Free(pMsg->msgData.beaconNotifyInd.pBufferRoot);
+  638:  				}
+  639:  			}
+  640:  		}
+  641:  
+  642:  		if (pSrcSAPInfo->pTaskID[0]) /* Take the message out of the Queue for no further processing */
+  643:  		{
+  644:  			TS_ClearEvent(pSrcSAPInfo->pTaskID[0], pSrcSAPInfo->msgEvent);
+  645:  		}
+  646:  	}
+  647:  
+  648:  	if (dstDataLen == gTooBig_c)
+  649:  	{
+  650:  		ZtcError(gZtcTooBig_c);
+  651:  		return;
+  652:  	}
+  653:  
+  654:  	gZtcPacketToClient.structured.header.opcodeGroup = pSrcSAPInfo->opcodeGroup;
+  655:  	gZtcPacketToClient.structured.header.msgType = ((sapHandlerMsg_t *) pMsgFromSAPHandler)->structured.header.msgType;
+  656:  	gZtcPacketToClient.structured.header.len = dstDataLen;
+  657:  
+  658:  	ZtcWritePacketToClient(sizeof(gZtcPacketToClient.structured.header) + dstDataLen);
+  659:  	if (pMsg && (maZtcSAPModeTable[pSrcSAPInfo->modeIndex] == gZtcSAPModeHook_c))
+  660:  		MSG_Free(pMsg); /* Free the whole message comming from the Queue */
+  661:  }  /* pktFromMsgAsync() */
+  662:  #endif
+  663:  
+  664:  /****************************************************************************/
+  665:  
+  666:  /* Handle a synchronous message from a SAP Handler.
+  667:   * Sync messages are always requests. Translate this message into the
+  668:   * corresponding response.
+  669:   *
+  670:   * By convention, the request message type info contains the format
+  671:   * information.
+  672:   */
+  673:  #if gZtcIncluded_d
+  674:  void pktFromMsgSync
+  675:  (
+  676:  	uint8_t const *pMsgFromSAPHandler,
+  677:  	ztcSAPHandlerInfo_t const *pSrcSAPInfo,
+  678:  	ztcMsgTypeInfo_t const *pSrcMsgTypeInfo,
+  679:  	uint8_t const srcStatus
+  680:  )
+  681:  {
+  682:  	index_t dstDataLen;
+  683:  	pZtcPktFromMsg_t pCopyFunc;
+  684:  	ztcFmtInfo_t const *pFmtInfo;
+  685:  	uint8_t *pSrcData;
+  686:  
+  687:  	/* For sync messages, a status code was passed here as a parameter, */
+  688:  	/* and must be stored in the first byte of the packet payload. */
+  689:  	gZtcPacketToClient.structured.payload[0] = srcStatus;
+  690:  	pSrcData = ((sapHandlerMsg_t *) pMsgFromSAPHandler)->structured.payload;
+  691:  
+  692:  	pFmtInfo = &(maZtcFmtInfoTable[ZtcMsgGetFmt(pSrcMsgTypeInfo->flagAndFormat)]);
+  693:  	pCopyFunc = maPktFromMsgFunctionTable[ZtcGetPktFromMsgFuncIndex(pFmtInfo->copyFunctionIndexes)];
+  694:  
+  695:  	/* Copy the payload from the message to the client packet. */
+  696:  	dstDataLen = (*pCopyFunc)(&gZtcPacketToClient.structured.payload[sizeof(clientPacketStatus_t)],
+  697:  														sizeof(gZtcPacketToClient.structured.payload) - sizeof(clientPacketStatus_t),
+  698:  														pSrcData,
+  699:  														pSrcMsgTypeInfo->len,
+  700:  														pFmtInfo->pktFromMsgParametersIndex);
+  701:  
+  702:  	if (dstDataLen == gTooBig_c)
+  703:  	{
+  704:  		ZtcError(gZtcTooBig_c);
+  705:  		return;
+  706:  	}
+  707:  
+  708:  	gZtcPacketToClient.structured.header.opcodeGroup = pSrcSAPInfo->converseOpcodeGroup;
+  709:  	gZtcPacketToClient.structured.header.msgType = pSrcMsgTypeInfo->cnfType;
+  710:  	gZtcPacketToClient.structured.header.len = dstDataLen + sizeof(clientPacketStatus_t);
+  711:  
+  712:  	ZtcWritePacketToClient(dstDataLen
+  713:  												+ sizeof(gZtcPacketToClient.structured.header)
+  714:  												+ sizeof(clientPacketStatus_t));
+  715:  }  /* pktFromMsgSync() */
+  716:  #endif
+  717:  
+  718:  /******************************************************************************
+  719:  *******************************************************************************
+  720:  * Private functions
+  721:  *******************************************************************************
+  722:  ******************************************************************************/
+  723:  /****************************************************************************
+  724:  This function checks if there is any bytes in the uart/spi buffer, and 
+  725:  if there is any left, the ZTC task is signaled.
+  726:  ****************************************************************************/
+  727:  #if gZtcIncluded_d
+  728:  static void CheckZtcBufferStatus(void) {
+  729:    
+  730:    #if defined(gSPIInterface_d)
+  731:      if (mSpiRxBufferByteCount != 0)
+  732:    #elif defined(gI2CInterface_d)
+  733:      if (mIIcRxBufferByteCount != 0)
+  734:    #elif defined(gCDCInterface_d)
+  735:      if (gCDCRxBufferByteCount != 0)   	
+  736:    #else
+  737:      if (UartX_RxBufferByteCount != 0)
+  738:    #endif
+  739:    
+  740:    {  
+  741:      SendEventToZTC();    
+  742:    }
+  743:  }
+  744:  #endif 
+  745:  
+  746:  /* Send an error message back to the external client. */
+  747:  #if gZtcErrorReporting_d
+  748:  void ZtcError(uint8_t errorCode)
+  749:  {
+  750:    uint8_t buf[MbrSizeof(clientPacket_t, headerAndStatus)];
+  751:  
+  752:    if (mZtcErrorReported)
+  753:      return;                             /* Don't cascade error messages. */
+  754:  
+  755:  
+  756:    ((clientPacket_t *) buf)->headerAndStatus.header.opcodeGroup = gZtcCnfOpcodeGroup_c;
+  757:    ((clientPacket_t *) buf)->headerAndStatus.header.msgType = mZtcMsgError_c;
+  758:    ((clientPacket_t *) buf)->headerAndStatus.header.len = sizeof(((clientPacket_t *) buf)->headerAndStatus.status);
+  759:    ((clientPacket_t *) buf)->headerAndStatus.status = errorCode;
+  760:  
+  761:    ZtcTransmitBufferBlock(buf, sizeof(buf));
+  762:    mZtcErrorReported = TRUE;
+  763:  }
+  764:  #endif                                  /* #if gZtcErrorReporting_d */
+  765:  
+  766:  /****************************************************************************/
+  767:  
+  768:  /* Ztc's version of printf() debugging.
+  769:   *
+  770:   * To save RAM, use a dynamically allocated message buffer to construct
+  771:   * the message. If no buffer is available, send an error buffer and give up.
+  772:   *
+  773:   * Write as much of the requested data as possible to the buffer, but there
+  774:   * is no guarantee there the buffer will be big enough.
+  775:   *
+  776:   * Concatenate the source data to the print buffer, then
+  777:   *  If readyToSend is false, do nothing.
+  778:   *  If readyToSend is true,  send the buffer to the external client.
+  779:   */
+  780:  #if gZtcDebug_d
+  781:  void ZtcPrint
+  782:    (
+  783:    bool_t readyToSend,
+  784:    void const *pSrc,
+  785:    index_t len
+  786:    )
+  787:  {
+  788:    static index_t bufLen = 0;
+  789:    static index_t dataInBuf = 0;
+  790:    static uint8_t *pBuf = NULL;
+  791:  
+  792:    /* Search for a valid and available message buffer size, instead of */
+  793:    /* depending on knowing the possible buffer sizes. */
+  794:  #define ztcPrintDecrement       8       /* Ensure decrementing to zero. */
+  795:  #define ztcPrintNumberOfTries   8
+  796:    if (!bufLen) {
+  797:      for (pBuf = 0, bufLen = ztcPrintDecrement * ztcPrintNumberOfTries;
+  798:           !pBuf && bufLen;
+  799:           bufLen -= ztcPrintDecrement) {
+  800:        pBuf = MSG_Alloc(bufLen);
+  801:        dataInBuf = sizeof(clientPacketHdr_t);
+  802:      }
+  803:  
+  804:      if (!bufLen) {
+  805:        ZtcError(gZtcDebugPrintFailed_c);
+  806:        return;
+  807:      }
+  808:    }
+  809:  
+  810:    /* Concatenate the source data to the print buffer, if there's room. */
+  811:    if (dataInBuf + len < bufLen) {
+  812:      FLib_MemCpy(pBuf + dataInBuf, pSrc, len);
+  813:      dataInBuf += len;
+  814:    }
+  815:  
+  816:    if (readyToSend) {
+  817:      ((clientPacketHdr_t *) pBuf)->opcodeGroup = gZtcCnfOpcodeGroup_c;
+  818:      ((clientPacketHdr_t *) pBuf)->msgType = mZtcMsgDebugPrint_c;
+  819:      ((clientPacketHdr_t *) pBuf)->len = dataInBuf - sizeof(clientPacketHdr_t);
+  820:      ZtcTransmitBufferBlock(pBuf, dataInBuf);
+  821:      MSG_Free(pBuf);
+  822:      bufLen = 0;
+  823:    }
+  824:  }
+  825:  #endif                                  /* #if gZtcDebug_d */
+  826:  
+  827:  
+  828:  /*
+  829:    Called from both AF_APSDE_SapHandler() and APSDE_AF_SapHandler(), this function will 
+  830:    display all fragmented blocks to ZTC if both fragmentation and ZTC are enabled. 
+  831:  */
+  832:  void ZTC_FragEventMonitor
+  833:    (
+  834:    ztcIntSAPId_t const srcIntSAPId,
+  835:    uint8_t *pMsgFromSAPHandler
+  836:    )
+  837:  {
+  838:  #if (!gZtcIncluded_d)
+  839:    /* avoid compiler warning on unused parameters */
+  840:    (void)srcIntSAPId;
+  841:    (void)pMsgFromSAPHandler;
+  842:  
+  843:  /* ZTC is included */
+  844:  #else
+  845:  
+  846:   #if (gFragmentationCapability_d)
+  847:    zbTxFragmentedHdr_t *pFragHdr;
+  848:    apsdeFragment_t sZtcFragment;
+  849:    uint8_t *pData;
+  850:    uint8_t msgType;
+  851:    uint8_t dataSize;
+  852:    uint8_t opCodeGroup;
+  853:    uint8_t iBlockNumber;
+  854:   #endif
+  855:  
+  856:    /* first, send the main message to ZTC */
+  857:    ZTC_TaskEventMonitor(srcIntSAPId, (uint8_t *) pMsgFromSAPHandler, gZbSuccess_c);
+  858:  
+  859:   #if (gFragmentationCapability_d)
+  860:  
+  861:    /* find fragHdr for this message */
+  862:    /* the message will either come from the gAF_APSDE_SAPHandlerId_c or the gAPSDE_AF_SAPHandlerId_c */
+  863:    /* note: this code assumes both zbTxFragmentedHdr_t and zbRxFragmentedHdr_t begin with same 2 fields */
+  864:    msgType = *pMsgFromSAPHandler;
+  865:    if(srcIntSAPId == gAF_APSDE_SAPHandlerId_c)
+  866:    {
+  867:      /* make sure message is a data request */
+  868:      if(msgType != gApsdeDataReqMsgType_d)
+  869:        return;
+  870:  
+  871:      /* find first fragment header */
+  872:      pFragHdr = &(((afToApsdeMessage_t *)pMsgFromSAPHandler)->msgData.dataReq.fragmentHdr);
+  873:      opCodeGroup = 0x9c;
+  874:    }
+  875:  
+  876:    /* assumes srcIntSAPId == gAPSDE_AF_SAPHandlerId_c */
+  877:    else
+  878:    {
+  879:      /* make sure message is a data indication */
+  880:      if(msgType != gApsdeDataIndMsgType_d)
+  881:        return;
+  882:  
+  883:      /* find first fragment header */
+  884:      pFragHdr = (zbTxFragmentedHdr_t *)(&(((apsdeToAfMessage_t *)pMsgFromSAPHandler)->msgData.dataIndication.fragmentHdr));
+  885:      opCodeGroup = 0x9d;
+  886:    }
+  887:  
+  888:    /* skip first block (with dataReq or dataInd), as that's already been sent to ZTC */
+  889:    pFragHdr = pFragHdr->pNextDataBlock;
+  890:  
+  891:    /* send all subsequent blocks to ZTC */
+  892:    iBlockNumber = 1;
+  893:    while(pFragHdr)
+  894:    {
+  895:      /* copy data into ZTC Tx buffer */
+  896:      dataSize = pFragHdr->iDataSize;
+  897:      gZtcPacketToClient.structured.header.opcodeGroup = opCodeGroup;
+  898:      gZtcPacketToClient.structured.header.msgType = pFragHdr->iMsgType;
+  899:      gZtcPacketToClient.structured.header.len = (sizeof(apsdeFragment_t) - 1) + dataSize;
+  900:      sZtcFragment.iLength = dataSize;
+  901:      sZtcFragment.iBlockNumber = iBlockNumber++;
+  902:      sZtcFragment.iMoreBlocks = pFragHdr->pNextDataBlock ? TRUE : FALSE;
+  903:      gZtcPacketToClient.structured.payload[0] = dataSize;
+  904:      if(srcIntSAPId == gAF_APSDE_SAPHandlerId_c)
+  905:        pData = (uint8_t *)(pFragHdr + 1);    /* on Tx, data immediately follows TxFragHdr */
+  906:      else
+  907:        pData = ((zbRxFragmentedHdr_t *)pFragHdr)->pData; /* on Rx, it's pointed to by RxFragHdr */
+  908:      FLib_MemCpy(gZtcPacketToClient.structured.payload, &sZtcFragment, sizeof(apsdeFragment_t) - 1);
+  909:      FLib_MemCpy(&gZtcPacketToClient.structured.payload[sizeof(apsdeFragment_t) - 1], pData, dataSize);
+  910:  
+  911:      /* send through ZTC */
+  912:  	  ZtcWritePacketToClient(sizeof(gZtcPacketToClient.structured.header) + 
+  913:  	    (sizeof(apsdeFragment_t) - 1) + dataSize);
+  914:  
+  915:      /* go on to next block */
+  916:      pFragHdr = pFragHdr->pNextDataBlock;
+  917:    }
+  918:   #endif /* gFragmentationCapability_d */
+  919:  #endif  /* gZtcIncluded_d */
+  920:  }
+  0000 8d       [7]             RTC   
+  921:  
+  922:  #if (gZtcIncluded_d && gFragmentationCapability_d)
+  923:  
+  924:  /* for loading fragments prior to a data request */
+  925:  static zbTxFragmentedHdr_t *mpFragHead;  /* if NULL, then no fragments loaded */
+  926:  
+  927:  /*
+  928:    For handling the "special" APSDE commands for fragmentation. These do not go to the SAP 
+  929:    handler.
+  930:  
+  931:    ResetFragments   Free any memory allocated by LoadFragment. Only required if aborting a
+  932:                     Data request, or if
+  933:    LoadFragment     Load a fragment into memory through the ZTC interface.
+  934:    SetFragAckMask   Used for passing ZCP tests. Pretend a packet has already been ACKed so
+  935:                     it's not sent first time.
+  936:      
+  937:    Normal sequence for initiating an APSDE-DATA.request over ZTC is:
+  938:    1. Call LoadFragment (for all fragments but the first one. These fragments may be any length, 
+  939:       but should be the max size that will fit in a message (128 bytes) 
+  940:    2. Call APSDE-DATA.request for the first fragment. AsduLen should be the length of the first
+  941:       fragment only. ZTC will add the total size of all fragments.
+  942:  
+  943:    Note: the above sequence is different than from an application. The AF_DataRequestFragmented()
+  944:    and AF_DataRequestFragmentedNoCopy() should be called instead.
+  945:  
+  946:    Note: ZtcApsde_Handler() receives data in the global gZtcPacketFromClient, and modifies 
+  947:    gZtcPacketToClient.
+  948:  */
+  949:  static void ZtcApsde_Handler(void)
+  950:  {
+  951:  
+  952:    /* these commands do not actually go through the SAP, but are valid only in ZTC */
+  953:    #define gZtcMsgTypeResetFragments_c       0x10
+  954:    #define gZtcMsgTypeLoadFragment_c         0x11
+  955:    #define gZtcMsgTypeSetFragAckMask_c       0x12
+  956:    #define gZtcMsgTypeSetMaxFragmentLength_c 0x13
+  957:    #define gZtcMsgTypeSetWindowSize_c        0x14
+  958:    #define gZtcMsgTypeSetInterframeDelay_c   0x15
+  959:  
+  960:    zbTxFragmentedHdr_t *pFragBlock;    /* allocated message */
+  961:    zbTxFragmentedHdr_t *pFragNext;     /* next fragmented buffer */
+  962:    uint8_t fragLen;
+  963:    ztcMsgType_t msgType;
+  964:    clientPacketStatus_t ztcError = gZtcSuccess_c;
+  965:  
+  966:    msgType = gZtcPacketFromClient.structured.header.msgType;
+  967:    switch(msgType)
+  968:    {
+  969:      /* ResetFragments command. Will free any memory allocated with LoadFragment command. */
+  970:      case gZtcMsgTypeResetFragments_c:
+  971:  
+  972:        /* free every buffer in the linked list */
+  973:        while(mpFragHead)
+  974:        {
+  975:          pFragNext = mpFragHead->pNextDataBlock;
+  976:          MSG_Free(mpFragHead);
+  977:          mpFragHead = pFragNext;
+  978:        }
+  979:        /* note: mpFragHead will end up NULL */
+  980:      break;
+  981:  
+  982:      /* LoadFragment command */
+  983:      case gZtcMsgTypeLoadFragment_c:
+  984:  
+  985:        /* allocate a message buffer for the fragment */
+  986:        fragLen = gZtcPacketFromClient.structured.header.len - 1;
+  987:        pFragBlock = MSG_Alloc(sizeof(zbTxFragmentedHdr_t) + fragLen);
+  988:        if(!pFragBlock)
+  989:        {
+  990:          ztcError = gZtcOutOfMessages_c;
+  991:          break;
+  992:        }
+  993:  
+  994:        /* find tail, and link in allocated buffer at end */
+  995:        if(!mpFragHead)
+  996:          mpFragHead = pFragBlock;
+  997:        else
+  998:        {
+  999:          /* find tail */
+ 1000:          pFragNext = mpFragHead;
+ 1001:          while(pFragNext->pNextDataBlock)
+ 1002:            pFragNext = pFragNext->pNextDataBlock;
+ 1003:          pFragNext->pNextDataBlock = pFragBlock;
+ 1004:        }
+ 1005:  
+ 1006:        /* set up allocated buffer */
+ 1007:        pFragBlock->iDataSize = fragLen;
+ 1008:        pFragBlock->iMsgType = gApsdeDataReqFragMsgType_d;
+ 1009:        pFragBlock->pNextDataBlock = NULL;
+ 1010:  
+ 1011:        /* copy actual octets (they immediately follow the header) */
+ 1012:        FLib_MemCpy((uint8_t *)pFragBlock + sizeof(zbTxFragmentedHdr_t), 
+ 1013:            &(gZtcPacketFromClient.structured.payload[1]), fragLen);
+ 1014:      break;
+ 1015:  
+ 1016:      /* set the fragmentation mask (for debugging and ZCP testing) */
+ 1017:      case gZtcMsgTypeSetFragAckMask_c:
+ 1018:        giFragmentedPreAcked = *gZtcPacketFromClient.structured.payload;
+ 1019:      break;
+ 1020:  
+ 1021:      /* set the maximum OTA fragment length */
+ 1022:      case gZtcMsgTypeSetMaxFragmentLength_c:
+ 1023:        ApsmeSetRequest(gApsMaxFragmentLength_c, *gZtcPacketFromClient.structured.payload);
+ 1024:      break;
+ 1025:  
+ 1026:      /* set the window size (1-8) */
+ 1027:      case gZtcMsgTypeSetWindowSize_c:
+ 1028:        ApsmeSetRequest(gApsMaxWindowSize_c, *gZtcPacketFromClient.structured.payload);
+ 1029:      break;
+ 1030:  
+ 1031:      /* set the interframe delay 1-255 milliseconds */
+ 1032:      case gZtcMsgTypeSetInterframeDelay_c:
+ 1033:        ApsmeSetRequest(gApsInterframeDelay_c, *gZtcPacketFromClient.structured.payload);
+ 1034:      break;
+ 1035:  
+ 1036:      /* unknown opcode (aka msgType) */
+ 1037:      default:
+ 1038:        ztcError = gZtcUnknownOpcode_c;
+ 1039:      break;
+ 1040:    }
+ 1041:  
+ 1042:    /* send response */
+ 1043:    gZtcPacketToClient.structured.header.opcodeGroup = gApsdeAfOpcodeGroup_c;
+ 1044:    gZtcPacketToClient.structured.header.msgType = msgType;
+ 1045:    gZtcPacketToClient.structured.header.len = sizeof(clientPacketStatus_t);
+ 1046:    gZtcPacketToClient.structured.payload[0] = ztcError;
+ 1047:    ZtcWritePacketToClient(sizeof(gZtcPacketToClient.structured.header)
+ 1048:                                 + gZtcPacketToClient.structured.header.len);
+ 1049:  
+ 1050:  }
+ 1051:  #endif // #if (gZtcIncluded_d && gFragmentationCapability_d)
+ 1052:  
+ 1053:  
+ 1054:  /****************************************************************************/
+ 1055:  
+ 1056:  /* Handle Ztc configuration commands/requests from the external client.
+ 1057:   * This code would be easier to read, but slower and larger, if each
+ 1058:   * case called a function instead of processing in-line.
+ 1059:   *
+ 1060:   * On arrival, the opcodeGroup in the pMsg has been changed to the opcode
+ 1061:   * group used for Ztc responses.
+ 1062:   *
+ 1063:   * The functions that actually handle the packets are responsible for the
+ 1064:   * contents of the return packet, except for the return packet's opcode
+ 1065:   * group. The message type of the return packet will be unchanged from the
+ 1066:   * request packet.
+ 1067:   *
+ 1068:   * *warning* ZtcReq_Handler() receives data in the global gZtcPacketFromClient,
+ 1069:   * and modifies gZtcPacketToClient.
+ 1070:   */
+ 1071:  #if gZtcIncluded_d
+ 1072:  void ZtcReq_Handler(void) {
+ 1073:    ztcMsgType_t msgType = gZtcPacketFromClient.structured.header.msgType;
+ 1074:    index_t i;
+ 1075:  
+ 1076:    if (mZtcPacketToClientIsBusy) {
+ 1077:      return;
+ 1078:    }
+ 1079:  
+ 1080:    for (i = 0; i < gZtcInternalMsgTypeInfoTableLen; ++i) {
+ 1081:      if (gaZtcInternalMsgTypeInfoTable[i].msgType == msgType) {
+ 1082:  
+ 1083:        /* Set default values. */
+ 1084:        gZtcPacketToClient.structured.header.opcodeGroup = gZtcCnfOpcodeGroup_c;
+ 1085:        gZtcPacketToClient.structured.header.msgType = msgType;
+ 1086:        gZtcPacketToClient.structured.header.len = sizeof(clientPacketStatus_t);
+ 1087:        gZtcPacketToClient.structured.payload[0] = gZtcSuccess_c;
+ 1088:  
+ 1089:        (*gaZtcInternalMsgTypeInfoTable[i].pConfigFunc)();
+ 1090:  
+ 1091:  #if gZtcErrorReporting_d
+ 1092:        if (!mZtcErrorReported)
+ 1093:  #endif
+ 1094:          ZtcWritePacketToClient(sizeof(gZtcPacketToClient.structured.header)
+ 1095:                                 + gZtcPacketToClient.structured.header.len);
+ 1096:  
+ 1097:        return;
+ 1098:      }
+ 1099:    }
+ 1100:  
+ 1101:    ZtcError(gZtcUnknownOpcode_c);
+ 1102:  }                                       /* ZtcReq_Handler() */
+ 1103:  #endif
+ 1104:  
+ 1105:  
+ 1106:  /****************************************************************************/
+ 1107:  
+ 1108:  #if gZtcIncluded_d
+ 1109:  void ZtcMsgGetModeReqFunc(void) {
+ 1110:    uint8_t i;
+ 1111:    index_t payloadIndex = sizeof(clientPacketStatus_t);
+ 1112:  
+ 1113:    gZtcPacketToClient.structured.payload[payloadIndex++] = (uint8_t) gZtcTxBlocking;
+ 1114:  
+ 1115:    for (i = 0; i < mZtcSAPModeTableLen; ++i) {
+ 1116:      gZtcPacketToClient.structured.payload[payloadIndex++] = (uint8_t) maZtcSAPModeTable[i];
+ 1117:    }
+ 1118:  
+ 1119:    gZtcPacketToClient.structured.header.len = payloadIndex;
+ 1120:  }                                       /* ZtcMsgGetModeReqFunc() */
+ 1121:  #endif
+ 1122:  
+ 1123:  /****************************************************************************/
+ 1124:  
+ 1125:  #if gZtcIncluded_d
+ 1126:  void ZtcMsgGetNVDataSetDescReqFunc(void) {
+ 1127:    index_t payloadIndex = sizeof(clientPacketStatus_t);
+ 1128:  #if !gNvStorageIncluded_d
+ 1129:    gZtcPacketToClient.structured.payload[payloadIndex++] = 0;
+ 1130:  #else
+ 1131:    index_t dataSetIndex;
+ 1132:    NvDataItemDescription_t const *pDesc;
+ 1133:    uint16_t size;
+ 1134:  
+ 1135:    gZtcPacketToClient.structured.payload[payloadIndex++] = NumberOfElements(NvDataSetTable);
+ 1136:  
+ 1137:    for (dataSetIndex = 0; dataSetIndex < NumberOfElements(NvDataSetTable); ++dataSetIndex) {
+ 1138:      gZtcPacketToClient.structured.payload[payloadIndex++] = NvDataSetTable[dataSetIndex].dataSetID;
+ 1139:  
+ 1140:      pDesc = NvDataSetTable[dataSetIndex].pItemDescriptions;
+ 1141:      size = 0;
+ 1142:      while (pDesc->length) {
+ 1143:        size += pDesc++->length;
+ 1144:      }
+ 1145:  
+ 1146:      gZtcPacketToClient.structured.payload[payloadIndex++] = (size & 0xFF);
+ 1147:      gZtcPacketToClient.structured.payload[payloadIndex++] = (size >> 8);
+ 1148:    }
+ 1149:  
+ 1150:  #endif
+ 1151:    gZtcPacketToClient.structured.header.len = payloadIndex;
+ 1152:  }                                       /* ZtcMsgGetNVDataSetDescReqFunc() */
+ 1153:  #endif
+ 1154:  
+ 1155:  /****************************************************************************/
+ 1156:  
+ 1157:  #if gZtcIncluded_d
+ 1158:  void ZtcMsgGetNVPageHdrReqFunc(void) {
+ 1159:    index_t payloadIndex = sizeof(clientPacketStatus_t);
+ 1160:  #if !gNvStorageIncluded_d
+ 1161:    gZtcPacketToClient.structured.payload[payloadIndex++] = 0;
+ 1162:  #else
+ 1163:    index_t pageIndex;
+ 1164:  
+ 1165:    gZtcPacketToClient.structured.payload[payloadIndex++] = NumberOfElements(maNvRawPageAddressTable);
+ 1166:  
+ 1167:    for (pageIndex = 0; pageIndex < NumberOfElements(maNvRawPageAddressTable); ++pageIndex) {
+ 1168:      FLib_MemCpy((void *) &gZtcPacketToClient.structured.payload[payloadIndex],
+ 1169:                  (void *) maNvRawPageAddressTable[pageIndex],
+ 1170:                  sizeof(NvStructuredPageHeader_t));
+ 1171:      payloadIndex += sizeof(NvStructuredPageHeader_t);
+ 1172:    }
+ 1173:  #endif
+ 1174:    gZtcPacketToClient.structured.header.len = payloadIndex;
+ 1175:  }                                       /* ZtcMsgGetNVPageHdrReqFunc() */
+ 1176:  #endif
+ 1177:  
+ 1178:  /****************************************************************************/
+ 1179:  
+ 1180:  /* Set various Ztc operating mode flags:
+ 1181:   *
+ 1182:   *  gZtcTxBlocking: if TRUE, the UART/SPI output routine will block until
+ 1183:   *  output is finished.
+ 1184:   *
+ 1185:   *  maZtcSAPModeTable[]: One byter per group of SAP Handlers, indicating
+ 1186:   *  what Ztc should do when a message from one of the given SAP Handlers
+ 1187:   *  arrives at ZTC_TaskEventMonitor():
+ 1188:   *      ignore messages from that SAP Handler, or
+ 1189:   *      forward monitor copies of messages from that SAP Handler to the
+ 1190:   *          external client, or
+ 1191:   *      intercept messages from that SAP Handle; forward them to the external
+ 1192:   *      client, and prevent them from being passed to their destination
+ 1193:   *      BeeStack layer.
+ 1194:   *  Note that these modes only affect messages that are sent from the SAP
+ 1195:   *  Handler to Ztc. These settings have no effect on packets sent from the
+ 1196:   *  external client to the SAP Handler.
+ 1197:   *
+ 1198:   * *warning* This is brittle. Ztc and the client must implicitly
+ 1199:   * agree on the order of the mode setting flags.
+ 1200:   */
+ 1201:  #if gZtcIncluded_d
+ 1202:  void ZtcMsgModeSelectReqFunc(void) {
+ 1203:    uint8_t byte;
+ 1204:    index_t count;
+ 1205:    index_t dataLen = gZtcPacketFromClient.structured.header.len;
+ 1206:    uint8_t i;
+ 1207:    index_t payloadIndex = 0;
+ 1208:  
+ 1209:    if (dataLen > 0) {
+ 1210:      gZtcTxBlocking = !!gZtcPacketFromClient.structured.payload[payloadIndex++];
+ 1211:    }
+ 1212:  
+ 1213:    dataLen -= sizeof(gZtcPacketFromClient.structured.payload[0]);
+ 1214:  
+ 1215:    count = (dataLen <= mZtcSAPModeTableLen ? dataLen : mZtcSAPModeTableLen);
+ 1216:  
+ 1217:    for (i = 0; i < count; ++i) {
+ 1218:      byte = gZtcPacketFromClient.structured.payload[payloadIndex + i];
+ 1219:      /* If support for these SAP Handlers hse by compiled out, ignore them. */
+ 1220:      if (maZtcSAPModeTable[i] != gZtcSAPModeInvalid_c) {
+ 1221:        maZtcSAPModeTable[i] = byte;
+ 1222:      }
+ 1223:    }
+ 1224:  }                                       /* ZtcMsgModeSelectReqFunc() */
+ 1225:  #endif
+ 1226:  
+ 1227:  /****************************************************************************/
+ 1228:  
+ 1229:  #if gZtcIncluded_d
+ 1230:  void ZtcMsgNVSaveReqFunc(void) {
+ 1231:  #if !gNvStorageIncluded_d
+ 1232:    ZtcError(gZtcRequestIsDisabled_c);
+ 1233:  #else
+ 1234:    uint8_t dataSetIndex;
+ 1235:  
+ 1236:    dataSetIndex = gZtcPacketFromClient.structured.payload[0];
+ 1237:    if (dataSetIndex > NumberOfElements(NvDataSetTable)) {
+ 1238:      ZtcError(gZtcTooBig_c);
+ 1239:      return;
+ 1240:    }
+ 1241:  
+ 1242:    NvSaveOnIdle(NvDataSetTable[dataSetIndex].dataSetID);
+ 1243:  #endif
+ 1244:  }                                       /* ZtcMsgNVSaveReqFunc() */
+ 1245:  #endif
+ 1246:  
+ 1247:  /****************************************************************************/
+ 1248:  #if gZtcIncluded_d
+ 1249:  #if (gMsgInfo_d)
+ 1250:  #include "msgsystem.h"
+ 1251:  extern pools_t maMmPools[];
+ 1252:  
+ 1253:  /******************************************************************************
+ 1254:  * MM_DebugNumFreeBigBuffers
+ 1255:  *
+ 1256:  ******************************************************************************/
+ 1257:  uint8_t ZTC_DebugNumFreeBigBuffers
+ 1258:    (
+ 1259:    void
+ 1260:    )
+ 1261:  {
+ 1262:    listHeader_t *pHead;
+ 1263:    uint8_t count = 0;
+ 1264:    pHead = maMmPools[1].anchor.pHead;
+ 1265:    while(pHead != NULL)   
+ 1266:    {
+ 1267:      pHead = pHead->pNext;
+ 1268:      count++;
+ 1269:    }
+ 1270:     
+ 1271:   return count;
+ 1272:  }
+ 1273:  
+ 1274:  /******************************************************************************
+ 1275:  * MM_DebugNumFreeSmallBuffers
+ 1276:  *
+ 1277:  ******************************************************************************/
+ 1278:  uint8_t ZTC_DebugNumFreeSmallBuffers
+ 1279:    (
+ 1280:    void
+ 1281:    )
+ 1282:  {
+ 1283:    listHeader_t *pHead;
+ 1284:    uint8_t count = 0;
+ 1285:    
+ 1286:    pHead = maMmPools[0].anchor.pHead;
+ 1287:    while(pHead != NULL)    
+ 1288:    {
+ 1289:      pHead = pHead->pNext;
+ 1290:      count++;
+ 1291:    }
+ 1292:    return count;
+ 1293:  }
+ 1294:  
+ 1295:  /******************************************************************************/
+ 1296:  void ZtcMsgGetNumOfMsgsReqFunc(void) {
+ 1297:    gZtcPacketToClient.structured.payload[0] = ZTC_DebugNumFreeSmallBuffers();
+ 1298:    gZtcPacketToClient.structured.payload[1] = ZTC_DebugNumFreeBigBuffers();
+ 1299:    gZtcPacketToClient.structured.header.len = (sizeof(uint8_t) *2);
+ 1300:  }
+ 1301:  #endif //gMsgInfo_d
+ 1302:  
+ 1303:  #endif
+ 1304:  /****************************************************************************/
+ 1305:  
+ 1306:  #if gZtcIncluded_d
+ 1307:  void ZtcMsgReadExtendedAdrReqFunc(void) {
+ 1308:    FLib_MemCpy( &gZtcPacketToClient.structured.payload[sizeof(clientPacketStatus_t)],
+ 1309:         aExtendedAddress, 8 );
+ 1310:   
+ 1311:    gZtcPacketToClient.structured.header.len = sizeof(clientPacketStatus_t) + 8;
+ 1312:  }                                         /* ZtcMsgReadExtendedAdrReqFunc() */
+ 1313:  
+ 1314:  #endif
+ 1315:  
+ 1316:  /****************************************************************************/
+ 1317:  
+ 1318:  /* eliminate compiler warnings */
+ 1319:  #if gZtcIncluded_d
+ 1320:  uint8_t AF_AppToAfdeDataReq(void) {
+ 1321:    return gZbSuccess_c;
+ 1322:  }
+ 1323:  
+ 1324:  #endif
+ 1325:  
+ 1326:  /****************************************************************************/
+ 1327:  extern void Mlme_Reset(bool_t resetPib);
+ 1328:  
+ 1329:  #if gZtcIncluded_d
+ 1330:  void ZtcMsgResetCPUReqFunc(void) {
+ 1331:  #ifdef gCDCInterface_d
+ 1332:    // Do not reset the CPU if using USB CDC for communications
+ 1333:    Mlme_Reset(TRUE);
+ 1334:  #else  
+ 1335:    /* We're about to reset the CPU. Turn off Uart/SPI */    
+ 1336:    Uart_ModuleUninit();
+ 1337:  #if defined(gSPIInterface_d)
+ 1338:  
+ 1339:    SPI_Uninit();
+ 1340:    
+ 1341:  #elif defined(gI2CInterface_d)
+ 1342:  
+ 1343:    IIC_ModuleUninit();
+ 1344:    
+ 1345:  #endif
+ 1346:    PWRLib_Reset();
+ 1347:  #endif
+ 1348:  }                                       /* ZtcMsgResetCPUReqFunc() */
+ 1349:  #endif
+ 1350:  
+ 1351:  /****************************************************************************/
+ 1352:  #if gZtcIncluded_d
+ 1353:  /* ZtcMsgWriteExtendedAdrReqFunc() */
+ 1354:  void ZtcMsgWriteExtendedAdrReqFunc(void)
+ 1355:  {
+ 1356:    FLib_MemCpy(aExtendedAddress, gZtcPacketFromClient.structured.payload,8);
+ 1357:  #ifdef PROCESSOR_MC1323X
+ 1358:    MacPhyInit_WriteExtAddress(aExtendedAddress);
+ 1359:  #endif //PROCESSOR_MC1323X   
+ 1360:  }
+ 1361:  
+ 1362:  #endif
+ 1363:  
+ 1364:  /****************************************************************************/
+ 1365:  #if (gSAPMessagesEnableNlme_d)
+ 1366:  #if gZtcIncluded_d
+ 1367:  void ZtcFreeDiscoveryTables(void) {
+ 1368:    NWK_FreeUpDiscoveryTables();
+ 1369:  }                          
+ 1370:  
+ 1371:  #endif
+ 1372:  /****************************************************************************/
+ 1373:  
+ 1374:  #if gZtcIncluded_d
+ 1375:  void ZtcSetJoinFilterFlag(void) {
+ 1376:    gZDOJoinMode = gZtcPacketFromClient.structured.payload[0];
+ 1377:  }                          
+ 1378:  #endif
+ 1379:  #endif
+ 1380:  /****************************************************************************/
+ 1381:  
+ 1382:  #if gUseHwValidation_c
+ 1383:  /* Function used for writing to RAM memory.
+ 1384:   * gZtcPacketFromClient.structured.payload contains the packet received from TestTool:
+ 1385:   * bytes 0 to 1 --> start address for writing
+ 1386:   * byte    2    --> number of bytes to be written
+ 1387:   * bytes 3 to (3+ (2nd byte) - 1) --> data to be written starting with start address.  
+ 1388:   */
+ 1389:  #if gZtcIncluded_d
+ 1390:  void ZtcWriteMemoryBlock(void) 
+ 1391:  {
+ 1392:    uint8_t *addr;
+ 1393:    uint8_t nBytes;
+ 1394:    uint8_t *pIn, *pOut;
+ 1395:    uint8_t nWritten, nRead;
+ 1396:    uint16_t auxAddr = 0;
+ 1397:    #define OffsetToSize   4  
+ 1398:  
+ 1399:    /* even if address is 4 bytes long, only the first 2 bytes received represent the effective address */
+ 1400:    FLib_MemCpy(&addr, gZtcPacketFromClient.structured.payload, sizeofPointer);
+ 1401:    
+ 1402:    #if gBigEndian_c
+ 1403:      auxAddr = Swap2Bytes((uint16_t)addr); 
+ 1404:      pOut = (uint8_t*)auxAddr;       
+ 1405:    #else
+ 1406:      pOut = addr; 
+ 1407:    #endif  
+ 1408:  
+ 1409:    /* number of bytes to write parameter is the 5th received byte */
+ 1410:    nBytes = gZtcPacketFromClient.structured.payload[OffsetToSize];
+ 1411:    /* data to write parameter starts with the 6th received byte */
+ 1412:    pIn = &gZtcPacketFromClient.structured.payload[OffsetToSize + 1];
+ 1413:    
+ 1414:    nRead = nWritten = 0;
+ 1415:    while (nRead++ < nBytes)
+ 1416:    {
+ 1417:    #ifndef PROCESSOR_QE128
+ 1418:    /* For MC1323x the RAM is in the address ranges 0x0000 - 0x107f and 0x1800 - 0x182B. No check is made to allow writing of registers. */
+ 1419:    *pOut++ = *pIn++;
+ 1420:    nWritten++;
+ 1421:    #else
+ 1422:    if ((uint16_t)pOut <= 0x207f) // Write to out of RAM range or I/O space attempted  */
+ 1423:       {
+ 1424:          *pOut++ = *pIn++;
+ 1425:          nWritten++;
+ 1426:       }else{
+ 1427:        pOut++;
+ 1428:        pIn++;
+ 1429:       }
+ 1430:    #endif
+ 1431:    }
+ 1432:    
+ 1433:    /* return the number of bytes written to RAM */
+ 1434:    gZtcPacketToClient.structured.payload[0] = nWritten;  
+ 1435:    
+ 1436:  }
+ 1437:  #endif
+ 1438:  /****************************************************************************/
+ 1439:  
+ 1440:  /* Function used for reading from memory.
+ 1441:   * gZtcPacketFromClient.structured.payload contains the packet received from TestTool:
+ 1442:   * bytes 0 to 1 --> start address for reading
+ 1443:   * byte    2    --> number of bytes to be read. 
+ 1444:   */
+ 1445:  #if gZtcIncluded_d
+ 1446:  void ZtcReadMemoryBlock(void) 
+ 1447:  {
+ 1448:    uint8_t *addr;
+ 1449:    uint8_t nBytes, lcount;
+ 1450:    uint8_t *pIn, *pOut;
+ 1451:    uint16_t auxAddr = 0;
+ 1452:    #define OffsetToSize   4
+ 1453:  
+ 1454:    /* even if address is 4 bytes long, only the first 2 bytes received represent the effective address */
+ 1455:    FLib_MemCpy(&addr, gZtcPacketFromClient.structured.payload, sizeofPointer);
+ 1456:    
+ 1457:    #if gBigEndian_c
+ 1458:      auxAddr = Swap2Bytes((uint16_t)addr);
+ 1459:      pOut = (uint8_t*)auxAddr;        
+ 1460:    #else
+ 1461:      pOut = addr; 
+ 1462:    #endif  
+ 1463:    /* number of bytes to read parameter is the 5th received byte */
+ 1464:    nBytes = gZtcPacketFromClient.structured.payload[OffsetToSize];
+ 1465:    lcount = nBytes;
+ 1466:    /* Construct and send response */
+ 1467:    
+ 1468:    pIn = &gZtcPacketToClient.structured.payload[0];
+ 1469:    for (;lcount != 0; lcount--)
+ 1470:    {
+ 1471:      *pIn++ = *pOut++;
+ 1472:    }
+ 1473:  
+ 1474:    gZtcPacketToClient.structured.header.len = nBytes;   
+ 1475:    
+ 1476:  }
+ 1477:  #endif
+ 1478:  
+ 1479:  
+ 1480:  /****************************************************************************/
+ 1481:  #if gZtcIncluded_d
+ 1482:  #ifdef PROCESSOR_MC1323X
+ 1483:  void ZtcMC1323xWriteTrimValue(void) {
+ 1484:    uint8_t trimValue;
+ 1485:    trimValue = gZtcPacketFromClient.structured.payload[0];
+ 1486:    IoIndirectWrite(0x0F, trimValue);
+ 1487:  }
+ 1488:  #endif //PROCESSOR_MC1323X
+ 1489:  #endif //gZtcIncluded_d
+ 1490:  
+ 1491:  #if gZtcIncluded_d
+ 1492:  #ifdef PROCESSOR_MC1323X
+ 1493:  void ZtcMC1323xReadTrimValue(void) {
+ 1494:    uint8_t trimValue;
+ 1495:    trimValue = IoIndirectRead(0x0F);
+ 1496:    gZtcPacketToClient.structured.header.len = 1;
+ 1497:    gZtcPacketToClient.structured.payload[0] = trimValue;
+ 1498:  }
+ 1499:  #endif //PROCESSOR_MC1323X
+ 1500:  #endif //gZtcIncluded_d
+ 1501:  
+ 1502:  /****************************************************************************/
+ 1503:  
+ 1504:  /* Function used for writing 16 bit data to ABEL registers. 
+ 1505:   * gZtcPacketFromClient.structured.payload contains the packet received from TestTool:
+ 1506:   * byte 0       --> The address to be written (0x00-0x3F)
+ 1507:   * bytes 1 to 2 --> 16 bits value to be written 
+ 1508:   */
+ 1509:  #if gZtcIncluded_d
+ 1510:  #ifndef PROCESSOR_MC1323X
+ 1511:  void ZtcAbelWrite(void) 
+ 1512:  {
+ 1513:    uint16_t auxValue; 
+ 1514:    ztcAbelWrite_t* pAbelWrite = (ztcAbelWrite_t*)gZtcPacketFromClient.structured.payload;
+ 1515:  
+ 1516:    #if gBigEndian_c
+ 1517:      auxValue = Swap2Bytes((uint16_t)pAbelWrite->value);        
+ 1518:    #else
+ 1519:      auxValue = (uint16_t)pAbelWrite->value; 
+ 1520:    #endif
+ 1521:    MC1319xDrv_WriteSpiAsync(gZtcPacketFromClient.structured.payload[0], auxValue);
+ 1522:  }
+ 1523:  #endif /* PROCESSOR_MC1323X */
+ 1524:  #endif
+ 1525:  /****************************************************************************/
+ 1526:  
+ 1527:  /* Function used for reading 16 bit data from ABEL registers. 
+ 1528:   * gZtcPacketFromClient.structured.payload contains the packet received from TestTool:
+ 1529:   * byte 0       --> The address to be read
+ 1530:   */
+ 1531:  #if gZtcIncluded_d
+ 1532:  #ifndef PROCESSOR_MC1323X
+ 1533:  void ZtcAbelRead(void) 
+ 1534:  {
+ 1535:    uint16_t auxValue, returnValue;
+ 1536:   
+ 1537:    MC1319xDrv_ReadSpiAsync(gZtcPacketFromClient.structured.payload[0], &auxValue);
+ 1538:    
+ 1539:    #if gBigEndian_c
+ 1540:      returnValue = Swap2Bytes(auxValue);        
+ 1541:    #else
+ 1542:      returnValue = auxValue; 
+ 1543:    #endif  
+ 1544:  
+ 1545:      gZtcPacketToClient.structured.header.len = sizeof(returnValue);
+ 1546:      /* return read value */
+ 1547:      FLib_MemCpy(gZtcPacketToClient.structured.payload, &returnValue, sizeof(returnValue));  
+ 1548:  }
+ 1549:  #endif
+ 1550:  #endif
+ 1551:  /****************************************************************************/
+ 1552:  
+ 1553:  /*ZtcPing echoes back the payload*/
+ 1554:  #if gZtcIncluded_d
+ 1555:  void  ZtcPing(void)
+ 1556:  {
+ 1557:  
+ 1558:    gZtcPacketToClient.structured.header.len = gZtcPacketFromClient.structured.header.len;
+ 1559:    FLib_MemCpy(gZtcPacketToClient.structured.payload, gZtcPacketFromClient.structured.payload,
+ 1560:                gZtcPacketFromClient.structured.header.len );
+ 1561:  
+ 1562:  }
+ 1563:  #endif
+ 1564:  
+ 1565:  #endif /* gUseHwValidation_c */
+ 1566:  
+ 1567:  /* Permissions Configuration Table */
+ 1568:  #if (gZtcIncluded_d && (gStandardSecurity_d || gHighSecurity_d) && gApsMaxEntriesForPermissionsTable_c)
+ 1569:  
+ 1570:  extern index_t GetPermissionsTable(permissionsTable_t * pDstTable);
+ 1571:  extern void SetPermissionsTable(index_t entryCounter, uint8_t * payload);
+ 1572:  extern uint8_t RemoveDeviceFromPermissionsTable(zbIeeeAddr_t aDevAddr);
+ 1573:  extern void RemoveAllFromPermissionsTable(void);
+ 1574:  extern uint8_t AddDeviceToPermissionsTable(uint8_t * aDevAddr, permissionsFlags_t permissionsCategory);
+ 1575:  
+ 1576:  void ZtcMsgSetPermissionsTableFunc(void) {
+ 1577:    SetPermissionsTable(gZtcPacketFromClient.structured.payload[0], &(gZtcPacketFromClient.structured.payload[1]));
+ 1578:  }                                       /*  */
+ 1579:  
+ 1580:  void ZtcMsgGetPermissionsTableFunc(void) {
+ 1581:    ztcPermissionsTable_t *pTable = (ztcPermissionsTable_t *) &gZtcPacketToClient.structured.payload[sizeof(clientPacketStatus_t)];
+ 1582:    pTable->count = GetPermissionsTable(pTable->table);
+ 1583:    gZtcPacketToClient.structured.header.len = sizeof(clientPacketStatus_t)
+ 1584:                                             + sizeof(pTable->count)
+ 1585:                                             + (pTable->count * sizeof(permissionsTable_t));                                           
+ 1586:  }                                       /*  */
+ 1587:  
+ 1588:  void ZtcMsgRemoveFromPermissionsTableFunc(void)
+ 1589:  {
+ 1590:    if (gZtcPacketFromClient.structured.payload[0])
+ 1591:      RemoveAllFromPermissionsTable();
+ 1592:    else
+ 1593:      gZtcPacketToClient.structured.payload[0] = RemoveDeviceFromPermissionsTable(&gZtcPacketFromClient.structured.payload[1]);
+ 1594:    gZtcPacketToClient.structured.header.len = sizeof(clientPacketStatus_t); 
+ 1595:  }                                       /*  */
+ 1596:  
+ 1597:  void ZtcMsgAddDeviceToPermissionsTableFunc(void)
+ 1598:  {
+ 1599:    gZtcPacketToClient.structured.payload[0] = AddDeviceToPermissionsTable(&(gZtcPacketFromClient.structured.payload[0]), gZtcPacketFromClient.structured.payload[sizeof(zbIeeeAddr_t)]);
+ 1600:    gZtcPacketToClient.structured.header.len = sizeof(clientPacketStatus_t); 
+ 1601:  }                                       /*  */
+ 1602:  
+ 1603:  #endif /* (gZtcIncluded_d && (gStandardSecurity_d || gHighSecurity_d) && gApsMaxEntriesForPermissionsTable_c) */
+ 1604:  
+ 1605:  /****************************************************************************/
+ 1606:  
+ 1607:  #if (gZtcIncluded_d && defined(gZtcOtapSupport_d))
+ 1608:  
+ 1609:  #if gUpgradeImageOnCurrentDevice_d 
+ 1610:  static uint32_t mTotalImageSize = 0; 
+ 1611:  #endif
+ 1612:  
+ 1613:  /****************************************************************************
+ 1614:   * ZtcOtapSupportStartImageReqFunc - is called by the PC App to initiate 
+ 1615:   * an Image Upgrade Process. 
+ 1616:   * This function will inform the Host if External Memory is available or not.
+ 1617:   ****************************************************************************/
+ 1618:  void ZtcOtapSupportStartImageReqFunc(void) 
+ 1619:  {
+ 1620:    gZtcPacketToClient.structured.header.len = (3*sizeof(uint8_t));
+ 1621:    gZtcPacketToClient.structured.payload[0] = gOtapSucess_c;
+ 1622:    gZtcPacketToClient.structured.payload[1] = gZtcOatapVersion_c;
+ 1623:    gZtcPacketToClient.structured.payload[2] = gOtapExternalMemorySupported_d;
+ 1624:  
+ 1625:    /* Check if Upgrade is already in progress*/
+ 1626:    if (mUpgradeInProgress){    
+ 1627:       gZtcPacketToClient.structured.payload[0] = gOtapInvalidOperation_c;
+ 1628:       return;
+ 1629:    }
+ 1630:  
+ 1631:    mUpgradeInProgress = TRUE;
+ 1632:    gImageOffset = 0;
+ 1633:  #if gUpgradeImageOnCurrentDevice_d
+ 1634:    FLib_MemCpyReverseOrder(&mTotalImageSize, gZtcPacketFromClient.structured.payload, sizeof(mTotalImageSize));
+ 1635:  #endif  
+ 1636:  }
+ 1637:  
+ 1638:  /****************************************************************************
+ 1639:   * ZtcOtapSupportSetModeReqFunc - will set the OTAP operating mode:
+ 1640:   *  - gUpgradeImageOnCurrentDevice_c
+ 1641:   *  - gUseExternalMemoryForOtaUpdate_c
+ 1642:   *  - gDoNotUseExternalMemoryForOtaUpdate_c
+ 1643:   ****************************************************************************/
+ 1644:  void ZtcOtapSupportSetModeReqFunc(void) 
+ 1645:  {
+ 1646:    gOtapMode = gZtcPacketFromClient.structured.payload[0];
+ 1647:    gZtcPacketToClient.structured.header.len = (sizeof(uint8_t));
+ 1648:    gZtcPacketToClient.structured.payload[0] = gOtapSucess_c;
+ 1649:  
+ 1650:  #if gUpgradeImageOnCurrentDevice_d
+ 1651:  
+ 1652:    if (gOtapMode == gUpgradeImageOnCurrentDevice_c)
+ 1653:    {
+ 1654:        gZtcPacketToClient.structured.payload[0] = OTAP_StartImage_NoCRC(mTotalImageSize);
+ 1655:        return;
+ 1656:    }  
+ 1657:  #endif
+ 1658:    if ((gOtapMode != gUseExternalMemoryForOtaUpdate_c) &&
+ 1659:        (gOtapMode != gDoNotUseExternalMemoryForOtaUpdate_c))
+ 1660:    {
+ 1661:        gZtcPacketToClient.structured.payload[0] = gOtapInvalidParam_c;
+ 1662:        return;
+ 1663:    }
+ 1664:  
+ 1665:    // Inform the AppTask
+ 1666:    if (pfOtapSetModeCallback != NULL)
+ 1667:        gZtcPacketToClient.structured.payload[0] = pfOtapSetModeCallback(gOtapMode);
+ 1668:    
+ 1669:  }
+ 1670:  
+ 1671:  /****************************************************************************
+ 1672:   * ZtcOtapSupportImageNotifyReqFunc
+ 1673:   ****************************************************************************/
+ 1674:  void ZtcOtapSupportImageNotifyReqFunc(void)
+ 1675:  {}
+ 1676:  
+ 1677:  /****************************************************************************
+ 1678:   * ZtcOtapSupportQueryImageReqFunc - is used to request information for the
+ 1679:   * new image.
+ 1680:   ****************************************************************************/
+ 1681:  void ZtcOtapSupportQueryImageReqFunc(uint16_t devId, uint16_t manufacturer, uint16_t imgType, uint32_t fileVersion)
+ 1682:  {
+ 1683:      uint8_t idx = 0;
+ 1684:      
+ 1685:      gZtcPacketToClient.structured.header.opcodeGroup = gZtcReqOpcodeGroup_c;
+ 1686:      gZtcPacketToClient.structured.header.msgType = mZtcOtapSupportQueryImageReq_c;
+ 1687:      gZtcPacketToClient.structured.header.len = sizeof(devId) + sizeof(manufacturer) + 
+ 1688:                                                 sizeof(imgType) + sizeof(fileVersion);
+ 1689:      
+ 1690:      // Copy data into the payload buffer
+ 1691:      FLib_MemCpyReverseOrder(&gZtcPacketToClient.structured.payload[idx], &devId, sizeof(devId));
+ 1692:      idx +=sizeof(devId);
+ 1693:      FLib_MemCpyReverseOrder(&gZtcPacketToClient.structured.payload[idx], &manufacturer, sizeof(manufacturer));
+ 1694:      idx +=sizeof(manufacturer);
+ 1695:      FLib_MemCpy(&gZtcPacketToClient.structured.payload[idx], &imgType, sizeof(imgType));
+ 1696:      idx +=sizeof(imgType);
+ 1697:      FLib_MemCpy(&gZtcPacketToClient.structured.payload[idx], &fileVersion, sizeof(fileVersion));
+ 1698:      
+ 1699:      ZtcWritePacketToClient(sizeof(gZtcPacketToClient.structured.header) + gZtcPacketToClient.structured.header.len);
+ 1700:  }
+ 1701:  
+ 1702:  /****************************************************************************
+ 1703:   * ZtcOtapSupportQueryImageReqConfirmFunc - returns a minimal set of data 
+ 1704:   * about the image 
+ 1705:   ****************************************************************************/
+ 1706:  void ZtcOtapSupportQueryImageRspFunc(void)
+ 1707:  {
+ 1708:      if (pfOtapQueryImageReqCallback != NULL)
+ 1709:          pfOtapQueryImageReqCallback( gZtcPacketFromClient.structured.payload, gZtcPacketFromClient.structured.header.len );
+ 1710:  }
+ 1711:  
+ 1712:  /****************************************************************************
+ 1713:   * ZtcOtapSupportImageChunkReqFunc - will request a new image chunk from 
+ 1714:   * the PC
+ 1715:   ****************************************************************************/
+ 1716:  void ZtcOtapSupportImageChunkReqFunc(uint32_t offset, uint8_t len, uint16_t devId)
+ 1717:  {
+ 1718:    uint8_t idx = 0;
+ 1719:  
+ 1720:    gZtcPacketToClient.structured.header.opcodeGroup = gZtcReqOpcodeGroup_c;
+ 1721:    gZtcPacketToClient.structured.header.msgType = mZtcOtapSupportImageChunkReq_c;
+ 1722:    gZtcPacketToClient.structured.header.len = sizeof(offset) + sizeof(len) + sizeof(devId);
+ 1723:    
+ 1724:    // Copy data into the payload buffer
+ 1725:    FLib_MemCpyReverseOrder(&gZtcPacketToClient.structured.payload[idx], &devId, sizeof(devId));
+ 1726:    idx +=sizeof(devId);
+ 1727:    FLib_MemCpyReverseOrder(&gZtcPacketToClient.structured.payload[idx], &offset, sizeof(offset));
+ 1728:    idx +=sizeof(offset);
+ 1729:    FLib_MemCpy(&gZtcPacketToClient.structured.payload[idx], &len, sizeof(len));
+ 1730:    
+ 1731:    ZtcWritePacketToClient(sizeof(gZtcPacketToClient.structured.header) + gZtcPacketToClient.structured.header.len);
+ 1732:  }
+ 1733:  
+ 1734:  
+ 1735:  /****************************************************************************
+ 1736:   *  ZtcOtapSupportPushImageChunkReqFunc - is called every time a new chunk 
+ 1737:   *  is received.
+ 1738:   ****************************************************************************/
+ 1739:  void ZtcOtapSupportPushImageChunkReqFunc(void) 
+ 1740:  {
+ 1741:    gZtcPacketToClient.structured.header.len = (sizeof(uint8_t));
+ 1742:    
+ 1743:    if (mUpgradeInProgress == FALSE){    
+ 1744:      gZtcPacketToClient.structured.payload[0] = gOtapInvalidOperation_c;
+ 1745:      return;
+ 1746:    }
+ 1747:    
+ 1748:    if (gZtcPacketFromClient.structured.header.len == 0) {
+ 1749:      gZtcPacketToClient.structured.payload[0] = gOtapInvalidParam_c;
+ 1750:      return;
+ 1751:    }
+ 1752:  
+ 1753:  #if gUpgradeImageOnCurrentDevice_d
+ 1754:    if (gOtapMode == gUpgradeImageOnCurrentDevice_c)
+ 1755:    {
+ 1756:        gZtcPacketToClient.structured.payload[0] = OTAP_PushImageChunk_NoCRC(gZtcPacketFromClient.structured.payload, gZtcPacketFromClient.structured.header.len, NULL);
+ 1757:        return;
+ 1758:    }
+ 1759:  #endif 
+ 1760:    // Inform the AppTask
+ 1761:    if (pfOtapPushImageChunkCallback != NULL)
+ 1762:        gZtcPacketToClient.structured.payload[0] = pfOtapPushImageChunkCallback(gZtcPacketFromClient.structured.payload, gZtcPacketFromClient.structured.header.len);    
+ 1763:  }
+ 1764:  
+ 1765:  /****************************************************************************
+ 1766:   * ZtcOtapSupportCommitImageReqFunc - will mark the process as colpleted
+ 1767:   ****************************************************************************/
+ 1768:  void ZtcOtapSupportCommitImageReqFunc(void) 
+ 1769:  {
+ 1770:      mUpgradeInProgress = FALSE;
+ 1771:  #if gUpgradeImageOnCurrentDevice_d
+ 1772:      gZtcPacketToClient.structured.header.len = (sizeof(uint8_t));
+ 1773:      gZtcPacketToClient.structured.payload[0] = OTAP_CommitImage_NoCRC(gZtcPacketFromClient.structured.payload);
+ 1774:      OTAP_WriteNewImageFlashFlags();
+ 1775:  #endif
+ 1776:  }
+ 1777:  
+ 1778:  /****************************************************************************
+ 1779:   * Calling this function will terminate the Upgrade Process
+ 1780:   ****************************************************************************/
+ 1781:  void ZtcOtapSupportCancelImageReqFunc(void) 
+ 1782:  {
+ 1783:      mUpgradeInProgress = FALSE;
+ 1784:  }
+ 1785:  #endif /* (gZtcIncluded_d && defined(gZtcOtapSupport_d)) */
+ 1786:  
+ 1787:  
+ 1788:  #if gZtcIncluded_d
+ 1789:  void ZtcGetLastReceivedPacketLqiValue(void)
+ 1790:  {
+ 1791:    gZtcPacketToClient.structured.payload[0] = PhyGetLastRxLqiValue();
+ 1792:    gZtcPacketToClient.structured.header.len = 1;
+ 1793:  }
+ 1794:  #endif
+ 1795:  
+ 1796:  #if gZtcIncluded_d
+ 1797:  void ZtcMsgGetMaxProgramStackUsage(void)
+ 1798:  {
+ 1799:    uint8_t *pStack;
+ 1800:    uint16_t stackSize =(uint16_t)__SEG_END_SSTACK , stackUsage = 0;
+ 1801:    stackSize -=  (uint16_t)__SEG_START_SSTACK;
+ 1802:  #if (STACK_FILL)
+ 1803:    
+ 1804:    #if gNvStorageIncluded_d
+ 1805:      pStack = __SEG_END_NV_CODE_BUFFER;
+ 1806:    #else//gNvStorageIncluded_d
+ 1807:      pStack = __SEG_START_SSTACK;
+ 1808:    #endif//gNvStorageIncluded_d
+ 1809:    
+ 1810:    while ( pStack < __SEG_END_SSTACK )
+ 1811:    {
+ 1812:      if(*pStack != STACK_INIT_VALUE)
+ 1813:      {
+ 1814:        break;
+ 1815:      }
+ 1816:      else
+ 1817:      {
+ 1818:        stackUsage++;
+ 1819:      }
+ 1820:      pStack++;
+ 1821:    }
+ 1822:    #if gNvStorageIncluded_d
+ 1823:      stackUsage = (stackSize - stackUsage);
+ 1824:      stackUsage -= (uint16_t)((uint16_t) __SEG_END_NV_CODE_BUFFER - (uint16_t) __SEG_START_SSTACK);
+ 1825:      gZtcPacketToClient.structured.payload[0] = 2;//Err NvStorageIncluded_d=1 in file NVM_Interface
+ 1826:    #else//gNvStorageIncluded_d
+ 1827:      stackUsage = (stackSize - stackUsage);
+ 1828:      gZtcPacketToClient.structured.payload[0] = 0;//Success
+ 1829:    #endif//gNvStorageIncluded_d
+ 1830:    
+ 1831:    #if gBigEndian_c
+ 1832:      *((uint16_t *)&gZtcPacketToClient.structured.payload[1]) = Swap2Bytes(stackSize);
+ 1833:      *((uint16_t *)&gZtcPacketToClient.structured.payload[3]) = Swap2Bytes(stackUsage);
+ 1834:    #else//gBigEndian_c
+ 1835:      *((uint16_t *)&gZtcPacketToClient.structured.payload[1]) = (stackSize);
+ 1836:      *((uint16_t *)&gZtcPacketToClient.structured.payload[3]) = (stackUsage);
+ 1837:    #endif//gBigEndian_c
+ 1838:      gZtcPacketToClient.structured.header.len = 2 * sizeof(uint16_t) + 1;
+ 1839:  #else// STACK_FILL
+ 1840:    gZtcPacketToClient.structured.payload[0] = 1;//Err STACK_FILL=0 in file crt0.h
+ 1841:    #if gBigEndian_c
+ 1842:      *((uint16_t *)&gZtcPacketToClient.structured.payload[1]) = Swap2Bytes(stackSize);
+ 1843:    #else//gBigEndian_c
+ 1844:      *((uint16_t *)&gZtcPacketToClient.structured.payload[1]) = (stackSize);
+ 1845:    #endif//gBigEndian_c
+ 1846:    *((uint16_t *)&gZtcPacketToClient.structured.payload[3]) = (0);
+ 1847:    gZtcPacketToClient.structured.header.len = 2 * sizeof(uint16_t) + 1;
+ 1848:  #endif//STACK_FILL
+ 1849:  }
+ 1850:  #endif
+ 1851:  
+ 1852:  #if (gLpmIncluded_d == 1)
+ 1853:  /****************************************************************************/
+ 1854:  #if gZtcIncluded_d
+ 1855:  static void ZtcMsgWakeUpInd(void) 
+ 1856:  {
+ 1857:    /* Set default values. */
+ 1858:    gZtcPacketToClient.structured.header.opcodeGroup = gZtcCnfOpcodeGroup_c;
+ 1859:    gZtcPacketToClient.structured.header.msgType = mZtcMsgWakeUpIndication_c;
+ 1860:    gZtcPacketToClient.structured.header.len = 0x00;
+ 1861:    ZtcWritePacketToClient(sizeof(gZtcPacketToClient.structured.header) + gZtcPacketToClient.structured.header.len);
+ 1862:  }
+ 1863:  #endif
+ 1864:  /****************************************************************************/
+ 1865:  /* This function selects and configures the PIN (KB0-KB7)
+ 1866:   * through which the MCU enters or not in sleep mode.
+ 1867:   */
+ 1868:  #if gZtcIncluded_d 
+ 1869:  void ZtcMsgSelectWakeUpPINReqFunc(void) 
+ 1870:  {  
+ 1871:    /* Check if any pin is selected */
+ 1872:    if(gZtcPacketFromClient.structured.payload[0])
+ 1873:    {
+ 1874:    
+ 1875:  #ifndef PROCESSOR_MC1323X  
+ 1876:    /* On S08GT60, if rising edges detection was selected, check if a right pin was chosen */
+ 1877:     if ((gZtcPacketFromClient.structured.payload[1] == 0x01) &&
+ 1878:        !(gZtcPacketFromClient.structured.payload[0] & mRisingEdgesPinsMask_c ))
+ 1879:     {
+ 1880:        /* The parameters are not correctly set */
+ 1881:        gZtcPacketToClient.structured.payload[0] = gZtcError_c; 
+ 1882:        return;
+ 1883:     }
+ 1884:  #endif   
+ 1885:     /* Set the new configuration */   
+ 1886:     FLib_MemCpy(&ztcWakeUpConfig, &gZtcPacketFromClient.structured.payload[0], sizeof(ztcWakeUpConfig)-sizeof(ztcWakeUpConfig.prevPinLevel)); 
+ 1887:     KBISC |= 0x02; /* KBI status and control register initialized*/   
+ 1888:     if(ztcWakeUpConfig.detectionEdge == mRisingEdges_c) 
+ 1889:     {
+ 1890:  #ifndef PROCESSOR_MC1323X   
+ 1891:       KBISC |= (ztcWakeUpConfig.selectedKBPin & mRisingEdgesPinsMask_c); /* Select to wake up on rising edges */
+ 1892:  #else  
+ 1893:       KBIES |= ztcWakeUpConfig.selectedKBPin;
+ 1894:  #endif 
+ 1895:     }
+ 1896:     else
+ 1897:     {
+ 1898:  #ifndef PROCESSOR_MC1323X   
+ 1899:       KBISC &= ~(ztcWakeUpConfig.selectedKBPin & mRisingEdgesPinsMask_c);/* Select to wake up on falling edges */
+ 1900:  #else
+ 1901:       KBIES &= ~ztcWakeUpConfig.selectedKBPin;
+ 1902:  #endif   
+ 1903:     }
+ 1904:     KBIPE |= ztcWakeUpConfig.selectedKBPin; /* KBI pin enable controls initialized */  
+ 1905:     /* If prevPinLevel is 0xff, it's mean that we don't have any pin level previously detected */
+ 1906:     ztcWakeUpConfig.prevPinLevel = 0xff;
+ 1907:    }
+ 1908:    else
+ 1909:    {
+ 1910:      FLib_MemSet(&ztcWakeUpConfig, 0x00, sizeof(ztcWakeUpConfig)-sizeof(ztcWakeUpConfig.prevPinLevel));
+ 1911:      ztcWakeUpConfig.prevPinLevel = 0xff;
+ 1912:    }
+ 1913:    /* Get the level of the pin */
+ 1914:    Ztc_CheckWakeUpPIN();
+ 1915:  }
+ 1916:  #endif
+ 1917:  /****************************************************************************/
+ 1918:  
+ 1919:  /* Read the pin level to detect the level changes;
+ 1920:     Allow or not to enter in sleep mode (depend on wakeup pin configuration) */
+ 1921:  #if gZtcIncluded_d
+ 1922:  void Ztc_CheckWakeUpPIN(void) 
+ 1923:  {
+ 1924:   uint8_t currentPinLevel;
+ 1925:   /* By default, the Application allows device to sleep */
+ 1926:   static bool_t ztcDevCanGoToSleep_Flag = TRUE; 
+ 1927:  
+ 1928:   if(!ztcWakeUpConfig.selectedKBPin)
+ 1929:   {
+ 1930:   /* If the wake up pin is not configured, disallow device to sleep */ 
+ 1931:    if(ztcDevCanGoToSleep_Flag)
+ 1932:    {
+ 1933:      PWR_DisallowDeviceToSleep();  /* Disallow device to sleep */
+ 1934:      ztcDevCanGoToSleep_Flag = FALSE; 
+ 1935:    }    
+ 1936:    return;
+ 1937:   }
+ 1938:  
+ 1939:   /* Read the pin */
+ 1940:   currentPinLevel = SWITCH_PORT & ztcWakeUpConfig.selectedKBPin;
+ 1941:   /* Check if the level was changed since the previous read or this is the 
+ 1942:      first time we read it */
+ 1943:   if((currentPinLevel^ztcWakeUpConfig.prevPinLevel) || (ztcWakeUpConfig.prevPinLevel == 0xff))
+ 1944:   {
+ 1945:      /* If the MCU is waking up on rising edges and the level is low(or MCU is waking up on falling edges 
+ 1946:      and the level is high), allow device to sleep; else disallow to sleep;
+ 1947:      Send a Wakeup.Ind message if needed.
+ 1948:      */
+ 1949:      if( (!currentPinLevel && (ztcWakeUpConfig.detectionEdge == mRisingEdges_c)) ||
+ 1950:         (currentPinLevel && (ztcWakeUpConfig.detectionEdge == mFallingEdges_c)) )
+ 1951:      { /* Allow to sleep only if the device can NOT go to sleep */
+ 1952:       if(!ztcDevCanGoToSleep_Flag)
+ 1953:       {
+ 1954:         PWR_AllowDeviceToSleep(); /* Allow device to sleep */
+ 1955:         ztcDevCanGoToSleep_Flag = TRUE;
+ 1956:       }
+ 1957:      }
+ 1958:      else
+ 1959:      { /* Disallow to sleep only if the device can go to sleep */
+ 1960:       if(ztcDevCanGoToSleep_Flag)
+ 1961:       {
+ 1962:         PWR_DisallowDeviceToSleep();  /* Disallow device to sleep */
+ 1963:         ztcDevCanGoToSleep_Flag = FALSE;
+ 1964:         if(ztcWakeUpConfig.signalWhenWakeUpFlag && (ztcWakeUpConfig.prevPinLevel != 0xff))
+ 1965:            ZtcMsgWakeUpInd();
+ 1966:       }
+ 1967:      }
+ 1968:   }
+ 1969:   
+ 1970:    /* Update the previous pin level with the current one */
+ 1971:    ztcWakeUpConfig.prevPinLevel = currentPinLevel;
+ 1972:  }
+ 1973:  #endif
+ 1974:  
+ 1975:  #else /*  else #if gLpmIncluded_d */
+ 1976:  #if gZtcIncluded_d
+ 1977:  void ZtcMsgSelectWakeUpPINReqFunc(void) 
+ 1978:  { 
+ 1979:  }
+ 1980:  #endif
+ 1981:  #endif /* #if gLpmIncluded_d */ 
+ 1982:  
+ 1983:  
+ 1984:  
+ 1985:  /****************************************************************************/
+ 1986:  
