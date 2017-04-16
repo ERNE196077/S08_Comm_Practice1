@@ -28,7 +28,7 @@ OBJS_OS_FORMAT += \
 
 
 # Each subdirectory must supply rules for building sources it contributes
-SSM/CommUtil/CommUtil_c.obj: ../SSM/CommUtil/CommUtil.c pre-build
+SSM/CommUtil/CommUtil_c.obj: ../SSM/CommUtil/CommUtil.c | pre-build
 	@echo 'Building file: $<'
 	@echo 'Executing target #8 $<'
 	@echo 'Invoking: HCS08 Compiler'

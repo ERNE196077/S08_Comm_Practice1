@@ -2,7 +2,7 @@
 # Automatically-generated file. Do not edit!
 ################################################################################
 
-#Progress monitor hint: 40
+#Progress monitor hint: 41
 first : all
 -include ../makefile.init
 
@@ -115,16 +115,16 @@ main-build: S80_EndDevice.abs
 endif
 
 # Tool invocations
-S80_EndDevice.abs: $(OBJS) $(USER_OBJS) pre.prm pre-build
+S80_EndDevice.abs: $(OBJS) $(USER_OBJS) pre.prm | pre-build
 	@echo 'Building target: $@'
-	@echo 'Executing target #41 $@'
+	@echo 'Executing target #42 $@'
 	@echo 'Invoking: Linker'
 	"$(HC08ToolsEnv)/linker" -ArgFile"S80_EndDevice.args" -O"S80_EndDevice.abs"
 	@echo 'Finished building target: $@'
 	@echo ' '
 
-S80_EndDevice.abs.s19: $(BBL_SRCS) $(EXECUTABLES) pre-build
-	@echo 'Executing target #42 $@'
+S80_EndDevice.abs.s19: $(BBL_SRCS) $(EXECUTABLES) | pre-build
+	@echo 'Executing target #43 $@'
 	@echo 'Invoking: Burner'
 	"$(HC08ToolsEnv)/burner" -ArgFile"S80_EndDevice.abs.args" -f="$<" -env"ABS_FILE=$(strip $(EXECUTABLES_OS_FORMAT))"
 	@echo 'Finished building: $@'

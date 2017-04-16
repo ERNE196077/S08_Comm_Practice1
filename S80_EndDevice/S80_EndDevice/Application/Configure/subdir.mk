@@ -28,9 +28,9 @@ OBJS_OS_FORMAT += \
 
 
 # Each subdirectory must supply rules for building sources it contributes
-Application/Configure/GlobalVars_c.obj: ../Application/Configure/GlobalVars.c pre-build
+Application/Configure/GlobalVars_c.obj: ../Application/Configure/GlobalVars.c | pre-build
 	@echo 'Building file: $<'
-	@echo 'Executing target #40 $<'
+	@echo 'Executing target #41 $<'
 	@echo 'Invoking: HCS08 Compiler'
 	"$(HC08ToolsEnv)/chc08" -ArgFile"Application/Configure/GlobalVars.args" -ObjN="Application/Configure/GlobalVars_c.obj" "$<" -Lm="$(@:%.obj=%.d)" -LmCfg=xilmou
 	@echo 'Finished building: $<'

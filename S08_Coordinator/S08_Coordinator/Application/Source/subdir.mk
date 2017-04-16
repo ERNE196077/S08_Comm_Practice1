@@ -7,28 +7,35 @@
 # Add inputs and outputs from these tool invocations to the build variables 
 C_SRCS_QUOTED += \
 "../Application/Source/MApp.c" \
+"../Application/Source/MyNewTask.c" \
 
 C_SRCS += \
 ../Application/Source/MApp.c \
+../Application/Source/MyNewTask.c \
 
 OBJS += \
 ./Application/Source/MApp_c.obj \
+./Application/Source/MyNewTask_c.obj \
 
 OBJS_QUOTED += \
 "./Application/Source/MApp_c.obj" \
+"./Application/Source/MyNewTask_c.obj" \
 
 C_DEPS += \
 ./Application/Source/MApp_c.d \
+./Application/Source/MyNewTask_c.d \
 
 C_DEPS_QUOTED += \
 "./Application/Source/MApp_c.d" \
+"./Application/Source/MyNewTask_c.d" \
 
 OBJS_OS_FORMAT += \
 ./Application/Source/MApp_c.obj \
+./Application/Source/MyNewTask_c.obj \
 
 
 # Each subdirectory must supply rules for building sources it contributes
-Application/Source/MApp_c.obj: ../Application/Source/MApp.c pre-build
+Application/Source/MApp_c.obj: ../Application/Source/MApp.c | pre-build
 	@echo 'Building file: $<'
 	@echo 'Executing target #37 $<'
 	@echo 'Invoking: HCS08 Compiler'
@@ -39,6 +46,14 @@ Application/Source/MApp_c.obj: ../Application/Source/MApp.c pre-build
 Application/Source/%.d: ../Application/Source/%.c
 	@echo 'Regenerating dependency file: $@'
 	
+	@echo ' '
+
+Application/Source/MyNewTask_c.obj: ../Application/Source/MyNewTask.c | pre-build
+	@echo 'Building file: $<'
+	@echo 'Executing target #38 $<'
+	@echo 'Invoking: HCS08 Compiler'
+	"$(HC08ToolsEnv)/chc08" -ArgFile"Application/Source/MyNewTask.args" -ObjN="Application/Source/MyNewTask_c.obj" "$<" -Lm="$(@:%.obj=%.d)" -LmCfg=xilmou
+	@echo 'Finished building: $<'
 	@echo ' '
 
 

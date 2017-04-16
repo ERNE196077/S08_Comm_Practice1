@@ -39,5 +39,6 @@ Application/Source/MApp_c.obj: \
 	C:/Users/ernesto/Documents/Workspace/S08_Coordinator/S80_EndDevice/PLM/Interface/Keyboard.h \
 	C:/Users/ernesto/Documents/Workspace/S08_Coordinator/S80_EndDevice/PLM/Interface/NV_Data.h \
 	C:/Users/ernesto/Documents/Workspace/S08_Coordinator/S80_EndDevice/PLM/Interface/Sound.h \
-	C:/Users/ernesto/Documents/Workspace/S08_Coordinator/S80_EndDevice/PLM/Interface/NVM_Interface.h 
+	C:/Users/ernesto/Documents/Workspace/S08_Coordinator/S80_EndDevice/PLM/Interface/NVM_Interface.h \
+	C:/Users/ernesto/Documents/Workspace/S08_Coordinator/S80_EndDevice/Application/Source/MyNewTask.h 
 

@@ -1,0 +1,303 @@
+ANSI-C/cC++ Compiler for HC08 V-5.0.45 Build 14019, Jan 20 2014
+
+    1:  /*
+    2:   * MyNewTask.c
+    3:   *
+    4:   *  Created on: Aug 10, 2016
+    5:   *      Author: B42931
+    6:   */
+    7:  
+    8:  #include "MyNewTask.h"
+    9:  #include "CommUtil.h"      /* Defines the interface of the demo serial terminal interface. */
+   10:  
+   11:  /* Global Variable to store our TimerID */
+   12:  tmrTimerID_t myTimerID;
+   13:  tsTaskID_t myNewTaskID;
+   14:  
+   15:  /* Local variable to store the current state of the LEDs */
+   16:  static uint8_t ledsState;
+   17:  
+   18:  /* Timer Callback prototype */
+   19:  void myTaskTimerCallback(tmrTimerID_t timer);
+   20:  
+   21:  /* myNewTask main function that will handle the events*/
+   22:  void MyNewTask(event_t events)
+   23:  {
+  0000 8b       [2]             PSHH  
+   24:  	/* Depending on the received event */
+   25:  	switch(events){
+  0001 afff     [2]             AIX   #-1
+  0003 8b       [2]             PSHH  
+  0004 86       [3]             PULA  
+  0005 cd0000   [6]             JSR   _Jump_Table_Header_Offset
+  0008 04               DC.B  4
+  0009 71               DC.B  L7B
+  000a 03               DC.B  LE
+  000b 25               DC.B  L31
+  000c 6e               DC.B  L7B
+  000d 5e               DC.B  L6C
+  000e          LE:     
+   26:  	case gMyNewTaskEvent1_c:
+   27:  		TMR_StartTimer(myTimerID, 		/* Timer ID allocated in "MyNewTaskInit()", called in MApp_init.c during initialization */
+  000e c60000   [4]             LDA   myTimerID
+  0011 87       [2]             PSHA  
+  0012 a602     [2]             LDA   #2
+  0014 87       [2]             PSHA  
+  0015 450bb8   [3]             LDHX  #3000
+  0018 89       [2]             PSHX  
+  0019 8b       [2]             PSHH  
+  001a 4f       [1]             CLRA  
+  001b 87       [2]             PSHA  
+  001c 87       [2]             PSHA  
+  001d 450000   [3]             LDHX  @myTaskTimerCallback
+  0020 89       [2]             PSHX  
+  0021 8b       [2]             PSHH  
+  0022 a600     [2]             LDA   @myTaskTimerCallback:PAGE
+  0024 87       [2]             PSHA  
+  0025 ac000000 [8]             CALL  TMR_StartTimer
+  0029 a709     [2]             AIS   #9
+   28:  				       gTmrIntervalTimer_c, /* Type of timer: INTERVAL */
+   29:  				       3000, 				/* Timer's Timeout */
+   30:  				       myTaskTimerCallback 	/* pointer to myTaskTimerCallback function */
+   31:  				       );
+   32:  		TurnOffLeds();	/* Ensure all LEDs are turned off */
+  002b ac000000 [8]             CALL  LED_TurnOffAllLeds
+   33:  		break;
+   34:  	case gMyNewTaskEvent2_c:	/* Event called from myTaskTimerCallback */
+   35:  		
+   36:  		/****NEWCODE: CHANGE LED STATE****/
+   37:  		ledsState = ++ledsState > 4 ? 1 : ledsState;
+   38:  		TurnOffLeds();
+   39:  		switch(ledsState){
+   40:  			case 1:
+   41:  				Led1On();
+   42:  			break;
+   43:  			case 2:
+   44:  				Led2On();
+   45:  			break;
+   46:  			case 3:
+   47:  				Led3On();
+   48:  			break;
+   49:  			case 4:
+   50:  				Led4On();
+   51:  			break;
+   52:  				
+   53:  		}
+   54:  		/****NEWCODE: CHANGE LED STATE****/
+   55:  		
+   56:  		break;
+   57:  	case gMyNewTaskEvent3_c:	/* Event to stop the timer */
+   58:  		ledsState = 0;
+   59:  		TurnOffLeds();
+   60:  		TMR_StopTimer(myTimerID);
+   61:  		break;
+   62:  	default:
+   63:  		break;
+   64:  	}
+   65:  }
+  002f 8a       [3]             PULH  
+  0030 8d       [7]             RTC   
+  0031          L31:    
+  0031 450000   [3]             LDHX  @ledsState
+  0034 7c       [4]             INC   ,X
+  0035 c60000   [4]             LDA   ledsState
+  0038 a104     [2]             CMP   #4
+  003a 2302     [3]             BLS   L3E ;abs = 003e
+  003c a601     [2]             LDA   #1
+  003e          L3E:    
+  003e 95       [2]             TSX   
+  003f f7       [2]             STA   ,X
+  0040 fe       [3]             LDX   ,X
+  0041 cf0000   [4]             STX   ledsState
+  0044 ac000000 [8]             CALL  LED_TurnOffAllLeds
+  0048 c60000   [4]             LDA   ledsState
+  004b a104     [2]             CMP   #4
+  004d 222c     [3]             BHI   L7B ;abs = 007b
+  004f a001     [2]             SUB   #1
+  0051 97       [1]             TAX   
+  0052 4f       [1]             CLRA  
+  0053 cd0000   [6]             JSR   _Jump_Table_Header_Offset
+  0056 04               DC.B  4
+  0057 23               DC.B  L7B
+  0058 03               DC.B  L5C
+  0059 06               DC.B  L60
+  005a 09               DC.B  L64
+  005b 0c               DC.B  L68
+  005c          L5C:    
+  005c 1100     [5]             BCLR  0,0
+  005e 8a       [3]             PULH  
+  005f 8d       [7]             RTC   
+  0060          L60:    
+  0060 1900     [5]             BCLR  4,0
+  0062 8a       [3]             PULH  
+  0063 8d       [7]             RTC   
+  0064          L64:    
+  0064 1106     [5]             BCLR  0,6
+  0066 8a       [3]             PULH  
+  0067 8d       [7]             RTC   
+  0068          L68:    
+  0068 1306     [5]             BCLR  1,6
+  006a 8a       [3]             PULH  
+  006b 8d       [7]             RTC   
+  006c          L6C:    
+  006c 4f       [1]             CLRA  
+  006d c70000   [4]             STA   ledsState
+  0070 ac000000 [8]             CALL  LED_TurnOffAllLeds
+  0074 c60000   [4]             LDA   myTimerID
+  0077 ac000000 [8]             CALL  TMR_StopTimer
+  007b          L7B:    
+  007b 8a       [3]             PULH  
+  007c 8d       [7]             RTC   
+   66:  
+   67:  /* This function is called in MApp_init.c during initialization ( main() )
+   68:   * It will INITIALIZE all required components for the task to work and then 
+   69:   * call an event for the new Task.*/
+   70:  void MyNewTaskInit(void)
+   71:  {
+   72:  	/* Allocate in memory the timer*/
+   73:  	myTimerID = TMR_AllocateTimer();
+  0000 ac000000 [8]             CALL  TMR_AllocateTimer
+  0004 c70000   [4]             STA   myTimerID
+   74:  	ledsState = 0;
+  0007 4f       [1]             CLRA  
+  0008 c70000   [4]             STA   ledsState
+   75:  	/* Create the New Task */
+   76:  	myNewTaskID = TS_CreateTask(gMyNewTaskPriority_c, MyNewTask);
+  000b a681     [2]             LDA   #-127
+  000d 87       [2]             PSHA  
+  000e 450000   [3]             LDHX  @MyNewTask
+  0011 89       [2]             PSHX  
+  0012 8b       [2]             PSHH  
+  0013 a600     [2]             LDA   @MyNewTask:PAGE
+  0015 87       [2]             PSHA  
+  0016 ac000000 [8]             CALL  TS_CreateTask
+  001a a704     [2]             AIS   #4
+  001c c70000   [4]             STA   myNewTaskID
+   77:  	/* Send an Event to myNewTask with the first event */
+   78:  	TS_SendEvent(myNewTaskID, gMyNewTaskEvent1_c); 
+  001f ae01     [2]             LDX   #1
+  0021 8c       [1]             CLRH  
+  0022 ac000000 [8]             CALL  TS_SendEvent
+   79:  }
+  0026 8d       [7]             RTC   
+   80:  
+   81:  /* This is the function called by the Timer each time it expires */
+   82:  static void myTaskTimerCallback(tmrTimerID_t timer)
+   83:  {
+   84:  	(void)timer; // this line is just to clear a warning
+   85:  	TS_SendEvent(myNewTaskID, gMyNewTaskEvent2_c);
+  0000 c60000   [4]             LDA   myNewTaskID
+  0003 ae02     [2]             LDX   #2
+  0005 8c       [1]             CLRH  
+  0006 ac000000 [8]             CALL  TS_SendEvent
+   86:  }
+  000a 8d       [7]             RTC   
+   87:  
+   88:  /* Public function to send an event to stop the timer */
+   89:  void MyTaskTimer_Stop(void)
+   90:  {
+   91:  	TS_SendEvent(myNewTaskID, gMyNewTaskEvent3_c);
+  0000 c60000   [4]             LDA   myNewTaskID
+  0003 ae04     [2]             LDX   #4
+  0005 8c       [1]             CLRH  
+  0006 ac000000 [8]             CALL  TS_SendEvent
+   92:  }
+  000a 8d       [7]             RTC   
+   93:  
+   94:  void MyTaskButtonPress(uint8_t buttonPressed){
+  0000 87       [2]             PSHA  
+   95:  	TMR_StopTimer(myTimerID);
+  0001 c60000   [4]             LDA   myTimerID
+  0004 ac000000 [8]             CALL  TMR_StopTimer
+   96:  	
+   97:  	switch(buttonPressed){
+  0008 95       [2]             TSX   
+  0009 f6       [3]             LDA   ,X
+  000a a104     [2]             CMP   #4
+  000c 223a     [3]             BHI   L48 ;abs = 0048
+  000e a001     [2]             SUB   #1
+  0010 97       [1]             TAX   
+  0011 4f       [1]             CLRA  
+  0012 cd0000   [6]             JSR   _Jump_Table_Header_Offset
+  0015 04               DC.B  4
+  0016 31               DC.B  L48
+  0017 03               DC.B  L1B
+  0018 0d               DC.B  L26
+  0019 17               DC.B  L31
+  001a 21               DC.B  L3C
+  001b          L1B:    
+   98:          case switch1Value:
+   99:            CommUtil_Print("Switch 1 Pressed",gAllowToBlock_d);
+  001b 450000   [3]             LDHX  @"Switch 1 Pressed"
+  001e ac000071 [8]             CALL  MyTaskButtonPress:113
+  100:            ledsState = 4;
+  0022 a604     [2]             LDA   #4
+  101:            break;
+  0024 201f     [3]             BRA   L45 ;abs = 0045
+  0026          L26:    
+  102:          case switch2Value:
+  103:            CommUtil_Print("Switch 2 Pressed",gAllowToBlock_d);
+  0026 450000   [3]             LDHX  @"Switch 2 Pressed"
+  0029 ac000071 [8]             CALL  MyTaskButtonPress:113
+  104:            ledsState = 1;
+  002d a601     [2]             LDA   #1
+  105:            break;
+  002f 2014     [3]             BRA   L45 ;abs = 0045
+  0031          L31:    
+  106:          case switch3Value:
+  107:            CommUtil_Print("Switch 3 Pressed",gAllowToBlock_d);
+  0031 450000   [3]             LDHX  @"Switch 3 Pressed"
+  0034 ac000071 [8]             CALL  MyTaskButtonPress:113
+  108:            ledsState = 2;
+  0038 a602     [2]             LDA   #2
+  109:            break;
+  003a 2009     [3]             BRA   L45 ;abs = 0045
+  003c          L3C:    
+  110:          case switch4Value:
+  111:            CommUtil_Print("Switch 4 Pressed",gAllowToBlock_d);
+  003c 450000   [3]             LDHX  @"Switch 4 Pressed"
+  003f ac000071 [8]             CALL  MyTaskButtonPress:113
+  112:            ledsState = 3;
+  0043 a603     [2]             LDA   #3
+  0045          L45:    
+  0045 c70000   [4]             STA   ledsState
+  0048          L48:    
+  113:          default:
+  114:            break;
+  115:      }
+  116:  
+  117:  
+  118:  	TMR_StartTimer(myTimerID, 		/* Timer ID allocated in "MyNewTaskInit()", called in MApp_init.c during initialization */
+  0048 c60000   [4]             LDA   myTimerID
+  004b 87       [2]             PSHA  
+  004c a602     [2]             LDA   #2
+  004e 87       [2]             PSHA  
+  004f 450bb8   [3]             LDHX  #3000
+  0052 89       [2]             PSHX  
+  0053 8b       [2]             PSHH  
+  0054 4f       [1]             CLRA  
+  0055 87       [2]             PSHA  
+  0056 87       [2]             PSHA  
+  0057 450000   [3]             LDHX  @myTaskTimerCallback
+  005a 89       [2]             PSHX  
+  005b 8b       [2]             PSHH  
+  005c a600     [2]             LDA   @myTaskTimerCallback:PAGE
+  005e 87       [2]             PSHA  
+  005f ac000000 [8]             CALL  TMR_StartTimer
+  0063 a709     [2]             AIS   #9
+  119:  				       gTmrIntervalTimer_c, /* Type of timer: INTERVAL */
+  120:  				       3000, 				/* Timer's Timeout */
+  121:  				       myTaskTimerCallback 	/* pointer to myTaskTimerCallback function */
+  122:  				       );
+  123:  	TS_SendEvent(myNewTaskID,gMyNewTaskEvent2_c);
+  0065 c60000   [4]             LDA   myNewTaskID
+  0068 ae02     [2]             LDX   #2
+  006a 8c       [1]             CLRH  
+  006b ac000000 [8]             CALL  TS_SendEvent
+  124:  }
+  006f 8a       [3]             PULH  
+  0070 8d       [7]             RTC   
+  0071          L71:    
+  0071 a601     [2]             LDA   #1
+  0073 ac000000 [8]             CALL  CommUtil_Print
+  0077 8d       [7]             RTC   

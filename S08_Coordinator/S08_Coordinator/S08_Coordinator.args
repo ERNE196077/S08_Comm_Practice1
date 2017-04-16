@@ -43,6 +43,7 @@
 "$(ProjDirPath)/S08_Coordinator/MacPhy/Phy/MC1323X/PhyPlmeData_c.obj"
 "$(ProjDirPath)/S08_Coordinator/MacPhy/Phy/MC1323X/PhyTime_c.obj"
 "$(ProjDirPath)/S08_Coordinator/Application/Source/MApp_c.obj"
+"$(ProjDirPath)/S08_Coordinator/Application/Source/MyNewTask_c.obj"
 "$(ProjDirPath)/S08_Coordinator/Application/Init/MApp_init_c.obj"
 "$(ProjDirPath)/S08_Coordinator/Application/Init/MacInit_c.obj"
 "$(ProjDirPath)/S08_Coordinator/Application/Configure/GlobalVars_c.obj"

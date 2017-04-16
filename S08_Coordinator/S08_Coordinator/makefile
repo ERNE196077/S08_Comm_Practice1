@@ -2,7 +2,7 @@
 # Automatically-generated file. Do not edit!
 ################################################################################
 
-#Progress monitor hint: 40
+#Progress monitor hint: 41
 first : all
 -include ../makefile.init
 
@@ -115,16 +115,16 @@ main-build: S08_Coordinator.abs
 endif
 
 # Tool invocations
-S08_Coordinator.abs: $(OBJS) $(USER_OBJS) pre.prm pre-build
+S08_Coordinator.abs: $(OBJS) $(USER_OBJS) pre.prm | pre-build
 	@echo 'Building target: $@'
-	@echo 'Executing target #41 $@'
+	@echo 'Executing target #42 $@'
 	@echo 'Invoking: Linker'
 	"$(HC08ToolsEnv)/linker" -ArgFile"S08_Coordinator.args" -O"S08_Coordinator.abs"
 	@echo 'Finished building target: $@'
 	@echo ' '
 
-S08_Coordinator.abs.s19: $(BBL_SRCS) $(EXECUTABLES) pre-build
-	@echo 'Executing target #42 $@'
+S08_Coordinator.abs.s19: $(BBL_SRCS) $(EXECUTABLES) | pre-build
+	@echo 'Executing target #43 $@'
 	@echo 'Invoking: Burner'
 	"$(HC08ToolsEnv)/burner" -ArgFile"S08_Coordinator.abs.args" -f="$<" -env"ABS_FILE=$(strip $(EXECUTABLES_OS_FORMAT))"
 	@echo 'Finished building: $@'

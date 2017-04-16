@@ -6,6 +6,7 @@
  */
 
 #include "MyNewTask.h"
+#include "CommUtil.h"      /* Defines the interface of the demo serial terminal interface. */
 
 /* Global Variable to store our TimerID */
 tmrTimerID_t myTimerID;
@@ -90,3 +91,34 @@ void MyTaskTimer_Stop(void)
 	TS_SendEvent(myNewTaskID, gMyNewTaskEvent3_c);
 }
 
+void MyTaskButtonPress(uint8_t buttonPressed){
+	TMR_StopTimer(myTimerID);
+	
+	switch(buttonPressed){
+        case switch1Value:
+          CommUtil_Print("Switch 1 Pressed",gAllowToBlock_d);
+          ledsState = 4;
+          break;
+        case switch2Value:
+          CommUtil_Print("Switch 2 Pressed",gAllowToBlock_d);
+          ledsState = 1;
+          break;
+        case switch3Value:
+          CommUtil_Print("Switch 3 Pressed",gAllowToBlock_d);
+          ledsState = 2;
+          break;
+        case switch4Value:
+          CommUtil_Print("Switch 4 Pressed",gAllowToBlock_d);
+          ledsState = 3;
+        default:
+          break;
+    }
+
+
+	TMR_StartTimer(myTimerID, 		/* Timer ID allocated in "MyNewTaskInit()", called in MApp_init.c during initialization */
+				       gTmrIntervalTimer_c, /* Type of timer: INTERVAL */
+				       3000, 				/* Timer's Timeout */
+				       myTaskTimerCallback 	/* pointer to myTaskTimerCallback function */
+				       );
+	TS_SendEvent(myNewTaskID,gMyNewTaskEvent2_c);
+}

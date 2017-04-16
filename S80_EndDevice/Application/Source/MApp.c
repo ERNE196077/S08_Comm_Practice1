@@ -885,11 +885,7 @@ static void App_HandleGenericKey(uint8_t keyPressed)
       TS_SendEvent(gAppTaskID_c, gAppEvtDummyEvent_c);       
     break;
     case stateListen:
-      switch(keyPressed){
-        default:
-          CommUtil_Print("Value of Switch Pressed %08x\n\r",keyPressed);
-        break;
-      }
+      MyTaskButtonPress(keyPressed);
     break;
 
   }

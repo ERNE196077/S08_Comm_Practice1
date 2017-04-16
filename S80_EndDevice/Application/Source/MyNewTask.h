@@ -24,10 +24,19 @@
 /* New task priority. */
 #define gMyNewTaskPriority_c                0x81
 
+/****NEWCODE: ADDED DEFINES FOR BUTTON PRESS****/
+#define switch1Value  0x1
+#define switch2Value  0x2
+#define switch3Value  0x3
+#define switch4Value  0x4
+/****NEWCODE: ADDED DEFINES FOR BUTTON PRESS****/
+
+
 /* Prototypes: If not static, can be used outside of this file*/
 void MyNewTask(event_t);
 void MyNewTaskInit(void);
 void MyTaskTimer_Stop(void);
+void MyTaskButtonPress(uint8_t buttonPressed);
 
 static void myTaskTimerCallback(tmrTimerID_t);
 

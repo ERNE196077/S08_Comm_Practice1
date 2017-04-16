@@ -35,9 +35,9 @@ OBJS_OS_FORMAT += \
 
 
 # Each subdirectory must supply rules for building sources it contributes
-Application/Init/MApp_init_c.obj: ../Application/Init/MApp_init.c pre-build
+Application/Init/MApp_init_c.obj: ../Application/Init/MApp_init.c | pre-build
 	@echo 'Building file: $<'
-	@echo 'Executing target #38 $<'
+	@echo 'Executing target #39 $<'
 	@echo 'Invoking: HCS08 Compiler'
 	"$(HC08ToolsEnv)/chc08" -ArgFile"Application/Init/MApp_init.args" -ObjN="Application/Init/MApp_init_c.obj" "$<" -Lm="$(@:%.obj=%.d)" -LmCfg=xilmou
 	@echo 'Finished building: $<'
@@ -48,9 +48,9 @@ Application/Init/%.d: ../Application/Init/%.c
 	
 	@echo ' '
 
-Application/Init/MacInit_c.obj: ../Application/Init/MacInit.c pre-build
+Application/Init/MacInit_c.obj: ../Application/Init/MacInit.c | pre-build
 	@echo 'Building file: $<'
-	@echo 'Executing target #39 $<'
+	@echo 'Executing target #40 $<'
 	@echo 'Invoking: HCS08 Compiler'
 	"$(HC08ToolsEnv)/chc08" -ArgFile"Application/Init/MacInit.args" -ObjN="Application/Init/MacInit_c.obj" "$<" -Lm="$(@:%.obj=%.d)" -LmCfg=xilmou
 	@echo 'Finished building: $<'

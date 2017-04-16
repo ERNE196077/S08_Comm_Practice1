@@ -28,7 +28,7 @@ OBJS_OS_FORMAT += \
 
 
 # Each subdirectory must supply rules for building sources it contributes
-PLM/Source/Accelerometer/Accelerometer_c.obj: ../PLM/Source/Accelerometer/Accelerometer.c pre-build
+PLM/Source/Accelerometer/Accelerometer_c.obj: ../PLM/Source/Accelerometer/Accelerometer.c | pre-build
 	@echo 'Building file: $<'
 	@echo 'Executing target #32 $<'
 	@echo 'Invoking: HCS08 Compiler'
