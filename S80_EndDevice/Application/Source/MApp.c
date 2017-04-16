@@ -885,10 +885,14 @@ static void App_HandleGenericKey(uint8_t keyPressed)
       TS_SendEvent(gAppTaskID_c, gAppEvtDummyEvent_c);       
     break;
     case stateListen:
+    /****NEWCODE: PRESS BUTTON HANDLER - Declared on MyNewTask ****/
       MyTaskButtonPress(keyPressed);
+    /****NEWCODE: PRESS BUTTON HANDLER - Declared on MyNewTask ****/
+
     break;
 
   }
+  /****NEWCODE: ADDED SWITCH****/
 }
 
 /*****************************************************************************
