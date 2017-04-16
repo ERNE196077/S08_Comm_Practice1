@@ -13,6 +13,7 @@
 #include "MApp.h"
 #include "Sound.h"
 #include "NVM_Interface.h"
+#include "MyNewTask.h"
 
 /************************************************************************************
 *************************************************************************************
@@ -315,6 +316,11 @@ void AppTask(event_t events)
 	          LCD_WriteString(2,"and receive data");    
 	          /* Startup the timer */
 	          TMR_StartSingleShotTimer(mTimer_c, mPollInterval, AppPollWaitTimeout);
+
+            /****NEWCODE: INIT 3 SEC TIMER****/
+            MyNewTaskInit();
+            /****NEWCODE: INIT 3 SEC TIMER****/
+            
 	          /* Go to the listen state */
 	          gState = stateListen;
 	          TS_SendEvent(gAppTaskID_c, gAppEvtDummyEvent_c); 
@@ -857,22 +863,35 @@ static void    AppPollWaitTimeout(uint8_t tmr)
 /*****************************************************************************
 * Function to handle a generic key press. Called for all keys.
 *****************************************************************************/
-static void App_HandleGenericKey(void)
+/****NEWCODE: MODIFIED FUNC, ADDED PARAMETER keyPressed ****/
+static void App_HandleGenericKey(uint8_t keyPressed)
 {
-  if(gState == stateInit)
+
+  /****NEWCODE: ADDED SWITCH****/
+  switch(gState)
   {
-    StopLed1Flashing();
-    StopLed2Flashing();
-    StopLed3Flashing();
-    StopLed4Flashing();
-    Led1Off();
-    Led2Off();
-    Led3Off();
-    Led4Off();
-    LCD_ClearDisplay();
-    LCD_WriteString(1,"Application");
-    LCD_WriteString(2,"    started");     
-    TS_SendEvent(gAppTaskID_c, gAppEvtDummyEvent_c);       
+    case stateInit:
+      StopLed1Flashing();
+      StopLed2Flashing();
+      StopLed3Flashing();
+      StopLed4Flashing();
+      Led1Off();
+      Led2Off();
+      Led3Off();
+      Led4Off();
+      LCD_ClearDisplay();
+      LCD_WriteString(1,"Application");
+      LCD_WriteString(2,"    started");     
+      TS_SendEvent(gAppTaskID_c, gAppEvtDummyEvent_c);       
+    break;
+    case stateListen:
+      switch(keyPressed){
+        default:
+          CommUtil_Print("Value of Switch Pressed %08x\n\r",keyPressed);
+        break;
+      }
+    break;
+
   }
 }
 
@@ -886,7 +905,7 @@ static void App_HandleKeys(uint8_t events, uint8_t pressedKey)
 {
  (void)events;
  (void)pressedKey;
- App_HandleGenericKey();
+ App_HandleGenericKey(pressedKey);
 }
 #else
 static void App_HandleKeys(key_event_t events)
@@ -901,7 +920,7 @@ static void App_HandleKeys(key_event_t events)
       case gKBD_EventLongSW2_c:
       case gKBD_EventLongSW3_c:
       case gKBD_EventLongSW4_c:
-        App_HandleGenericKey();
+        App_HandleGenericKey(pressedKey);
 	    break;	
     }    
 }
