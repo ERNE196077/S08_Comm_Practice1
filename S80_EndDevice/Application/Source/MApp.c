@@ -76,6 +76,7 @@ static uint8_t mAddrMode;
 /* Data request packet for sending serial terminal interface input to the coordinator */
 static nwkToMcpsMessage_t *mpPacket;
 
+
 /* The MSDU handle is a unique data packet identifier */
 static uint8_t mMsduHandle;
 
