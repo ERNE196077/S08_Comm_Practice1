@@ -7,16 +7,18 @@
 
 #include "MyNewTask.h"
 #include "CommUtil.h"      /* Defines the interface of the demo serial terminal interface. */
-#include "802_15_4.h"
+#include "FunctionLib.h"
 
 
 /* Global Variable to store our TimerID */
 tmrTimerID_t myTimerID;
 tsTaskID_t myNewTaskID;
-
-/* NEWCODE: Pointer to Package Button State */
-static nwkToMcpsMessage_t *mpBtnPacket;
-/* NEWCODE: Pointer to Package Button State */
+char *strCounter1 = "Counter:1";
+char *strCounter2 = "Counter:2";
+char *strCounter3 = "Counter:3";
+char *strCounter4 = "Counter:4";
+char *tmpString;
+		
 
 /* Local variable to store the current state of the LEDs */
 static uint8_t ledsState;
@@ -38,25 +40,29 @@ void MyNewTask(event_t events)
 		TurnOffLeds();	/* Ensure all LEDs are turned off */
 		break;
 	case gMyNewTaskEvent2_c:	/* Event called from myTaskTimerCallback */
-		
 		/****NEWCODE: CHANGE LED STATE****/
 		ledsState = ++ledsState > 4 ? 1 : ledsState;
 		TurnOffLeds();
 		switch(ledsState){
 			case 1:
 				Led1On();
+				tmpString = strCounter1;
 			break;
 			case 2:
 				Led2On();
+				tmpString = strCounter2;
 			break;
 			case 3:
 				Led3On();
+				tmpString = strCounter3;
 			break;
 			case 4:
 				Led4On();
+				tmpString = strCounter4;
 			break;
 				
 		}
+		genericDataTransfer(tmpString, 9);
 		/****NEWCODE: CHANGE LED STATE****/
 		
 		break;
@@ -129,51 +135,3 @@ void MyTaskButtonPress(uint8_t buttonPressed){
 	TS_SendEvent(myNewTaskID,gMyNewTaskEvent2_c);
 }
 
-/* NEWCODE: Added function to send package over the air with the active button number */
-
-static uint8_t myTaskBtnStaSend(uint8_t btnStat){
-  char *mpMsgPDU  = "Counter: ";
-  FLib_MemCpy((uint8_t*) mpMsgPDU + 8, &btnStat, 1);
-
-  if( (mcPendingPackets < mDefaultValueOfMaxPendingDataPackets_c) && (mpBtnPacket == NULL) ) 
-  {
-    /* If the maximum number of pending data buffes is below maximum limit 
-       and we do not have a data buffer already then allocate one. */
-    mpBtnPacket = MSG_Alloc(gMaxRxTxDataLength_c);
-  }
-
-  if(mpBtnPacket != NULL)
-  {
-    /* get data from serial terminal interface */        
-      mpBtnPacket->msgData.dataReq.pMsdu = (uint8_t*)(&(mpBtnPacket->msgData.dataReq.pMsdu)) + sizeof(uint8_t*);
-      FLib_MemCpy(mpBtnPacket->msgData.dataReq.pMsdu, (uint8_t*) mpMsgPDU, 9);
-      /* Data was available in the serial terminal interface receive buffer. Now create an
-         MCPS-Data Request message containing the serial terminal interface data. */
-      mpBtnPacket->msgType = gMcpsDataReq_c;
-      /* Create the header using coordinator information gained during 
-         the scan procedure. Also use the short address we were assigned
-         by the coordinator during association. */
-      FLib_MemCpy(mpBtnPacket->msgData.dataReq.dstAddr, mCoordInfo.coordAddress, 8);
-      FLib_MemCpy(mpBtnPacket->msgData.dataReq.srcAddr, maMyAddress, 8);
-      FLib_MemCpy(mpBtnPacket->msgData.dataReq.dstPanId, mCoordInfo.coordPanId, 2);
-      FLib_MemCpy(mpBtnPacket->msgData.dataReq.srcPanId, mCoordInfo.coordPanId, 2);
-      mpBtnPacket->msgData.dataReq.dstAddrMode = mCoordInfo.coordAddrMode;
-      mpBtnPacket->msgData.dataReq.srcAddrMode = mAddrMode;
-      mpBtnPacket->msgData.dataReq.msduLength = 9;
-      /* Request MAC level acknowledgement of the data packet */
-      mpBtnPacket->msgData.dataReq.txOptions = gTxOptsAck_c;
-      /* Give the data packet a handle. The handle is
-         returned in the MCPS-Data Confirm message. */
-      mpBtnPacket->msgData.dataReq.msduHandle = mMsduHandle++;
-	#ifdef gMAC2006_d
-	      mpBtnPacket->msgData.dataReq.securityLevel = 0;
-	#endif //gMAC2006_d      
-      
-      /* Send the Data Request to the MCPS */
-      (void)MSG_Send(NWK_MCPS, mpBtnPacket);
-      /* Prepare for another data buffer */
-      mpBtnPacket = NULL;
-	}
-}
-
-/* NEWCODE: Added function to send package over the air with the active button number */

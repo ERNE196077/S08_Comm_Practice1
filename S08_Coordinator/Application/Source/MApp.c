@@ -706,6 +706,7 @@ static uint8_t App_HandleMlmeInput(nwkMessage_t *pMsg)
 ******************************************************************************/
 static void App_HandleMcpsInput(mcpsToNwkMessage_t *pMsgIn)
 {
+	uint8_t *btnValue;
   switch(pMsgIn->msgType)
   {
     /* The MCPS-Data confirm is sent by the MAC to the network 
@@ -719,7 +720,45 @@ static void App_HandleMcpsInput(mcpsToNwkMessage_t *pMsgIn)
     /* The MCPS-Data indication is sent by the MAC to the network 
        or application layer when data has been received. We simply 
        copy the received data to the serial terminal interface. */
-    CommUtil_Tx(pMsgIn->msgData.dataInd.pMsdu, pMsgIn->msgData.dataInd.msduLength);
+
+
+
+  /* NEWCODE: Check for Button Data */
+    if(FLib_MemCmp(pMsgIn->msgData.dataInd.pMsdu,"Counter:",8)){
+    	btnValue = (uint8_t *)pMsgIn->msgData.dataInd.pMsdu;
+    	btnValue += 8;
+      TurnOffLeds();
+      switch(*btnValue){
+        case '1':
+         Led1On();
+        break;
+        case '2':
+         Led2On();
+        break;
+        case '3':
+         Led3On();
+        break;
+        case '4':
+         Led4On();
+        break;
+      }
+
+      CommUtil_Print("Source Addres : 0x", gAllowToBlock_d);
+      CommUtil_PrintHex((uint8_t *)pMsgIn->msgData.dataInd.srcAddr, 2, 0);
+      CommUtil_Print("\r\n", gAllowToBlock_d);
+      CommUtil_Print("Link Quality : 0x", gAllowToBlock_d);
+      CommUtil_PrintHex((uint8_t *)pMsgIn->msgData.dataInd.mpduLinkQuality, 1, 0);          
+      CommUtil_Print("\r\n", gAllowToBlock_d);
+      CommUtil_Print("Data : ", gAllowToBlock_d);
+      CommUtil_Tx(pMsgIn->msgData.dataInd.pMsdu, pMsgIn->msgData.dataInd.msduLength);
+      CommUtil_Print("\r\n", gAllowToBlock_d);
+
+      msduLength
+
+    }else{
+      CommUtil_Tx(pMsgIn->msgData.dataInd.pMsdu, pMsgIn->msgData.dataInd.msduLength);
+    }
+    /* NEWCODE: Check for Button Data */
     break;
   }
 }

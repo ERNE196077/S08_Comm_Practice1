@@ -88,6 +88,7 @@ enum {
 ******************************************************************************/
 extern void MApp_init(void);
 extern tsTaskID_t gAppTaskID_c;
+void genericDataTransfer(uint8_t *ptrPDU, uint8_t lengthPDU);
 
 /**********************************************************************************/
 

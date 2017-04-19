@@ -39,6 +39,7 @@ void MyTaskTimer_Stop(void);
 void MyTaskButtonPress(uint8_t buttonPressed);
 
 static void myTaskTimerCallback(tmrTimerID_t);
+extern void genericDataTransfer(uint8_t *ptrPDU, uint8_t lengthPDU);
 
 
 #endif /* MYNEWTASK_H_ */

@@ -76,6 +76,9 @@ static uint8_t mAddrMode;
 /* Data request packet for sending serial terminal interface input to the coordinator */
 static nwkToMcpsMessage_t *mpPacket;
 
+/* NEWCODE: Pointer to Package Button State */
+static nwkToMcpsMessage_t *mpBtnPacket;
+/* NEWCODE: Pointer to Package Button State */
 
 /* The MSDU handle is a unique data packet identifier */
 static uint8_t mMsduHandle;
@@ -967,3 +970,52 @@ uint8_t ASP_APP_SapHandler(aspToAppMsg_t *pMsg)
 }
 
 /******************************************************************************/
+
+
+
+/* NEWCODE: Added function to send package over the air with the active button number */
+
+void genericDataTransfer(uint8_t *ptrPDU, uint8_t lengthPDU){
+
+  if( (mcPendingPackets < mDefaultValueOfMaxPendingDataPackets_c) && (mpBtnPacket == NULL) ) 
+  {
+    /* If the maximum number of pending data buffes is below maximum limit 
+       and we do not have a data buffer already then allocate one. */
+    mpBtnPacket = MSG_Alloc(gMaxRxTxDataLength_c);
+  }
+
+  if(mpBtnPacket != NULL)
+  {
+    /* get data from serial terminal interface */        
+      mpBtnPacket->msgData.dataReq.pMsdu = (uint8_t*)(&(mpBtnPacket->msgData.dataReq.pMsdu)) + sizeof(uint8_t*);
+      FLib_MemCpy(mpBtnPacket->msgData.dataReq.pMsdu, (uint8_t*) ptrPDU, 9);
+      /* Data was available in the serial terminal interface receive buffer. Now create an
+         MCPS-Data Request message containing the serial terminal interface data. */
+      mpBtnPacket->msgType = gMcpsDataReq_c;
+      /* Create the header using coordinator information gained during 
+         the scan procedure. Also use the short address we were assigned
+         by the coordinator during association. */
+      FLib_MemCpy(mpBtnPacket->msgData.dataReq.dstAddr, mCoordInfo.coordAddress, 8);
+      FLib_MemCpy(mpBtnPacket->msgData.dataReq.srcAddr, maMyAddress, 8);
+      FLib_MemCpy(mpBtnPacket->msgData.dataReq.dstPanId, mCoordInfo.coordPanId, 2);
+      FLib_MemCpy(mpBtnPacket->msgData.dataReq.srcPanId, mCoordInfo.coordPanId, 2);
+      mpBtnPacket->msgData.dataReq.dstAddrMode = mCoordInfo.coordAddrMode;
+      mpBtnPacket->msgData.dataReq.srcAddrMode = mAddrMode;
+      mpBtnPacket->msgData.dataReq.msduLength = 9;
+      /* Request MAC level acknowledgement of the data packet */
+      mpBtnPacket->msgData.dataReq.txOptions = gTxOptsAck_c;
+      /* Give the data packet a handle. The handle is
+         returned in the MCPS-Data Confirm message. */
+      mpBtnPacket->msgData.dataReq.msduHandle = mMsduHandle++;
+  #ifdef gMAC2006_d
+        mpBtnPacket->msgData.dataReq.securityLevel = 0;
+  #endif //gMAC2006_d      
+      
+      /* Send the Data Request to the MCPS */
+      (void)MSG_Send(NWK_MCPS, mpBtnPacket);
+      /* Prepare for another data buffer */
+      mpBtnPacket = NULL;
+  }
+}
+
+/* NEWCODE: Added function to send package over the air with the active button number */

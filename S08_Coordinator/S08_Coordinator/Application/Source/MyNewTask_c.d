@@ -1,4 +1,5 @@
 
+
 Application/Source/MyNewTask_c.obj: \
 	../Application/Source/MyNewTask.c \
 	C:/Users/ernesto/Documents/Workspace/S08_Coordinator/S08_Coordinator/PLM/Source/Common/Interface/HCS08_Prefix.h \

@@ -1,4 +1,5 @@
 
+
 Application/Source/MyNewTask_c.obj: \
 	../Application/Source/MyNewTask.c \
 	C:/Users/ernesto/Documents/Workspace/S08_Coordinator/S80_EndDevice/PLM/Source/Common/Interface/HCS08_Prefix.h \
@@ -15,5 +16,7 @@ Application/Source/MyNewTask_c.obj: \
 	C:/Users/ernesto/Documents/Workspace/S08_Coordinator/S80_EndDevice/PLM/Interface/PortConfig.h \
 	C:/Users/ernesto/Documents/Workspace/S08_Coordinator/S80_EndDevice/PLM/Interface/TargetMC1323xREM.h \
 	C:/Users/ernesto/Documents/Workspace/S08_Coordinator/S80_EndDevice/SSM/CommUtil/CommUtil.h \
-	C:/Users/ernesto/Documents/Workspace/S08_Coordinator/S80_EndDevice/PLM/Interface/Uart_Interface.h 
+	C:/Users/ernesto/Documents/Workspace/S08_Coordinator/S80_EndDevice/PLM/Interface/Uart_Interface.h \
+	C:/Users/ernesto/Documents/Workspace/S08_Coordinator/S80_EndDevice/PLM/Interface/FunctionLib.h \
+	C:/Users/ernesto/Documents/Workspace/S08_Coordinator/S80_EndDevice/PLM/Interface/PlatformToMacPhyConfig.h 
 
