@@ -75,6 +75,9 @@ static nwkToMcpsMessage_t *mpPacket;
 /* The MSDU handle is a unique data packet identifier */
 static uint8_t mMsduHandle;
 
+
+static uint8_t maDeviceShortAddress[2];
+
 /* Number of pending data packets */
 static uint8_t mcPendingPackets;
 
@@ -604,6 +607,8 @@ static uint8_t App_SendAssociateResponse(nwkMessage_t *pMsgIn)
 {
   mlmeMessage_t *pMsg;
   mlmeAssociateRes_t *pAssocRes;
+  uint16_t i;
+  uint8_t FoundFlag = 0;
  
   CommUtil_Print("Sending the MLME-Associate Response message to the MAC...", gAllowToBlock_d);
  
@@ -624,8 +629,7 @@ static uint8_t App_SendAssociateResponse(nwkMessage_t *pMsgIn)
        be assigned to it. */
 
       /* Check if ED requester was already registered */
-      uint8_t i;
-      uint8_t FoundFlag = 0;
+
       for (i = 0; i < AssocDevCounter; ++i)
       {
         /* If ED was already registered associate the same address and set the flag */
@@ -665,7 +669,7 @@ static uint8_t App_SendAssociateResponse(nwkMessage_t *pMsgIn)
         FLib_MemCpy(AssociatedDevices[AssocDevCounter].ShortAddress, pAssocRes->assocShortAddress, 2);
         FLib_MemCpy(AssociatedDevices[AssocDevCounter].ExtendedAddress, pAssocRes->deviceAddress, 8);
         AssociatedDevices[AssocDevCounter].RxOnWhenIdle = pMsgIn->msgData.associateInd.capabilityInfo & gCapInfoRxWhenIdle_c ? 0x1 : 0x0;
-        AssociatedDevices[AssocDevCounter].DeviceType; = pMsgIn->msgData.associateInd.capabilityInfo & gCapInfoDeviceFfd_c ? 0x1 : 0x0;
+        AssociatedDevices[AssocDevCounter].DeviceType = pMsgIn->msgData.associateInd.capabilityInfo & gCapInfoDeviceFfd_c ? 0x1 : 0x0;
         /* Association granted. May also be gPanAtCapacity_c or gPanAccessDenied_c. */
 
       }
@@ -692,16 +696,16 @@ static uint8_t App_SendAssociateResponse(nwkMessage_t *pMsgIn)
           i = AssocDevCounter;
         }
         CommUtil_PrintHex((uint8_t *)AssociatedDevices[i].ShortAddress, 2, 0);
-        CommUtil_Print("\n\nLong Address: 0x", gAllowToBlock_d);
+        CommUtil_Print("\n\rLong Address: 0x", gAllowToBlock_d);
         CommUtil_PrintHex((uint8_t *)AssociatedDevices[i].ExtendedAddress, 8, 0);
         if(AssociatedDevices[i].RxOnWhenIdle)
-          CommUtil_Print("\n\nRX On When Idle: Yes", gAllowToBlock_d);
+          CommUtil_Print("\n\rRX On When Idle: Yes", gAllowToBlock_d);
         else
-          CommUtil_Print("\n\nRX On When Idle: No", gAllowToBlock_d);
+          CommUtil_Print("\n\rRX On When Idle: No", gAllowToBlock_d);
         if(AssociatedDevices[i].DeviceType)
-          CommUtil_Print("\n\nDevice Type: FFD", gAllowToBlock_d);
+          CommUtil_Print("\n\rDevice Type: FFD", gAllowToBlock_d);
         else
-          CommUtil_Print("\n\nDevice Type: RFD", gAllowToBlock_d);
+          CommUtil_Print("\n\rDevice Type: RFD", gAllowToBlock_d);
         CommUtil_Print("\n\r\n\r************************************\n\r", gAllowToBlock_d);
         
         /* "SAVE" the new device by incrementing the counter */
@@ -806,8 +810,6 @@ static void App_HandleMcpsInput(mcpsToNwkMessage_t *pMsgIn)
       CommUtil_Print("Data : ", gAllowToBlock_d);
       CommUtil_Tx(pMsgIn->msgData.dataInd.pMsdu, pMsgIn->msgData.dataInd.msduLength);
       CommUtil_Print("\r\n", gAllowToBlock_d);
-
-      msduLength
 
     }else{
       CommUtil_Tx(pMsgIn->msgData.dataInd.pMsdu, pMsgIn->msgData.dataInd.msduLength);
