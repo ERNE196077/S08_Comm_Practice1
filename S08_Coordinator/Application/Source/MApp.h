@@ -78,6 +78,12 @@ enum {
   errorNoScanResults
 };
 
+typedef struct _EndDevListItem_t_{
+  uint8_t ShortAddress[2];
+  uint8_t ExtendedAddress[8];
+  uint8_t RxOnWhenIdle;       /* 0x1 == On When Idle  ::: 0x0 == Not On When Idle */
+  uint8_t DeviceType;         /* 0x1 == FFD  ::: 0x0 == RFD */
+}EndDevListItem_t;
 /******************************************************************************
 *******************************************************************************
 * Public Prototypes

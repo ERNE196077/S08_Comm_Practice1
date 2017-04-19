@@ -69,11 +69,6 @@ static const uint8_t maPanId[2] = { (mDefaultValueOfPanId_c & 0xff), (mDefaultVa
 /* The current logical channel (frequency band) */
 static uint8_t mLogicalChannel;
 
-/* These byte arrays stores an associated
-   devices long and short addresses. */
-static uint8_t maDeviceShortAddress[2];
-static uint8_t maDeviceLongAddress[8];
-
 /* Data request packet for sending serial input to the coordinator */
 static nwkToMcpsMessage_t *mpPacket;
 
@@ -86,6 +81,10 @@ static uint8_t mcPendingPackets;
 /* Application input queues */
 static anchor_t mMlmeNwkInputQueue;
 static anchor_t mMcpsNwkInputQueue;
+
+static EndDevListItem_t AssociatedDevices[5];
+static uint16_t AssocDevCounter;
+
 
 /************************************************************************************
 *************************************************************************************
@@ -127,7 +126,9 @@ void MApp_init(void)
   /* The initial application state */
   gState = stateInit;
   /* Reset number of pending packets */
-  mcPendingPackets = 0;    
+  mcPendingPackets = 0;   
+  /* Number of devices associated - Max 5 */
+  AssocDevCounter = 0; 
 
   /* Initialize the MAC 802.15.4 extended address */
   Init_MacExtendedAddress();
@@ -621,46 +622,99 @@ static uint8_t App_SendAssociateResponse(nwkMessage_t *pMsgIn)
        different short addresses. However, if a device do not want to use 
        short addresses at all in the PAN, a short address of 0xFFFE must
        be assigned to it. */
-    if(pMsgIn->msgData.associateInd.capabilityInfo & gCapInfoAllocAddr_c)
-    {
-      /* Assign a unique short address less than 0xfffe if the device requests so. */
-      pAssocRes->assocShortAddress[0] = 0x01;
-      pAssocRes->assocShortAddress[1] = 0x00;
-    }
-    else
-    {
-      /* A short address of 0xfffe means that the device is granted access to
-         the PAN (Associate successful) but that long addressing is used.*/
-      pAssocRes->assocShortAddress[0] = 0xFE;
-      pAssocRes->assocShortAddress[1] = 0xFF;
-    }
-    /* Get the 64 bit address of the device requesting association. */
-    FLib_MemCpy(pAssocRes->deviceAddress, pMsgIn->msgData.associateInd.deviceAddress, 8);
-    /* Association granted. May also be gPanAtCapacity_c or gPanAccessDenied_c. */
-    pAssocRes->status = gSuccess_c;
-    /* Do not use security */
-#ifndef gMAC2006_d    
-    pAssocRes->securityEnable = FALSE;
-#else
-    pAssocRes->securityLevel = 0;
-#endif //gMAC2006_d    
+
+      /* Check if ED requester was already registered */
+      uint8_t i;
+      uint8_t FoundFlag = 0;
+      for (i = 0; i < AssocDevCounter; ++i)
+      {
+        /* If ED was already registered associate the same address and set the flag */
+        if(FLib_MemCmp(AssociatedDevices[i].ExtendedAddress,pMsgIn->msgData.associateInd.deviceAddress,8)){
+          FoundFlag++;
+          break;
+        }
+      }
+
+      if(FoundFlag){
+        FLib_MemCpy(pAssocRes->assocShortAddress, AssociatedDevices[i].ShortAddress, 2);
+        FLib_MemCpy(pAssocRes->deviceAddress, AssociatedDevices[i].ExtendedAddress, 8);
+
+      }else{
+
+
+        if(pMsgIn->msgData.associateInd.capabilityInfo & gCapInfoAllocAddr_c)
+        {
+          /* Assign a unique short address less than 0xfffe if the device requests so. */
+          uint16_t tmpAddr = AssocDevCounter + 1;
+          FLib_MemCpy(pAssocRes->assocShortAddress, &tmpAddr, 2);
+        }
+        else
+        {
+          /* A short address of 0xfffe means that the device is granted access to
+             the PAN (Associate successful) but that long addressing is used.*/
+          pAssocRes->assocShortAddress[0] = 0xFE;
+          pAssocRes->assocShortAddress[1] = 0xFF;
+
+        }
+
+
+        /* Get the 64 bit address of the device requesting association. */
+        FLib_MemCpy(pAssocRes->deviceAddress, pMsgIn->msgData.associateInd.deviceAddress, 8);
+
+        /* Save Short and Extended address inside the local array */
+        FLib_MemCpy(AssociatedDevices[AssocDevCounter].ShortAddress, pAssocRes->assocShortAddress, 2);
+        FLib_MemCpy(AssociatedDevices[AssocDevCounter].ExtendedAddress, pAssocRes->deviceAddress, 8);
+        AssociatedDevices[AssocDevCounter].RxOnWhenIdle = pMsgIn->msgData.associateInd.capabilityInfo & gCapInfoRxWhenIdle_c ? 0x1 : 0x0;
+        AssociatedDevices[AssocDevCounter].DeviceType; = pMsgIn->msgData.associateInd.capabilityInfo & gCapInfoDeviceFfd_c ? 0x1 : 0x0;
+        /* Association granted. May also be gPanAtCapacity_c or gPanAccessDenied_c. */
+
+      }
+
+      pAssocRes->status = gSuccess_c;
+      /* Do not use security */
+      #ifndef gMAC2006_d    
+          pAssocRes->securityEnable = FALSE;
+      #else
+          pAssocRes->securityLevel = 0;
+      #endif //gMAC2006_d    
+          
+      
+      /* Send the Associate Response to the MLME. */
+      if(MSG_Send(NWK_MLME, pMsg) == gSuccess_c)
+      {
+        CommUtil_Print("Done\n\r", gAllowToBlock_d);
+        
+        /* Print association information */
+        if(FoundFlag)
+          CommUtil_Print("\n\r************************************\n\r\n\rWelcome back old friend\n\rShort Address: 0x", gAllowToBlock_d);
+        else{
+          CommUtil_Print("\n\r************************************\n\r\n\rI see you are new, welcome!\n\rShort Address: 0x", gAllowToBlock_d);
+          i = AssocDevCounter;
+        }
+        CommUtil_PrintHex((uint8_t *)AssociatedDevices[i].ShortAddress, 2, 0);
+        CommUtil_Print("\n\nLong Address: 0x", gAllowToBlock_d);
+        CommUtil_PrintHex((uint8_t *)AssociatedDevices[i].ExtendedAddress, 8, 0);
+        if(AssociatedDevices[i].RxOnWhenIdle)
+          CommUtil_Print("\n\nRX On When Idle: Yes", gAllowToBlock_d);
+        else
+          CommUtil_Print("\n\nRX On When Idle: No", gAllowToBlock_d);
+        if(AssociatedDevices[i].DeviceType)
+          CommUtil_Print("\n\nDevice Type: FFD", gAllowToBlock_d);
+        else
+          CommUtil_Print("\n\nDevice Type: RFD", gAllowToBlock_d);
+        CommUtil_Print("\n\r\n\r************************************\n\r", gAllowToBlock_d);
+        
+        /* "SAVE" the new device by incrementing the counter */
+        AssocDevCounter++;
+        return errorNoError;
+      }
+      else
+      {
+        /* One or more parameters in the message were invalid. */
+        CommUtil_Print("Invalid parameter!\n\r", gAllowToBlock_d);
+        return errorInvalidParameter;
+      }
     
-    /* Save device info. */
-    FLib_MemCpy(maDeviceShortAddress, pAssocRes->assocShortAddress, 2);
-    FLib_MemCpy(maDeviceLongAddress,  pAssocRes->deviceAddress,     8);
-    
-    /* Send the Associate Response to the MLME. */
-    if(MSG_Send(NWK_MLME, pMsg) == gSuccess_c)
-    {
-      CommUtil_Print("Done\n\r", gAllowToBlock_d);
-      return errorNoError;
-    }
-    else
-    {
-      /* One or more parameters in the message were invalid. */
-      CommUtil_Print("Invalid parameter!\n\r", gAllowToBlock_d);
-      return errorInvalidParameter;
-    }
   }
   else
   {
