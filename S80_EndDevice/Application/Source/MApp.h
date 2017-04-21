@@ -81,6 +81,11 @@ enum {
   errorNoScanResults
 };
 
+typedef struct _CfgEndDev_t_
+{
+  uint8_t Capabilities;
+}CfgEndDev_t;
+
 /******************************************************************************
 *******************************************************************************
 * Public Prototypes

@@ -1,5 +1,4 @@
 
-
 PLM/Source/Display/Display_MC1323x_RCM_c.obj: \
 	../PLM/Source/Display/Display_MC1323x_RCM.c \
 	C:/Users/ernesto/Documents/Workspace/S08_Coordinator/S08_Coordinator/PLM/Source/Common/Interface/HCS08_Prefix.h \

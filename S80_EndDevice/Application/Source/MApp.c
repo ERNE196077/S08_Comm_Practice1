@@ -99,6 +99,9 @@ static anchor_t mMcpsNwkInputQueue;
 
 static tmrTimerID_t mTimer_c = gTmrInvalidTimerID_c;
 
+CfgEndDev_t EndDeviceConfig = {
+  gCapInfoAllocAddr_c  | gCapInfoRxWhenIdle_c | gCapInfoDeviceFfd_c   /* Uncomment last 2 parameters to create FFD Device  */
+};
 /************************************************************************************
 *************************************************************************************
 * Public memory declarations
@@ -578,7 +581,7 @@ static uint8_t App_SendAssociateRequest(void)
     pAssocReq->securityLevel = 0;
 #endif //gMAC2006_d    
     /* We want the coordinator to assign a short address to us. */
-    pAssocReq->capabilityInfo     = gCapInfoAllocAddr_c;
+    pAssocReq->capabilityInfo = EndDeviceConfig.Capabilities;//gCapInfoAllocAddr_c;
       
     /* Send the Associate Request to the MLME. */
     if(MSG_Send(NWK_MLME, pMsg) == gSuccess_c)
@@ -694,6 +697,7 @@ static void App_HandleMcpsInput(mcpsToNwkMessage_t *pMsgIn)
   case gMcpsDataInd_c:
     /* Copy the received data to the serial terminal interface. */
     CommUtil_Tx(pMsgIn->msgData.dataInd.pMsdu, pMsgIn->msgData.dataInd.msduLength);
+    CommUtil_Print("\n\r", gAllowToBlock_d);
     /* Since we received data, the coordinator might have more to send. We 
        reduce the polling interval to raise the throughput while data is
        available. */

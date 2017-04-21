@@ -1,5 +1,4 @@
 
-
 SSM/CommUtil/CommUtil_c.obj: \
 	../SSM/CommUtil/CommUtil.c \
 	C:/Users/ernesto/Documents/Workspace/S08_Coordinator/S08_Coordinator/PLM/Source/Common/Interface/HCS08_Prefix.h \

@@ -1,5 +1,4 @@
 
-
 SSM/ZTC/Source/ZtcMsgTypeInfo_c.obj: \
 	../SSM/ZTC/Source/ZtcMsgTypeInfo.c \
 	C:/Users/ernesto/Documents/Workspace/S08_Coordinator/S08_Coordinator/PLM/Source/Common/Interface/HCS08_Prefix.h \

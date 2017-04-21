@@ -1,5 +1,4 @@
 
-
 PLM/Source/TempSensor/LM61B_c.obj: \
 	../PLM/Source/TempSensor/LM61B.c \
 	C:/Users/ernesto/Documents/Workspace/S08_Coordinator/S08_Coordinator/PLM/Source/Common/Interface/HCS08_Prefix.h \

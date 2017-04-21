@@ -101,67 +101,70 @@ ANSI-C/cC++ Compiler for HC08 V-5.0.45 Build 14019, Jan 20 2014
    99:  
   100:  static tmrTimerID_t mTimer_c = gTmrInvalidTimerID_c;
   101:  
-  102:  /************************************************************************************
-  103:  *************************************************************************************
-  104:  * Public memory declarations
-  105:  *************************************************************************************
-  106:  ************************************************************************************/
-  107:  
-  108:  /* The current state of the applications state machine */
-  109:  uint8_t gState;
+  102:  CfgEndDev_t EndDeviceConfig = {
+  103:    gCapInfoAllocAddr_c  | gCapInfoRxWhenIdle_c | gCapInfoDeviceFfd_c   /* Uncomment last 2 parameters to create FFD Device  */
+  104:  };
+  105:  /************************************************************************************
+  106:  *************************************************************************************
+  107:  * Public memory declarations
+  108:  *************************************************************************************
+  109:  ************************************************************************************/
   110:  
-  111:  /* This data set contains application variables to be preserved across resets */
-  112:  NvDataItemDescription_t const gaNvAppDataSet[] = {
-  113:    {NULL, 0}       /* Required end-of-table marker. */
-  114:  };
-  115:  
-  116:  /************************************************************************************
-  117:  *************************************************************************************
-  118:  * Public functions
-  119:  *************************************************************************************
-  120:  ************************************************************************************/
-  121:  
-  122:  void DeepSleepWakeupStackProc(void);
-  123:  
-  124:  /*****************************************************************************
-  125:  * Initialization function for the App Task. This is called during
-  126:  * initialization and should contain any application specific initialization
-  127:  * (ie. hardware initialization/setup, table initialization, power up
-  128:  * notificaiton.
-  129:  *
-  130:  * Interface assumptions: None
-  131:  *
-  132:  * Return value: None
-  133:  *
-  134:  *****************************************************************************/
-  135:  void MApp_init(void)
-  136:  { 
-  137:    
-  138:    /* The initial application state */
-  139:    gState = stateInit;  
+  111:  /* The current state of the applications state machine */
+  112:  uint8_t gState;
+  113:  
+  114:  /* This data set contains application variables to be preserved across resets */
+  115:  NvDataItemDescription_t const gaNvAppDataSet[] = {
+  116:    {NULL, 0}       /* Required end-of-table marker. */
+  117:  };
+  118:  
+  119:  /************************************************************************************
+  120:  *************************************************************************************
+  121:  * Public functions
+  122:  *************************************************************************************
+  123:  ************************************************************************************/
+  124:  
+  125:  void DeepSleepWakeupStackProc(void);
+  126:  
+  127:  /*****************************************************************************
+  128:  * Initialization function for the App Task. This is called during
+  129:  * initialization and should contain any application specific initialization
+  130:  * (ie. hardware initialization/setup, table initialization, power up
+  131:  * notificaiton.
+  132:  *
+  133:  * Interface assumptions: None
+  134:  *
+  135:  * Return value: None
+  136:  *
+  137:  *****************************************************************************/
+  138:  void MApp_init(void)
+  139:  { 
+  140:    
+  141:    /* The initial application state */
+  142:    gState = stateInit;  
   0000 4f       [1]             CLRA  
   0001 c70000   [4]             STA   gState
-  140:    /* Reset number of pending packets */
-  141:    mcPendingPackets = 0;
+  143:    /* Reset number of pending packets */
+  144:    mcPendingPackets = 0;
   0004 c70000   [4]             STA   mcPendingPackets
-  142:    
-  143:    /* Allow sending a poll request */  
-  144:    mWaitPollConfirm = FALSE;    
-  0007 c70000   [4]             STA   mWaitPollConfirm
   145:    
-  146:    /* Initialize the poll interval */
-  147:    mPollInterval = mDefaultValueOfPollIntervalSlow_c;
+  146:    /* Allow sending a poll request */  
+  147:    mWaitPollConfirm = FALSE;    
+  0007 c70000   [4]             STA   mWaitPollConfirm
+  148:    
+  149:    /* Initialize the poll interval */
+  150:    mPollInterval = mDefaultValueOfPollIntervalSlow_c;
   000a 450334   [3]             LDHX  #820
   000d 960000   [5]             STHX  mPollInterval
-  148:  
-  149:    /* Initialize the MAC 802.15.4 extended address */
-  150:    Init_MacExtendedAddress();
+  151:  
+  152:    /* Initialize the MAC 802.15.4 extended address */
+  153:    Init_MacExtendedAddress();
   0010 ac000000 [8]             CALL  Init_MacExtendedAddress
-  151:    mTimer_c = TMR_AllocateTimer();
+  154:    mTimer_c = TMR_AllocateTimer();
   0014 ac000000 [8]             CALL  TMR_AllocateTimer
   0018 c70000   [4]             STA   mTimer_c
-  152:    /* register keyboard callback function */
-  153:    KBD_Init(App_HandleKeys);
+  155:    /* register keyboard callback function */
+  156:    KBD_Init(App_HandleKeys);
   001b 450000   [3]             LDHX  @App_HandleKeys
   001e 89       [2]             PSHX  
   001f 8b       [2]             PSHH  
@@ -169,23 +172,23 @@ ANSI-C/cC++ Compiler for HC08 V-5.0.45 Build 14019, Jan 20 2014
   0022 87       [2]             PSHA  
   0023 ac000000 [8]             CALL  KBD_Init
   0027 a703     [2]             AIS   #3
-  154:    /* Initialize SPI Module */
-  155:    SPI_Init();
+  157:    /* Initialize SPI Module */
+  158:    SPI_Init();
   0029 ac000000 [8]             CALL  SPI1_Init
-  156:    /* initialize LCD Module */
-  157:    LCD_Init();
-  158:    /* initialize LED Module */
-  159:    LED_Init();
+  159:    /* initialize LCD Module */
+  160:    LCD_Init();
+  161:    /* initialize LED Module */
+  162:    LED_Init();
   002d ac000000 [8]             CALL  LED_Init
-  160:    /* Initialize the LPM module */
-  161:    PWRLib_Init();
+  163:    /* Initialize the LPM module */
+  164:    PWRLib_Init();
   0031 ac000000 [8]             CALL  PWRLib_Init
-  162:    /* Initialize the serial terminal interface so that we can print out status messages */
-  163:    Comm_SetBaud(gUartDefaultBaud_c);
+  165:    /* Initialize the serial terminal interface so that we can print out status messages */
+  166:    Comm_SetBaud(gUartDefaultBaud_c);
   0035 ae08     [2]             LDX   #8
   0037 8c       [1]             CLRH  
   0038 ac000000 [8]             CALL  Uart1_SetBaud
-  164:    Comm_SetRxCallBack(App_CommRxCallBack);
+  167:    Comm_SetRxCallBack(App_CommRxCallBack);
   003c 450000   [3]             LDHX  @App_CommRxCallBack
   003f 89       [2]             PSHX  
   0040 8b       [2]             PSHH  
@@ -193,105 +196,105 @@ ANSI-C/cC++ Compiler for HC08 V-5.0.45 Build 14019, Jan 20 2014
   0043 87       [2]             PSHA  
   0044 ac000000 [8]             CALL  Uart1_SetRxCallBack
   0048 a703     [2]             AIS   #3
-  165:    
-  166:    /* initialize buzzer (NCB, SRB only) */  
-  167:    BuzzerInit();  
-  168:    /* Prepare input queues.*/
-  169:    MSG_InitQueue(&mMlmeNwkInputQueue); 
+  168:    
+  169:    /* initialize buzzer (NCB, SRB only) */  
+  170:    BuzzerInit();  
+  171:    /* Prepare input queues.*/
+  172:    MSG_InitQueue(&mMlmeNwkInputQueue); 
   004a 450000   [3]             LDHX  @mMlmeNwkInputQueue
   004d ac000000 [8]             CALL  List_ClearAnchor
-  170:    MSG_InitQueue(&mMcpsNwkInputQueue);
+  173:    MSG_InitQueue(&mMcpsNwkInputQueue);
   0051 450000   [3]             LDHX  @mMcpsNwkInputQueue
   0054 ac000000 [8]             CALL  List_ClearAnchor
-  171:    /* Enable MCU interrupts */
-  172:    IrqControlLib_EnableAllIrqs();
+  174:    /* Enable MCU interrupts */
+  175:    IrqControlLib_EnableAllIrqs();
   0058 9a       [1]             CLI   
-  173:    /*signal app ready*/  
-  174:    Led1Flashing();
+  176:    /*signal app ready*/  
+  177:    Led1Flashing();
   0059 a601     [2]             LDA   #1
   005b ac000000 [8]             CALL  LED_StartFlash
-  175:    Led2Flashing();
+  178:    Led2Flashing();
   005f a602     [2]             LDA   #2
   0061 ac000000 [8]             CALL  LED_StartFlash
-  176:    Led3Flashing();
+  179:    Led3Flashing();
   0065 a604     [2]             LDA   #4
   0067 ac000000 [8]             CALL  LED_StartFlash
-  177:    Led4Flashing();
+  180:    Led4Flashing();
   006b a608     [2]             LDA   #8
   006d ac000000 [8]             CALL  LED_StartFlash
-  178:      
-  179:    CommUtil_Print("\n\rPress any switch on board to start running the application.\n\r", gAllowToBlock_d);  
+  181:      
+  182:    CommUtil_Print("\n\rPress any switch on board to start running the application.\n\r", gAllowToBlock_d);  
   0071 450000   [3]             LDHX  @"\012\015Press any switch on board to start running the application.\012\015"
   0074 a601     [2]             LDA   #1
   0076 ac000000 [8]             CALL  CommUtil_Print
-  180:    LCD_ClearDisplay();
-  181:    LCD_WriteString(1,"Press any key");
-  182:    LCD_WriteString(2,"to start.");
-  183:  }
+  183:    LCD_ClearDisplay();
+  184:    LCD_WriteString(1,"Press any key");
+  185:    LCD_WriteString(2,"to start.");
+  186:  }
   007a 8d       [7]             RTC   
-  184:  
-  185:  /*****************************************************************************
-  186:  *Mac Application Task event processor.  This function is called to
-  187:  * process all events for the task. Events include timers, messages and any
-  188:  * other user defined events
-  189:  *
-  190:  * Interface assumptions: None
-  191:  *
-  192:  * Return value: None
-  193:  *****************************************************************************/
-  194:  void AppTask(event_t events) 
-  195:  { 
+  187:  
+  188:  /*****************************************************************************
+  189:  *Mac Application Task event processor.  This function is called to
+  190:  * process all events for the task. Events include timers, messages and any
+  191:  * other user defined events
+  192:  *
+  193:  * Interface assumptions: None
+  194:  *
+  195:  * Return value: None
+  196:  *****************************************************************************/
+  197:  void AppTask(event_t events) 
+  198:  { 
   0000 89       [2]             PSHX  
   0001 8b       [2]             PSHH  
   0002 a7fb     [2]             AIS   #-5
-  196:  
-  197:    /* Pointer for storing the messages from MLME, MCPS, and ASP. */
-  198:    void *pMsgIn;
-  199:    /* Stores the status code returned by some functions. */
-  200:    uint8_t rc;  
-  201:    pMsgIn = NULL;
+  199:  
+  200:    /* Pointer for storing the messages from MLME, MCPS, and ASP. */
+  201:    void *pMsgIn;
+  202:    /* Stores the status code returned by some functions. */
+  203:    uint8_t rc;  
+  204:    pMsgIn = NULL;
   0004 9e6f05   [6]             CLR   5,SP
   0007 9e6f04   [6]             CLR   4,SP
-  202:    
-  203:    /* Dequeue the MLME message */
-  204:    if (events & gAppEvtMessageFromMLME_c)
+  205:    
+  206:    /* Dequeue the MLME message */
+  207:    if (events & gAppEvtMessageFromMLME_c)
   000a 9f       [1]             TXA   
   000b a504     [2]             BIT   #4
   000d 2726     [3]             BEQ   L35 ;abs = 0035
-  205:    {
-  206:      /* Get the message from MLME */
-  207:      pMsgIn = MSG_DeQueue(&mMlmeNwkInputQueue);
+  208:    {
+  209:      /* Get the message from MLME */
+  210:      pMsgIn = MSG_DeQueue(&mMlmeNwkInputQueue);
   000f 450000   [3]             LDHX  @mMlmeNwkInputQueue
   0012 ac000000 [8]             CALL  List_RemoveHead
   0016 9eff04   [5]             STHX  4,SP
-  208:      
-  209:      /* Any time a beacon might arrive. Always handle the beacon frame first */
-  210:      if (pMsgIn)
+  211:      
+  212:      /* Any time a beacon might arrive. Always handle the beacon frame first */
+  213:      if (pMsgIn)
   0019 271a     [3]             BEQ   L35 ;abs = 0035
-  211:      {               
-  212:        rc = App_WaitMsg(pMsgIn, gNwkBeaconNotifyInd_c);
+  214:      {               
+  215:        rc = App_WaitMsg(pMsgIn, gNwkBeaconNotifyInd_c);
   001b a604     [2]             LDA   #4
   001d ac000000 [8]             CALL  App_WaitMsg
-  213:        if(rc == errorNoError)
+  216:        if(rc == errorNoError)
   0021 4d       [1]             TSTA  
   0022 2611     [3]             BNE   L35 ;abs = 0035
-  214:        {
-  215:          /* ALWAYS free the beacon frame contained in the beacon notify indication.*/
-  216:          /* ALSO the application can use the beacon payload.*/
-  217:          MSG_Free(((nwkMessage_t *)pMsgIn)->msgData.beaconNotifyInd.pBufferRoot);
+  217:        {
+  218:          /* ALWAYS free the beacon frame contained in the beacon notify indication.*/
+  219:          /* ALSO the application can use the beacon payload.*/
+  220:          MSG_Free(((nwkMessage_t *)pMsgIn)->msgData.beaconNotifyInd.pBufferRoot);
   0024 9efe04   [5]             LDHX  4,SP
   0027 9ece0a   [5]             LDHX  10,X
   002a ac000000 [8]             CALL  MM_Free
-  218:          CommUtil_Print("Received an MLME-Beacon Notify Indication\n\r", gAllowToBlock_d);
+  221:          CommUtil_Print("Received an MLME-Beacon Notify Indication\n\r", gAllowToBlock_d);
   002e 450000   [3]             LDHX  @"Received an MLME-Beacon Notify Indication\012\015"
   0031 ac00022d [8]             CALL  AppTask:557
   0035          L35:    
-  219:        }
-  220:      }
-  221:    }
-  222:    
-  223:    /* The application state machine */
-  224:    switch(gState)
+  222:        }
+  223:      }
+  224:    }
+  225:    
+  226:    /* The application state machine */
+  227:    switch(gState)
   0035 ce0000   [4]             LDX   gState
   0038 a305     [2]             CPX   #5
   003a 2303     [3]             BLS   L3F ;abs = 003f
@@ -308,84 +311,84 @@ ANSI-C/cC++ Compiler for HC08 V-5.0.45 Build 14019, Jan 20 2014
   004f 013c             DC.W  L13C
   0051 01c6             DC.W  L1C6
   0053          L53:    
-  225:    {
-  226:    case stateInit:    
-  227:      /* Print a welcome message to the serial terminal interface */
-  228:      CommUtil_Print("\n\rMyWirelessApp Demo Non Beacon End Device application is initialized and ready.\n\r\n\r", gAllowToBlock_d);            
+  228:    {
+  229:    case stateInit:    
+  230:      /* Print a welcome message to the serial terminal interface */
+  231:      CommUtil_Print("\n\rMyWirelessApp Demo Non Beacon End Device application is initialized and ready.\n\r\n\r", gAllowToBlock_d);            
   0053 450000   [3]             LDHX  @"\012\015MyWirelessApp Demo Non Beacon End Device application is initialized and ready.\012\015\012\015"
-  229:      /* Goto Active Scan state. */
-  230:      gState = stateScanActiveStart;
-  231:      TS_SendEvent(gAppTaskID_c, gAppEvtDummyEvent_c);    
-  232:      break;
+  232:      /* Goto Active Scan state. */
+  233:      gState = stateScanActiveStart;
+  234:      TS_SendEvent(gAppTaskID_c, gAppEvtDummyEvent_c);    
+  235:      break;
   0056 cc01b1   [4]             JMP   L1B1 ;abs = 01b1
   0059          L59:    
-  233:      
-  234:    case stateScanActiveStart:
-  235:      /* Start the Active scan, and goto wait for confirm state. */
-  236:      CommUtil_Print("Start scanning for a PAN coordinator\n\r", gAllowToBlock_d);
+  236:      
+  237:    case stateScanActiveStart:
+  238:      /* Start the Active scan, and goto wait for confirm state. */
+  239:      CommUtil_Print("Start scanning for a PAN coordinator\n\r", gAllowToBlock_d);
   0059 450000   [3]             LDHX  @"Start scanning for a PAN coordinator\012\015"
   005c ac00022d [8]             CALL  AppTask:557
-  237:      /*print a message on the LCD also*/
-  238:      LCD_ClearDisplay();
-  239:      LCD_WriteString(1,"Start scanning");
-  240:      LCD_WriteString(2,"for coordinator");  
-  241:      rc = App_StartScan(gScanModeActive_c);
+  240:      /*print a message on the LCD also*/
+  241:      LCD_ClearDisplay();
+  242:      LCD_WriteString(1,"Start scanning");
+  243:      LCD_WriteString(2,"for coordinator");  
+  244:      rc = App_StartScan(gScanModeActive_c);
   0060 a601     [2]             LDA   #1
   0062 ac000000 [8]             CALL  App_StartScan
-  242:      if(rc == errorNoError)
+  245:      if(rc == errorNoError)
   0066 4d       [1]             TSTA  
   0067 2703     [3]             BEQ   L6C ;abs = 006c
   0069 cc0115   [4]             JMP   L115 ;abs = 0115
   006c          L6C:    
-  243:      {
-  244:        gState = stateScanActiveWaitConfirm;
+  246:      {
+  247:        gState = stateScanActiveWaitConfirm;
   006c a602     [2]             LDA   #2
   006e cc0136   [4]             JMP   L136 ;abs = 0136
   0071          L71:    
-  245:      }
-  246:      break;
-  247:      
-  248:    case stateScanActiveWaitConfirm:
-  249:      /* Stay in this state until the Scan confirm message
-  250:         arrives, and then goto the associate state. */
-  251:      if (events & gAppEvtMessageFromMLME_c)
+  248:      }
+  249:      break;
+  250:      
+  251:    case stateScanActiveWaitConfirm:
+  252:      /* Stay in this state until the Scan confirm message
+  253:         arrives, and then goto the associate state. */
+  254:      if (events & gAppEvtMessageFromMLME_c)
   0071 95       [2]             TSX   
   0072 e606     [3]             LDA   6,X
   0074 a504     [2]             BIT   #4
   0076 2603     [3]             BNE   L7B ;abs = 007b
   0078 cc0115   [4]             JMP   L115 ;abs = 0115
   007b          L7B:    
-  252:      {
-  253:        if (pMsgIn)
+  255:      {
+  256:        if (pMsgIn)
   007b 9efe04   [5]             LDHX  4,SP
   007e 2603     [3]             BNE   L83 ;abs = 0083
   0080 cc0115   [4]             JMP   L115 ;abs = 0115
   0083          L83:    
-  254:        {                     
-  255:          rc = App_WaitMsg(pMsgIn, gNwkScanCnf_c);
+  257:        {                     
+  258:          rc = App_WaitMsg(pMsgIn, gNwkScanCnf_c);
   0083 9eff01   [5]             STHX  1,SP
   0086 a60b     [2]             LDA   #11
   0088 ac000000 [8]             CALL  App_WaitMsg
-  256:          if(rc == errorNoError)
+  259:          if(rc == errorNoError)
   008c 4d       [1]             TSTA  
   008d 2703     [3]             BEQ   L92 ;abs = 0092
   008f cc0115   [4]             JMP   L115 ;abs = 0115
   0092          L92:    
-  257:          {
-  258:            rc = App_HandleScanActiveConfirm(pMsgIn);
+  260:          {
+  261:            rc = App_HandleScanActiveConfirm(pMsgIn);
   0092 9efe01   [5]             LDHX  1,SP
   0095 ac000000 [8]             CALL  App_HandleScanActiveConfirm
-  259:            if(rc == errorNoError)
+  262:            if(rc == errorNoError)
   0099 4d       [1]             TSTA  
   009a 2672     [3]             BNE   L10E ;abs = 010e
-  260:            {
-  261:              CommUtil_Print("Found a coordinator with the following properties:\n\r", gAllowToBlock_d);
+  263:            {
+  264:              CommUtil_Print("Found a coordinator with the following properties:\n\r", gAllowToBlock_d);
   009c 450000   [3]             LDHX  @"Found a coordinator with the following properties:\012\015"
   009f ac00022d [8]             CALL  AppTask:557
-  262:              CommUtil_Print("----------------------------------------------------", gAllowToBlock_d);
+  265:              CommUtil_Print("----------------------------------------------------", gAllowToBlock_d);
   00a3 450000   [3]             LDHX  @"----------------------------------------------------"
   00a6 ac00022d [8]             CALL  AppTask:557
-  263:              CommUtil_Print("\n\rAddress...........0x", gAllowToBlock_d); CommUtil_PrintHex(mCoordInfo.coordAddress, mCoordInfo.coordAddrMode == gAddrModeShort_c ? 2 : 8, 0);
+  266:              CommUtil_Print("\n\rAddress...........0x", gAllowToBlock_d); CommUtil_PrintHex(mCoordInfo.coordAddress, mCoordInfo.coordAddrMode == gAddrModeShort_c ? 2 : 8, 0);
   00aa 450000   [3]             LDHX  @"\012\015Address...........0x"
   00ad ac00022d [8]             CALL  AppTask:557
   00b1 450000   [3]             LDHX  @mCoordInfo
@@ -401,61 +404,61 @@ ANSI-C/cC++ Compiler for HC08 V-5.0.45 Build 14019, Jan 20 2014
   00c3 4f       [1]             CLRA  
   00c4 ac000000 [8]             CALL  CommUtil_PrintHex
   00c8 a702     [2]             AIS   #2
-  264:              CommUtil_Print("\n\rPAN ID............0x", gAllowToBlock_d); CommUtil_PrintHex(mCoordInfo.coordPanId, 2, 0);
+  267:              CommUtil_Print("\n\rPAN ID............0x", gAllowToBlock_d); CommUtil_PrintHex(mCoordInfo.coordPanId, 2, 0);
   00ca 450000   [3]             LDHX  @"\012\015PAN ID............0x"
   00cd ac00022d [8]             CALL  AppTask:557
   00d1 450008   [3]             LDHX  @mCoordInfo:8
   00d4 ac000234 [8]             CALL  AppTask:564
-  265:              CommUtil_Print("\n\rLogical Channel...0x", gAllowToBlock_d); CommUtil_PrintHex(&mCoordInfo.logicalChannel, 1, 0);
+  268:              CommUtil_Print("\n\rLogical Channel...0x", gAllowToBlock_d); CommUtil_PrintHex(&mCoordInfo.logicalChannel, 1, 0);
   00d8 450000   [3]             LDHX  @"\012\015Logical Channel...0x"
   00db ac00022d [8]             CALL  AppTask:557
   00df 45000b   [3]             LDHX  @mCoordInfo:11
   00e2 ac000240 [8]             CALL  AppTask:576
-  266:              CommUtil_Print("\n\rBeacon Spec.......0x", gAllowToBlock_d); CommUtil_PrintHex(mCoordInfo.superFrameSpec, 2, 0);
+  269:              CommUtil_Print("\n\rBeacon Spec.......0x", gAllowToBlock_d); CommUtil_PrintHex(mCoordInfo.superFrameSpec, 2, 0);
   00e6 450000   [3]             LDHX  @"\012\015Beacon Spec.......0x"
   00e9 ac00022d [8]             CALL  AppTask:557
   00ed 45000d   [3]             LDHX  @mCoordInfo:13
   00f0 ac000234 [8]             CALL  AppTask:564
-  267:              CommUtil_Print("\n\rLink Quality......0x", gAllowToBlock_d); CommUtil_PrintHex(&mCoordInfo.linkQuality, 1, 0);
+  270:              CommUtil_Print("\n\rLink Quality......0x", gAllowToBlock_d); CommUtil_PrintHex(&mCoordInfo.linkQuality, 1, 0);
   00f4 450000   [3]             LDHX  @"\012\015Link Quality......0x"
   00f7 ac00022d [8]             CALL  AppTask:557
   00fb 450010   [3]             LDHX  @mCoordInfo:16
   00fe ac000240 [8]             CALL  AppTask:576
-  268:              CommUtil_Print("\n\r\n\r", gAllowToBlock_d);
+  271:              CommUtil_Print("\n\r\n\r", gAllowToBlock_d);
   0102 450000   [3]             LDHX  @"\012\015\012\015"
   0105 ac00022d [8]             CALL  AppTask:557
-  269:  
-  270:              gState = stateAssociate;
+  272:  
+  273:              gState = stateAssociate;
   0109 a603     [2]             LDA   #3
-  271:              TS_SendEvent(gAppTaskID_c, gAppEvtDummyEvent_c);
-  272:            }
+  274:              TS_SendEvent(gAppTaskID_c, gAppEvtDummyEvent_c);
+  275:            }
   010b cc01ac   [4]             JMP   L1AC ;abs = 01ac
   010e          L10E:   
-  273:            else
-  274:  		      {
-  275:              CommUtil_Print("Scan did not find a suitable coordinator\n\r", gAllowToBlock_d);
+  276:            else
+  277:  		      {
+  278:              CommUtil_Print("Scan did not find a suitable coordinator\n\r", gAllowToBlock_d);
   010e 450000   [3]             LDHX  @"Scan did not find a suitable coordinator\012\015"
   0111 ac00022d [8]             CALL  AppTask:557
   0115          L115:   
   0115 2022     [3]             BRA   L139 ;abs = 0139
   0117          L117:   
-  276:              /*print a message on the LCD also*/
-  277:              LCD_ClearDisplay();
-  278:              LCD_WriteString(1,"No coordinator");
-  279:              LCD_WriteString(2,"found.");
-  280:  		      }
-  281:          
-  282:  		   }
-  283:        }
-  284:      }
-  285:      break;
-  286:  
-  287:    case stateAssociate:
-  288:      /* Associate to the PAN coordinator */
-  289:      CommUtil_Print("Associating to PAN coordinator on channel 0x", gAllowToBlock_d);
+  279:              /*print a message on the LCD also*/
+  280:              LCD_ClearDisplay();
+  281:              LCD_WriteString(1,"No coordinator");
+  282:              LCD_WriteString(2,"found.");
+  283:  		      }
+  284:          
+  285:  		   }
+  286:        }
+  287:      }
+  288:      break;
+  289:  
+  290:    case stateAssociate:
+  291:      /* Associate to the PAN coordinator */
+  292:      CommUtil_Print("Associating to PAN coordinator on channel 0x", gAllowToBlock_d);
   0117 450000   [3]             LDHX  @"Associating to PAN coordinator on channel 0x"
   011a ac00022d [8]             CALL  AppTask:557
-  290:      CommUtil_PrintHex(&(mCoordInfo.logicalChannel), 1, gPrtHexNewLine_c);
+  293:      CommUtil_PrintHex(&(mCoordInfo.logicalChannel), 1, gPrtHexNewLine_c);
   011e 45000b   [3]             LDHX  @mCoordInfo:11
   0121 89       [2]             PSHX  
   0122 8b       [2]             PSHH  
@@ -463,60 +466,60 @@ ANSI-C/cC++ Compiler for HC08 V-5.0.45 Build 14019, Jan 20 2014
   0125 a602     [2]             LDA   #2
   0127 ac000000 [8]             CALL  CommUtil_PrintHex
   012b a702     [2]             AIS   #2
-  291:      /*print a message on the LCD also*/
-  292:      LCD_ClearDisplay();
-  293:      LCD_WriteString(1,"Associating to ");
-  294:      LCD_WriteString(2,"PAN coordinator");  
-  295:      rc = App_SendAssociateRequest();
+  294:      /*print a message on the LCD also*/
+  295:      LCD_ClearDisplay();
+  296:      LCD_WriteString(1,"Associating to ");
+  297:      LCD_WriteString(2,"PAN coordinator");  
+  298:      rc = App_SendAssociateRequest();
   012d ac000000 [8]             CALL  App_SendAssociateRequest
-  296:      if(rc == errorNoError)
+  299:      if(rc == errorNoError)
   0131 4d       [1]             TSTA  
   0132 2605     [3]             BNE   L139 ;abs = 0139
-  297:        gState = stateAssociateWaitConfirm;
+  300:        gState = stateAssociateWaitConfirm;
   0134 a604     [2]             LDA   #4
   0136          L136:   
   0136 c70000   [4]             STA   gState
   0139          L139:   
   0139 cc01c4   [4]             JMP   L1C4 ;abs = 01c4
   013c          L13C:   
-  298:      break; 
-  299:  
-  300:    case stateAssociateWaitConfirm:
-  301:      /* Stay in this state until the Associate confirm message
-  302:         arrives, and then goto the Listen state. */
-  303:      if (events & gAppEvtMessageFromMLME_c)
+  301:      break; 
+  302:  
+  303:    case stateAssociateWaitConfirm:
+  304:      /* Stay in this state until the Associate confirm message
+  305:         arrives, and then goto the Listen state. */
+  306:      if (events & gAppEvtMessageFromMLME_c)
   013c 95       [2]             TSX   
   013d e606     [3]             LDA   6,X
   013f a504     [2]             BIT   #4
   0141 2703     [3]             BEQ   L146 ;abs = 0146
-  304:      {
-  305:        if (pMsgIn)
+  307:      {
+  308:        if (pMsgIn)
   0143 9efe04   [5]             LDHX  4,SP
   0146          L146:   
   0146 277c     [3]             BEQ   L1C4 ;abs = 01c4
-  306:        {   
-  307:          rc = App_WaitMsg(pMsgIn, gNwkAssociateCnf_c);
+  309:        {   
+  310:          rc = App_WaitMsg(pMsgIn, gNwkAssociateCnf_c);
   0148 9eff01   [5]             STHX  1,SP
   014b a601     [2]             LDA   #1
   014d ac000000 [8]             CALL  App_WaitMsg
-  308:          if(rc == errorNoError)
+  311:          if(rc == errorNoError)
   0151 4d       [1]             TSTA  
   0152 2670     [3]             BNE   L1C4 ;abs = 01c4
-  309:          {          
-  310:            rc = App_HandleAssociateConfirm(pMsgIn);
+  312:          {          
+  313:            rc = App_HandleAssociateConfirm(pMsgIn);
   0154 9efe01   [5]             LDHX  1,SP
   0157 ac000000 [8]             CALL  App_HandleAssociateConfirm
-  311:            if (rc == errorNoError)
+  314:            if (rc == errorNoError)
   015b 4d       [1]             TSTA  
   015c 2650     [3]             BNE   L1AE ;abs = 01ae
-  312:            { 
-  313:  	          CommUtil_Print("Successfully associated with the coordinator.\n\r", gAllowToBlock_d);
+  315:            { 
+  316:  	          CommUtil_Print("Successfully associated with the coordinator.\n\r", gAllowToBlock_d);
   015e 450000   [3]             LDHX  @"Successfully associated with the coordinator.\012\015"
   0161 ac00022d [8]             CALL  AppTask:557
-  314:  	          CommUtil_Print("We were assigned the short address 0x", gAllowToBlock_d);
+  317:  	          CommUtil_Print("We were assigned the short address 0x", gAllowToBlock_d);
   0165 450000   [3]             LDHX  @"We were assigned the short address 0x"
   0168 ac00022d [8]             CALL  AppTask:557
-  315:  	          CommUtil_PrintHex(maMyAddress, mAddrMode == gAddrModeShort_c ? 2 : 8, 0);
+  318:  	          CommUtil_PrintHex(maMyAddress, mAddrMode == gAddrModeShort_c ? 2 : 8, 0);
   016c 450000   [3]             LDHX  @maMyAddress
   016f 89       [2]             PSHX  
   0170 8b       [2]             PSHH  
@@ -530,15 +533,15 @@ ANSI-C/cC++ Compiler for HC08 V-5.0.45 Build 14019, Jan 20 2014
   017e 4f       [1]             CLRA  
   017f ac000000 [8]             CALL  CommUtil_PrintHex
   0183 a702     [2]             AIS   #2
-  316:  	          CommUtil_Print("\n\r\n\rReady to send and receive data over the serial terminal interface.\n\r\n\r", gAllowToBlock_d);
+  319:  	          CommUtil_Print("\n\r\n\rReady to send and receive data over the serial terminal interface.\n\r\n\r", gAllowToBlock_d);
   0185 450000   [3]             LDHX  @"\012\015\012\015Ready to send and receive data over the serial terminal interface.\012\015\012\015"
   0188 ac00022d [8]             CALL  AppTask:557
-  317:  	          /*print a message on the LCD also*/
-  318:  	          LCD_ClearDisplay();
-  319:  	          LCD_WriteString(1,"Ready to send");
-  320:  	          LCD_WriteString(2,"and receive data");    
-  321:  	          /* Startup the timer */
-  322:  	          TMR_StartSingleShotTimer(mTimer_c, mPollInterval, AppPollWaitTimeout);
+  320:  	          /*print a message on the LCD also*/
+  321:  	          LCD_ClearDisplay();
+  322:  	          LCD_WriteString(1,"Ready to send");
+  323:  	          LCD_WriteString(2,"and receive data");    
+  324:  	          /* Startup the timer */
+  325:  	          TMR_StartSingleShotTimer(mTimer_c, mPollInterval, AppPollWaitTimeout);
   018c c60000   [4]             LDA   mTimer_c
   018f 87       [2]             PSHA  
   0190 320000   [5]             LDHX  mPollInterval
@@ -554,32 +557,32 @@ ANSI-C/cC++ Compiler for HC08 V-5.0.45 Build 14019, Jan 20 2014
   019f 87       [2]             PSHA  
   01a0 ac000000 [8]             CALL  TMR_StartSingleShotTimer
   01a4 a708     [2]             AIS   #8
-  323:  
-  324:              /****NEWCODE: INIT 3 SEC TIMER****/
-  325:              MyNewTaskInit();
+  326:  
+  327:              /****NEWCODE: INIT 3 SEC TIMER****/
+  328:              MyNewTaskInit();
   01a6 ac000000 [8]             CALL  MyNewTaskInit
-  326:              /****NEWCODE: INIT 3 SEC TIMER****/
-  327:              
-  328:  	          /* Go to the listen state */
-  329:  	          gState = stateListen;
+  329:              /****NEWCODE: INIT 3 SEC TIMER****/
+  330:              
+  331:  	          /* Go to the listen state */
+  332:  	          gState = stateListen;
   01aa a605     [2]             LDA   #5
   01ac          L1AC:   
-  330:  	          TS_SendEvent(gAppTaskID_c, gAppEvtDummyEvent_c); 
-  331:            }        
+  333:  	          TS_SendEvent(gAppTaskID_c, gAppEvtDummyEvent_c); 
+  334:            }        
   01ac 2009     [3]             BRA   L1B7 ;abs = 01b7
   01ae          L1AE:   
-  332:            else 
-  333:            {
-  334:            
-  335:  	          CommUtil_Print("\n\rAssociate Confirm wasn't successful... \n\r\n\r", gAllowToBlock_d);
+  335:            else 
+  336:            {
+  337:            
+  338:  	          CommUtil_Print("\n\rAssociate Confirm wasn't successful... \n\r\n\r", gAllowToBlock_d);
   01ae 450000   [3]             LDHX  @"\012\015Associate Confirm wasn't successful... \012\015\012\015"
   01b1          L1B1:   
   01b1 ac00022d [8]             CALL  AppTask:557
-  336:  	          gState = stateScanActiveStart;
+  339:  	          gState = stateScanActiveStart;
   01b5 a601     [2]             LDA   #1
   01b7          L1B7:   
   01b7 c70000   [4]             STA   gState
-  337:                TS_SendEvent(gAppTaskID_c, gAppEvtDummyEvent_c);
+  340:                TS_SendEvent(gAppTaskID_c, gAppEvtDummyEvent_c);
   01ba c60000   [4]             LDA   gAppTaskID_c
   01bd ae01     [2]             LDX   #1
   01bf 8c       [1]             CLRH  
@@ -587,104 +590,104 @@ ANSI-C/cC++ Compiler for HC08 V-5.0.45 Build 14019, Jan 20 2014
   01c4          L1C4:   
   01c4 201b     [3]             BRA   L1E1 ;abs = 01e1
   01c6          L1C6:   
-  338:            }
-  339:          }
-  340:        }
-  341:      }
-  342:      break; 
-  343:      
-  344:    case stateListen:
-  345:      /* Transmit to coordinator data received from the serial terminal interface. */
-  346:      if (events & gAppEvtMessageFromMLME_c)
+  341:            }
+  342:          }
+  343:        }
+  344:      }
+  345:      break; 
+  346:      
+  347:    case stateListen:
+  348:      /* Transmit to coordinator data received from the serial terminal interface. */
+  349:      if (events & gAppEvtMessageFromMLME_c)
   01c6 95       [2]             TSX   
   01c7 e606     [3]             LDA   6,X
   01c9 a504     [2]             BIT   #4
   01cb 2709     [3]             BEQ   L1D6 ;abs = 01d6
-  347:      {  
-  348:        if (pMsgIn)
+  350:      {  
+  351:        if (pMsgIn)
   01cd 9efe04   [5]             LDHX  4,SP
   01d0 2704     [3]             BEQ   L1D6 ;abs = 01d6
-  349:        {  
-  350:          /* Process it */
-  351:          rc = App_HandleMlmeInput(pMsgIn);
+  352:        {  
+  353:          /* Process it */
+  354:          rc = App_HandleMlmeInput(pMsgIn);
   01d2 ac000000 [8]             CALL  App_HandleMlmeInput
   01d6          L1D6:   
-  352:        }
-  353:      } 
-  354:      
-  355:      if (events & gAppEvtRxFromComm_c)
+  355:        }
+  356:      } 
+  357:      
+  358:      if (events & gAppEvtRxFromComm_c)
   01d6 95       [2]             TSX   
   01d7 e606     [3]             LDA   6,X
   01d9 a502     [2]             BIT   #2
   01db 2704     [3]             BEQ   L1E1 ;abs = 01e1
-  356:      {      
-  357:        /* get byte from serial terminal interface */
-  358:        App_TransmitCommData();
+  359:      {      
+  360:        /* get byte from serial terminal interface */
+  361:        App_TransmitCommData();
   01dd ac000000 [8]             CALL  App_TransmitCommData
   01e1          L1E1:   
-  359:      }  
-  360:      break;
-  361:    }
-  362:    
-  363:    if (pMsgIn)
+  362:      }  
+  363:      break;
+  364:    }
+  365:    
+  366:    if (pMsgIn)
   01e1 9efe04   [5]             LDHX  4,SP
   01e4 2704     [3]             BEQ   L1EA ;abs = 01ea
-  364:    {
-  365:      /* Messages must always be freed. */ 
-  366:      MSG_Free(pMsgIn);
+  367:    {
+  368:      /* Messages must always be freed. */ 
+  369:      MSG_Free(pMsgIn);
   01e6 ac000000 [8]             CALL  MM_Free
   01ea          L1EA:   
-  367:    }
-  368:    
-  369:     /* Handle MCPS confirms and transmit data from serial terminal interface */
-  370:    if (events & gAppEvtMessageFromMCPS_c)
+  370:    }
+  371:    
+  372:     /* Handle MCPS confirms and transmit data from serial terminal interface */
+  373:    if (events & gAppEvtMessageFromMCPS_c)
   01ea 95       [2]             TSX   
   01eb e606     [3]             LDA   6,X
   01ed a508     [2]             BIT   #8
   01ef 271b     [3]             BEQ   L20C ;abs = 020c
-  371:    {      
-  372:      /* Get the message from MCPS */
-  373:      pMsgIn = MSG_DeQueue(&mMcpsNwkInputQueue);
+  374:    {      
+  375:      /* Get the message from MCPS */
+  376:      pMsgIn = MSG_DeQueue(&mMcpsNwkInputQueue);
   01f1 450000   [3]             LDHX  @mMcpsNwkInputQueue
   01f4 ac000000 [8]             CALL  List_RemoveHead
-  374:      if (pMsgIn)
+  377:      if (pMsgIn)
   01f8 650000   [3]             CPHX  #0
   01fb 270f     [3]             BEQ   L20C ;abs = 020c
-  375:      {              
-  376:        /* Process it */
-  377:        App_HandleMcpsInput(pMsgIn);
+  378:      {              
+  379:        /* Process it */
+  380:        App_HandleMcpsInput(pMsgIn);
   01fd 89       [2]             PSHX  
   01fe 8b       [2]             PSHH  
   01ff ac000000 [8]             CALL  App_HandleMcpsInput
-  378:        /* Messages from the MCPS must always be freed. */
-  379:        MSG_Free(pMsgIn);
+  381:        /* Messages from the MCPS must always be freed. */
+  382:        MSG_Free(pMsgIn);
   0203 9efe01   [5]             LDHX  1,SP
   0206 ac000000 [8]             CALL  MM_Free
   020a a702     [2]             AIS   #2
   020c          L20C:   
-  380:      }
-  381:    }
-  382:    
-  383:    /* Check for pending messages in the Queue */ 
-  384:    if(MSG_Pending(&mMcpsNwkInputQueue))
+  383:      }
+  384:    }
+  385:    
+  386:    /* Check for pending messages in the Queue */ 
+  387:    if(MSG_Pending(&mMcpsNwkInputQueue))
   020c 320000   [5]             LDHX  mMcpsNwkInputQueue
   020f 270a     [3]             BEQ   L21B ;abs = 021b
-  385:      TS_SendEvent(gAppTaskID_c, gAppEvtMessageFromMCPS_c);
+  388:      TS_SendEvent(gAppTaskID_c, gAppEvtMessageFromMCPS_c);
   0211 c60000   [4]             LDA   gAppTaskID_c
   0214 ae08     [2]             LDX   #8
   0216 8c       [1]             CLRH  
   0217 ac000000 [8]             CALL  TS_SendEvent
   021b          L21B:   
-  386:    if(MSG_Pending(&mMlmeNwkInputQueue))
+  389:    if(MSG_Pending(&mMlmeNwkInputQueue))
   021b 320000   [5]             LDHX  mMlmeNwkInputQueue
   021e 270a     [3]             BEQ   L22A ;abs = 022a
-  387:      TS_SendEvent(gAppTaskID_c, gAppEvtMessageFromMLME_c);  
+  390:      TS_SendEvent(gAppTaskID_c, gAppEvtMessageFromMLME_c);  
   0220 c60000   [4]             LDA   gAppTaskID_c
   0223 ae04     [2]             LDX   #4
   0225 8c       [1]             CLRH  
   0226 ac000000 [8]             CALL  TS_SendEvent
   022a          L22A:   
-  388:  }
+  391:  }
   022a a707     [2]             AIS   #7
   022c 8d       [7]             RTC   
   022d          L22D:   
@@ -707,36 +710,36 @@ ANSI-C/cC++ Compiler for HC08 V-5.0.45 Build 14019, Jan 20 2014
   0245 ac000000 [8]             CALL  CommUtil_PrintHex
   0249 a702     [2]             AIS   #2
   024b 8d       [7]             RTC   
-  389:  
-  390:  /************************************************************************************
-  391:  *************************************************************************************
-  392:  * Private functions
-  393:  *************************************************************************************
-  394:  ************************************************************************************/
-  395:  
-  396:  /*****************************************************************************
-  397:  * App_CommRxCallBack
-  398:  *
-  399:  * This callback is triggered when a new byte is received over the serial terminal interface
-  400:  *
-  401:  *****************************************************************************/
-  402:  static void App_CommRxCallBack(void) 
-  403:  {
+  392:  
+  393:  /************************************************************************************
+  394:  *************************************************************************************
+  395:  * Private functions
+  396:  *************************************************************************************
+  397:  ************************************************************************************/
+  398:  
+  399:  /*****************************************************************************
+  400:  * App_CommRxCallBack
+  401:  *
+  402:  * This callback is triggered when a new byte is received over the serial terminal interface
+  403:  *
+  404:  *****************************************************************************/
+  405:  static void App_CommRxCallBack(void) 
+  406:  {
   0000 8b       [2]             PSHH  
-  404:    uint8_t pressedKey;
-  405:  	if(stateListen == gState){
+  407:    uint8_t pressedKey;
+  408:  	if(stateListen == gState){
   0001 c60000   [4]             LDA   gState
   0004 a105     [2]             CMP   #5
   0006 260c     [3]             BNE   L14 ;abs = 0014
-  406:      TS_SendEvent(gAppTaskID_c, gAppEvtRxFromComm_c);
+  409:      TS_SendEvent(gAppTaskID_c, gAppEvtRxFromComm_c);
   0008 c60000   [4]             LDA   gAppTaskID_c
   000b ae02     [2]             LDX   #2
   000d 8c       [1]             CLRH  
   000e ac000000 [8]             CALL  TS_SendEvent
-  407:    }else{
-  408:  	  (void)Comm_GetByteFromRxBuffer(&pressedKey);
-  409:    }
-  410:  }
+  410:    }else{
+  411:  	  (void)Comm_GetByteFromRxBuffer(&pressedKey);
+  412:    }
+  413:  }
   0012 8a       [3]             PULH  
   0013 8d       [7]             RTC   
   0014          L14:    
@@ -744,165 +747,165 @@ ANSI-C/cC++ Compiler for HC08 V-5.0.45 Build 14019, Jan 20 2014
   0015 ac000000 [8]             CALL  Uart1_GetByteFromRxBuffer
   0019 8a       [3]             PULH  
   001a 8d       [7]             RTC   
-  411:  
-  412:  /******************************************************************************
-  413:  * The App_StartScan(scanType) function will start the scan process of the
-  414:  * specified type in the MAC. This is accomplished by allocating a MAC message,
-  415:  * which is then assigned the desired scan parameters and sent to the MLME
-  416:  * service access point.
-  417:  * The function may return either of the following values:
-  418:  *   errorNoError:          The Scan message was sent successfully.
-  419:  *   errorInvalidParameter: The MLME service access point rejected the
-  420:  *                          message due to an invalid parameter.
-  421:  *   errorAllocFailed:      A message buffer could not be allocated.
-  422:  *
-  423:  ******************************************************************************/
-  424:  static uint8_t App_StartScan(uint8_t scanType)
-  425:  {
+  414:  
+  415:  /******************************************************************************
+  416:  * The App_StartScan(scanType) function will start the scan process of the
+  417:  * specified type in the MAC. This is accomplished by allocating a MAC message,
+  418:  * which is then assigned the desired scan parameters and sent to the MLME
+  419:  * service access point.
+  420:  * The function may return either of the following values:
+  421:  *   errorNoError:          The Scan message was sent successfully.
+  422:  *   errorInvalidParameter: The MLME service access point rejected the
+  423:  *                          message due to an invalid parameter.
+  424:  *   errorAllocFailed:      A message buffer could not be allocated.
+  425:  *
+  426:  ******************************************************************************/
+  427:  static uint8_t App_StartScan(uint8_t scanType)
+  428:  {
   0000 87       [2]             PSHA  
   0001 a7fe     [2]             AIS   #-2
-  426:    mlmeMessage_t *pMsg;
-  427:    mlmeScanReq_t *pScanReq;
-  428:  
-  429:    CommUtil_Print("Sending the MLME-Scan Request message to the MAC...", gAllowToBlock_d);
+  429:    mlmeMessage_t *pMsg;
+  430:    mlmeScanReq_t *pScanReq;
+  431:  
+  432:    CommUtil_Print("Sending the MLME-Scan Request message to the MAC...", gAllowToBlock_d);
   0003 450000   [3]             LDHX  @"Sending the MLME-Scan Request message to the MAC..."
   0006 ac000058 [8]             CALL  App_StartScan:88
-  430:  
-  431:    /* Allocate a message for the MLME (We should check for NULL). */
-  432:    pMsg = MSG_AllocType(mlmeMessage_t);
+  433:  
+  434:    /* Allocate a message for the MLME (We should check for NULL). */
+  435:    pMsg = MSG_AllocType(mlmeMessage_t);
   000a a623     [2]             LDA   #35
   000c ac000000 [8]             CALL  MM_Alloc
   0010 9eff01   [5]             STHX  1,SP
-  433:    if(pMsg != NULL)
+  436:    if(pMsg != NULL)
   0013 2737     [3]             BEQ   L4C ;abs = 004c
-  434:    {
-  435:      /* This is a MLME-SCAN.req command */
-  436:      pMsg->msgType = gMlmeScanReq_c;
+  437:    {
+  438:      /* This is a MLME-SCAN.req command */
+  439:      pMsg->msgType = gMlmeScanReq_c;
   0015 a608     [2]             LDA   #8
   0017 f7       [2]             STA   ,X
-  437:      /* Create the Scan request message data. */
-  438:      pScanReq = &pMsg->msgData.scanReq;
-  439:      /* gScanModeED_c, gScanModeActive_c, gScanModePassive_c, or gScanModeOrphan_c */
-  440:      pScanReq->scanType = scanType;
+  440:      /* Create the Scan request message data. */
+  441:      pScanReq = &pMsg->msgData.scanReq;
+  442:      /* gScanModeED_c, gScanModeActive_c, gScanModePassive_c, or gScanModeOrphan_c */
+  443:      pScanReq->scanType = scanType;
   0018 9ee603   [4]             LDA   3,SP
   001b e701     [3]             STA   1,X
-  441:      /* ChannelsToScan & 0xFF - LSB, always 0x00 */
-  442:      pScanReq->scanChannels[0] = (uint8_t)((mDefaultValueOfChannel_c)     & 0xFF);
+  444:      /* ChannelsToScan & 0xFF - LSB, always 0x00 */
+  445:      pScanReq->scanChannels[0] = (uint8_t)((mDefaultValueOfChannel_c)     & 0xFF);
   001d 6f02     [5]             CLR   2,X
-  443:      /* ChannelsToScan>>8 & 0xFF  */
-  444:      pScanReq->scanChannels[1] = (uint8_t)((mDefaultValueOfChannel_c>>8)  & 0xFF);
+  446:      /* ChannelsToScan>>8 & 0xFF  */
+  447:      pScanReq->scanChannels[1] = (uint8_t)((mDefaultValueOfChannel_c>>8)  & 0xFF);
   001f 6f03     [5]             CLR   3,X
-  445:      /* ChannelsToScan>>16 & 0xFF  */
-  446:      pScanReq->scanChannels[2] = (uint8_t)((mDefaultValueOfChannel_c>>16) & 0xFF);
+  448:      /* ChannelsToScan>>16 & 0xFF  */
+  449:      pScanReq->scanChannels[2] = (uint8_t)((mDefaultValueOfChannel_c>>16) & 0xFF);
   0021 6f04     [5]             CLR   4,X
-  447:      /* ChannelsToScan>>24 & 0xFF - MSB */
-  448:      pScanReq->scanChannels[3] = (uint8_t)((mDefaultValueOfChannel_c>>24) & 0xFF);
+  450:      /* ChannelsToScan>>24 & 0xFF - MSB */
+  451:      pScanReq->scanChannels[3] = (uint8_t)((mDefaultValueOfChannel_c>>24) & 0xFF);
   0023 a601     [2]             LDA   #1
   0025 e705     [3]             STA   5,X
-  449:      /* Duration per channel 0-14 (dc). T[sec] = (16*960*((2^dc)+1))/1000000.
-  450:         A scan duration of 3 on 16 channels approximately takes 2 secs. */
-  451:      pScanReq->scanDuration = 3;
+  452:      /* Duration per channel 0-14 (dc). T[sec] = (16*960*((2^dc)+1))/1000000.
+  453:         A scan duration of 3 on 16 channels approximately takes 2 secs. */
+  454:      pScanReq->scanDuration = 3;
   0027 a603     [2]             LDA   #3
   0029 e706     [3]             STA   6,X
-  452:  #ifdef gMAC2006_d
-  453:      pScanReq->securityLevel = 0;
+  455:  #ifdef gMAC2006_d
+  456:      pScanReq->securityLevel = 0;
   002b 6f07     [5]             CLR   7,X
-  454:  #endif //gMAC2006_d    
-  455:      
-  456:      /* Send the Scan request to the MLME. */
-  457:      if(MSG_Send(NWK_MLME, pMsg) == gSuccess_c)
+  457:  #endif //gMAC2006_d    
+  458:      
+  459:      /* Send the Scan request to the MLME. */
+  460:      if(MSG_Send(NWK_MLME, pMsg) == gSuccess_c)
   002d 9efe01   [5]             LDHX  1,SP
   0030 ac000000 [8]             CALL  NWK_MLME_SapHandler
   0034 4d       [1]             TSTA  
   0035 260a     [3]             BNE   L41 ;abs = 0041
-  458:      {
-  459:        CommUtil_Print("Done\n\r", gAllowToBlock_d);
+  461:      {
+  462:        CommUtil_Print("Done\n\r", gAllowToBlock_d);
   0037 450000   [3]             LDHX  @"Done\012\015"
   003a ac000058 [8]             CALL  App_StartScan:88
-  460:        return errorNoError;
+  463:        return errorNoError;
   003e 4f       [1]             CLRA  
   003f 2014     [3]             BRA   L55 ;abs = 0055
   0041          L41:    
-  461:      }
-  462:      else
-  463:      {
-  464:        CommUtil_Print("Invalid parameter!\n\r", gAllowToBlock_d);
+  464:      }
+  465:      else
+  466:      {
+  467:        CommUtil_Print("Invalid parameter!\n\r", gAllowToBlock_d);
   0041 450000   [3]             LDHX  @"Invalid parameter!\012\015"
   0044 ac000058 [8]             CALL  App_StartScan:88
-  465:        return errorInvalidParameter;
+  468:        return errorInvalidParameter;
   0048 a605     [2]             LDA   #5
   004a 2009     [3]             BRA   L55 ;abs = 0055
   004c          L4C:    
-  466:      }
-  467:    }
-  468:    else
-  469:    {
-  470:      /* Allocation of a message buffer failed. */
-  471:      CommUtil_Print("Message allocation failed!\n\r", gAllowToBlock_d);
+  469:      }
+  470:    }
+  471:    else
+  472:    {
+  473:      /* Allocation of a message buffer failed. */
+  474:      CommUtil_Print("Message allocation failed!\n\r", gAllowToBlock_d);
   004c 450000   [3]             LDHX  @"Message allocation failed!\012\015"
   004f ac000058 [8]             CALL  App_StartScan:88
-  472:      return errorAllocFailed;
+  475:      return errorAllocFailed;
   0053 a604     [2]             LDA   #4
   0055          L55:    
-  473:    }
-  474:  }
+  476:    }
+  477:  }
   0055 a703     [2]             AIS   #3
   0057 8d       [7]             RTC   
   0058          L58:    
   0058 a601     [2]             LDA   #1
   005a ac000000 [8]             CALL  CommUtil_Print
   005e 8d       [7]             RTC   
-  475:  
-  476:  /******************************************************************************
-  477:  * The App_HandleScanActiveConfirm(nwkMessage_t *pMsg) function will handle the
-  478:  * Active Scan confirm message received from the MLME when the Active scan has
-  479:  * completed. The message contains a list of PAN descriptors. Based on link
-  480:  * quality inforamtion in the pan descriptors the nearest coordinator is chosen.
-  481:  * The corresponding pan descriptor is stored in the global variable mCoordInfo. 
-  482:  *
-  483:  * The function may return either of the following values:
-  484:  *   errorNoError:       A suitable pan descriptor was found.
-  485:  *   errorNoScanResults: No scan results were present in the confirm message.
-  486:  *
-  487:  ******************************************************************************/
-  488:  static uint8_t App_HandleScanActiveConfirm(nwkMessage_t *pMsg)
-  489:  {
+  478:  
+  479:  /******************************************************************************
+  480:  * The App_HandleScanActiveConfirm(nwkMessage_t *pMsg) function will handle the
+  481:  * Active Scan confirm message received from the MLME when the Active scan has
+  482:  * completed. The message contains a list of PAN descriptors. Based on link
+  483:  * quality inforamtion in the pan descriptors the nearest coordinator is chosen.
+  484:  * The corresponding pan descriptor is stored in the global variable mCoordInfo. 
+  485:  *
+  486:  * The function may return either of the following values:
+  487:  *   errorNoError:       A suitable pan descriptor was found.
+  488:  *   errorNoScanResults: No scan results were present in the confirm message.
+  489:  *
+  490:  ******************************************************************************/
+  491:  static uint8_t App_HandleScanActiveConfirm(nwkMessage_t *pMsg)
+  492:  {
   0000 a7f9     [2]             AIS   #-7
-  490:    void    *pBlock;
-  491:    uint8_t panDescListSize = pMsg->msgData.scanCnf.resultListSize;
+  493:    void    *pBlock;
+  494:    uint8_t panDescListSize = pMsg->msgData.scanCnf.resultListSize;
   0002 e603     [3]             LDA   3,X
-  492:    uint8_t rc = errorNoScanResults;
+  495:    uint8_t rc = errorNoScanResults;
   0004 87       [2]             PSHA  
   0005 a606     [2]             LDA   #6
   0007 9ee707   [4]             STA   7,SP
-  493:    uint8_t j;
-  494:    uint8_t bestLinkQuality = 0;  
+  496:    uint8_t j;
+  497:    uint8_t bestLinkQuality = 0;  
   000a 9e6f08   [6]             CLR   8,SP
-  495:    panDescriptorBlock_t *pDescBlock = pMsg->msgData.scanCnf.resList.pPanDescriptorBlocks;  
+  498:    panDescriptorBlock_t *pDescBlock = pMsg->msgData.scanCnf.resList.pPanDescriptorBlocks;  
   000d 9ece08   [5]             LDHX  8,X
   0010 9eff04   [5]             STHX  4,SP
-  496:    panDescriptor_t *pPanDesc;    
-  497:    
-  498:   
-  499:    /* Check if the scan resulted in any coordinator responses. */  
+  499:    panDescriptor_t *pPanDesc;    
   500:    
-  501:    if (panDescListSize > 0)
+  501:   
+  502:    /* Check if the scan resulted in any coordinator responses. */  
+  503:    
+  504:    if (panDescListSize > 0)
   0013 86       [3]             PULA  
   0014 a100     [2]             CMP   #0
   0016 2269     [3]             BHI   L81 ;abs = 0081
   0018 206c     [3]             BRA   L86 ;abs = 0086
   001a          L1A:    
-  502:    {    
-  503:      /* Check all PAN descriptors. */
-  504:      while (NULL != pDescBlock)
-  505:      {
-  506:        for (j = 0; j < pDescBlock->descriptorCount; j++)
+  505:    {    
+  506:      /* Check all PAN descriptors. */
+  507:      while (NULL != pDescBlock)
+  508:      {
+  509:        for (j = 0; j < pDescBlock->descriptorCount; j++)
   001a 95       [2]             TSX   
   001b 6f04     [5]             CLR   4,X
   001d 2047     [3]             BRA   L66 ;abs = 0066
   001f          L1F:    
-  507:        {            
-  508:          pPanDesc = &pDescBlock->descriptorList[j];
+  510:        {            
+  511:          pPanDesc = &pDescBlock->descriptorList[j];
   001f 95       [2]             TSX   
   0020 e604     [3]             LDA   4,X
   0022 ae1f     [2]             LDX   #31
@@ -914,30 +917,30 @@ ANSI-C/cC++ Compiler for HC08 V-5.0.45 Build 14019, Jan 20 2014
   002d 86       [3]             PULA  
   002e a900     [2]             ADC   #0
   0030 88       [3]             PULX  
-  509:  
-  510:          /* Only attempt to associate if the coordinator
-  511:             accepts associations and is non-beacon. */
-  512:          if( ( pPanDesc->superFrameSpec[1] & gSuperFrameSpecMsbAssocPermit_c) && 
+  512:  
+  513:          /* Only attempt to associate if the coordinator
+  514:             accepts associations and is non-beacon. */
+  515:          if( ( pPanDesc->superFrameSpec[1] & gSuperFrameSpecMsbAssocPermit_c) && 
   0031 87       [2]             PSHA  
   0032 8a       [3]             PULH  
   0033 e60e     [3]             LDA   14,X
   0035 2a2c     [3]             BPL   L63 ;abs = 0063
-  513:              ((pPanDesc->superFrameSpec[0] & gSuperFrameSpecLsbBO_c) == 0x0F) )
+  516:              ((pPanDesc->superFrameSpec[0] & gSuperFrameSpecLsbBO_c) == 0x0F) )
   0037 e60d     [3]             LDA   13,X
   0039 a40f     [2]             AND   #15
   003b a10f     [2]             CMP   #15
   003d 2624     [3]             BNE   L63 ;abs = 0063
-  514:          {        
-  515:            
-  516:            /* Find the nearest coordinator using the link quality measure. */
-  517:            if(pPanDesc->linkQuality > bestLinkQuality)
+  517:          {        
+  518:            
+  519:            /* Find the nearest coordinator using the link quality measure. */
+  520:            if(pPanDesc->linkQuality > bestLinkQuality)
   003f 9ee607   [4]             LDA   7,SP
   0042 e110     [3]             CMP   16,X
   0044 241d     [3]             BCC   L63 ;abs = 0063
-  518:            {
-  519:              /* Save the information of the coordinator candidate. If we
-  520:                 find a better candiate, the information will be replaced. */
-  521:              FLib_MemCpy(&mCoordInfo, pPanDesc, sizeof(panDescriptor_t));
+  521:            {
+  522:              /* Save the information of the coordinator candidate. If we
+  523:                 find a better candiate, the information will be replaced. */
+  524:              FLib_MemCpy(&mCoordInfo, pPanDesc, sizeof(panDescriptor_t));
   0046 9eff01   [5]             STHX  1,SP
   0049 450000   [3]             LDHX  @mCoordInfo
   004c 89       [2]             PSHX  
@@ -946,12 +949,12 @@ ANSI-C/cC++ Compiler for HC08 V-5.0.45 Build 14019, Jan 20 2014
   0051 a61f     [2]             LDA   #31
   0053 ac000000 [8]             CALL  FLib_MemCpy
   0057 a702     [2]             AIS   #2
-  522:              bestLinkQuality = pPanDesc->linkQuality;
+  525:              bestLinkQuality = pPanDesc->linkQuality;
   0059 9efe01   [5]             LDHX  1,SP
   005c e610     [3]             LDA   16,X
   005e 95       [2]             TSX   
   005f e706     [3]             STA   6,X
-  523:              rc = errorNoError;
+  526:              rc = errorNoError;
   0061 6f05     [5]             CLR   5,X
   0063          L63:    
   0063 95       [2]             TSX   
@@ -961,18 +964,18 @@ ANSI-C/cC++ Compiler for HC08 V-5.0.45 Build 14019, Jan 20 2014
   0069 e67c     [3]             LDA   124,X
   006b 9ee105   [4]             CMP   5,SP
   006e 22af     [3]             BHI   L1F ;abs = 001f
-  524:            }
-  525:          }      
-  526:        }
-  527:        
-  528:        /* Free current block */
-  529:        pBlock = pDescBlock;
-  530:        pDescBlock = pDescBlock->pNext;              
+  527:            }
+  528:          }      
+  529:        }
+  530:        
+  531:        /* Free current block */
+  532:        pBlock = pDescBlock;
+  533:        pDescBlock = pDescBlock->pNext;              
   0070 89       [2]             PSHX  
   0071 8b       [2]             PSHH  
   0072 9ece7d   [5]             LDHX  125,X
   0075 9eff05   [5]             STHX  5,SP
-  531:        MSG_Free(pBlock);
+  534:        MSG_Free(pBlock);
   0078 9efe01   [5]             LDHX  1,SP
   007b ac000000 [8]             CALL  MM_Free
   007f a702     [2]             AIS   #2
@@ -980,63 +983,63 @@ ANSI-C/cC++ Compiler for HC08 V-5.0.45 Build 14019, Jan 20 2014
   0081 9efe03   [5]             LDHX  3,SP
   0084 2694     [3]             BNE   L1A ;abs = 001a
   0086          L86:    
-  532:      }
-  533:    }
-  534:    
-  535:    if (pDescBlock)
+  535:      }
+  536:    }
+  537:    
+  538:    if (pDescBlock)
   0086 9efe03   [5]             LDHX  3,SP
   0089 2704     [3]             BEQ   L8F ;abs = 008f
-  536:        MSG_Free(pDescBlock);
+  539:        MSG_Free(pDescBlock);
   008b ac000000 [8]             CALL  MM_Free
   008f          L8F:    
-  537:    
-  538:    return rc;
+  540:    
+  541:    return rc;
   008f 95       [2]             TSX   
   0090 e605     [3]             LDA   5,X
-  539:  }
+  542:  }
   0092 a707     [2]             AIS   #7
   0094 8d       [7]             RTC   
-  540:  
-  541:  /******************************************************************************
-  542:  * The App_SendAssociateRequest(void) will create an Associate Request message
-  543:  * and send it to the coordinator it wishes to associate to. The function uses
-  544:  * information gained about the coordinator during the scan procedure.
-  545:  *
-  546:  * The function may return either of the following values:
-  547:  *   errorNoError:          The Associate Request message was sent successfully.
-  548:  *   errorInvalidParameter: The MLME service access point rejected the
-  549:  *                          message due to an invalid parameter.
-  550:  *   errorAllocFailed:      A message buffer could not be allocated.
-  551:  *
-  552:  ******************************************************************************/
-  553:  static uint8_t App_SendAssociateRequest(void)
-  554:  {
+  543:  
+  544:  /******************************************************************************
+  545:  * The App_SendAssociateRequest(void) will create an Associate Request message
+  546:  * and send it to the coordinator it wishes to associate to. The function uses
+  547:  * information gained about the coordinator during the scan procedure.
+  548:  *
+  549:  * The function may return either of the following values:
+  550:  *   errorNoError:          The Associate Request message was sent successfully.
+  551:  *   errorInvalidParameter: The MLME service access point rejected the
+  552:  *                          message due to an invalid parameter.
+  553:  *   errorAllocFailed:      A message buffer could not be allocated.
+  554:  *
+  555:  ******************************************************************************/
+  556:  static uint8_t App_SendAssociateRequest(void)
+  557:  {
   0000 a7fc     [2]             AIS   #-4
-  555:    mlmeMessage_t *pMsg;
-  556:    mlmeAssociateReq_t *pAssocReq;
-  557:  
-  558:    CommUtil_Print("Sending the MLME-Associate Request message to the MAC...", gAllowToBlock_d);
+  558:    mlmeMessage_t *pMsg;
+  559:    mlmeAssociateReq_t *pAssocReq;
+  560:  
+  561:    CommUtil_Print("Sending the MLME-Associate Request message to the MAC...", gAllowToBlock_d);
   0002 450000   [3]             LDHX  @"Sending the MLME-Associate Request message to the MAC..."
-  0005 ac000077 [8]             CALL  App_SendAssociateRequest:119
-  559:    
-  560:    /* Allocate a message for the MLME message. */
-  561:    pMsg = MSG_AllocType(mlmeMessage_t);
+  0005 ac000078 [8]             CALL  App_SendAssociateRequest:120
+  562:    
+  563:    /* Allocate a message for the MLME message. */
+  564:    pMsg = MSG_AllocType(mlmeMessage_t);
   0009 a623     [2]             LDA   #35
   000b ac000000 [8]             CALL  MM_Alloc
   000f 9eff03   [5]             STHX  3,SP
-  562:    if(pMsg != NULL)
-  0012 2757     [3]             BEQ   L6B ;abs = 006b
-  563:    {
-  564:      /* This is a MLME-ASSOCIATE.req command. */
-  565:      pMsg->msgType = gMlmeAssociateReq_c;
+  565:    if(pMsg != NULL)
+  0012 2758     [3]             BEQ   L6C ;abs = 006c
+  566:    {
+  567:      /* This is a MLME-ASSOCIATE.req command. */
+  568:      pMsg->msgType = gMlmeAssociateReq_c;
   0014 7f       [4]             CLR   ,X
-  566:      
-  567:      /* Create the Associate request message data. */
-  568:      pAssocReq = &pMsg->msgData.associateReq;
+  569:      
+  570:      /* Create the Associate request message data. */
+  571:      pAssocReq = &pMsg->msgData.associateReq;
   0015 af01     [2]             AIX   #1
-  569:   
-  570:      /* Use the coordinator info we got from the Active Scan. */
-  571:      FLib_MemCpy(pAssocReq->coordAddress, mCoordInfo.coordAddress, 8);
+  572:   
+  573:      /* Use the coordinator info we got from the Active Scan. */
+  574:      FLib_MemCpy(pAssocReq->coordAddress, mCoordInfo.coordAddress, 8);
   0017 89       [2]             PSHX  
   0018 8b       [2]             PSHH  
   0019 9eff03   [5]             STHX  3,SP
@@ -1044,7 +1047,7 @@ ANSI-C/cC++ Compiler for HC08 V-5.0.45 Build 14019, Jan 20 2014
   001f a608     [2]             LDA   #8
   0021 ac000000 [8]             CALL  FLib_MemCpy
   0025 a702     [2]             AIS   #2
-  572:      FLib_MemCpy(pAssocReq->coordPanId,   mCoordInfo.coordPanId, 2);
+  575:      FLib_MemCpy(pAssocReq->coordPanId,   mCoordInfo.coordPanId, 2);
   0027 9efe01   [5]             LDHX  1,SP
   002a af08     [2]             AIX   #8
   002c 89       [2]             PSHX  
@@ -1053,122 +1056,122 @@ ANSI-C/cC++ Compiler for HC08 V-5.0.45 Build 14019, Jan 20 2014
   0031 a602     [2]             LDA   #2
   0033 ac000000 [8]             CALL  FLib_MemCpy
   0037 a702     [2]             AIS   #2
-  573:      pAssocReq->coordAddrMode      = mCoordInfo.coordAddrMode;
+  576:      pAssocReq->coordAddrMode      = mCoordInfo.coordAddrMode;
   0039 c6000a   [4]             LDA   mCoordInfo:10
   003c 9efe01   [5]             LDHX  1,SP
   003f e70a     [3]             STA   10,X
-  574:      pAssocReq->logicalChannel     = mCoordInfo.logicalChannel;
+  577:      pAssocReq->logicalChannel     = mCoordInfo.logicalChannel;
   0041 c6000b   [4]             LDA   mCoordInfo:11
   0044 e70b     [3]             STA   11,X
-  575:  #ifndef gMAC2006_d    
-  576:      pAssocReq->securityEnable     = FALSE;
-  577:  #else    
-  578:      pAssocReq->securityLevel = 0;
+  578:  #ifndef gMAC2006_d    
+  579:      pAssocReq->securityEnable     = FALSE;
+  580:  #else    
+  581:      pAssocReq->securityLevel = 0;
   0046 6f0c     [5]             CLR   12,X
-  579:  #endif //gMAC2006_d    
-  580:      /* We want the coordinator to assign a short address to us. */
-  581:      pAssocReq->capabilityInfo     = gCapInfoAllocAddr_c;
-  0048 a680     [2]             LDA   #-128
-  004a e717     [3]             STA   23,X
-  582:        
-  583:      /* Send the Associate Request to the MLME. */
-  584:      if(MSG_Send(NWK_MLME, pMsg) == gSuccess_c)
-  004c 9efe03   [5]             LDHX  3,SP
-  004f ac000000 [8]             CALL  NWK_MLME_SapHandler
-  0053 4d       [1]             TSTA  
-  0054 260a     [3]             BNE   L60 ;abs = 0060
-  585:      {
-  586:        CommUtil_Print("Done\n\r", gAllowToBlock_d);
-  0056 450000   [3]             LDHX  @"Done\012\015"
-  0059 ac000077 [8]             CALL  App_SendAssociateRequest:119
-  587:        return errorNoError;
-  005d 4f       [1]             CLRA  
-  005e 2014     [3]             BRA   L74 ;abs = 0074
-  0060          L60:    
-  588:      }
-  589:      else
-  590:      {
-  591:        /* One or more parameters in the message were invalid. */
-  592:        CommUtil_Print("Invalid parameter!\n\r", gAllowToBlock_d);
-  0060 450000   [3]             LDHX  @"Invalid parameter!\012\015"
-  0063 ac000077 [8]             CALL  App_SendAssociateRequest:119
-  593:        return errorInvalidParameter;
-  0067 a605     [2]             LDA   #5
-  0069 2009     [3]             BRA   L74 ;abs = 0074
-  006b          L6B:    
-  594:      }
-  595:    }
-  596:    else
-  597:    {
-  598:      /* Allocation of a message buffer failed. */
-  599:      CommUtil_Print("Message allocation failed!\n\r", gAllowToBlock_d);
-  006b 450000   [3]             LDHX  @"Message allocation failed!\012\015"
-  006e ac000077 [8]             CALL  App_SendAssociateRequest:119
-  600:      return errorAllocFailed;
-  0072 a604     [2]             LDA   #4
-  0074          L74:    
-  601:    }
-  602:  }
-  0074 a704     [2]             AIS   #4
-  0076 8d       [7]             RTC   
-  0077          L77:    
-  0077 a601     [2]             LDA   #1
-  0079 ac000000 [8]             CALL  CommUtil_Print
-  007d 8d       [7]             RTC   
-  603:  
-  604:  /******************************************************************************
-  605:  * The App_HandleAssociateConfirm(nwkMessage_t *pMsg) function will handle the
-  606:  * Associate confirm message received from the MLME when the Association
-  607:  * procedure has completed. The message contains the short address that the
-  608:  * coordinator has assigned to us. This address is 0xfffe if we did not specify
-  609:  * the gCapInfoAllocAddr_c flag in the capability info field of the Associate
-  610:  * request. The address and address mode are saved in global variables. They
-  611:  * will be used in the next demo application when sending data.
-  612:  *
-  613:  ******************************************************************************/
-  614:  static uint8_t App_HandleAssociateConfirm(nwkMessage_t *pMsg)
-  615:  {
+  582:  #endif //gMAC2006_d    
+  583:      /* We want the coordinator to assign a short address to us. */
+  584:      pAssocReq->capabilityInfo = EndDeviceConfig.Capabilities;//gCapInfoAllocAddr_c;
+  0048 c60000   [4]             LDA   EndDeviceConfig
+  004b e717     [3]             STA   23,X
+  585:        
+  586:      /* Send the Associate Request to the MLME. */
+  587:      if(MSG_Send(NWK_MLME, pMsg) == gSuccess_c)
+  004d 9efe03   [5]             LDHX  3,SP
+  0050 ac000000 [8]             CALL  NWK_MLME_SapHandler
+  0054 4d       [1]             TSTA  
+  0055 260a     [3]             BNE   L61 ;abs = 0061
+  588:      {
+  589:        CommUtil_Print("Done\n\r", gAllowToBlock_d);
+  0057 450000   [3]             LDHX  @"Done\012\015"
+  005a ac000078 [8]             CALL  App_SendAssociateRequest:120
+  590:        return errorNoError;
+  005e 4f       [1]             CLRA  
+  005f 2014     [3]             BRA   L75 ;abs = 0075
+  0061          L61:    
+  591:      }
+  592:      else
+  593:      {
+  594:        /* One or more parameters in the message were invalid. */
+  595:        CommUtil_Print("Invalid parameter!\n\r", gAllowToBlock_d);
+  0061 450000   [3]             LDHX  @"Invalid parameter!\012\015"
+  0064 ac000078 [8]             CALL  App_SendAssociateRequest:120
+  596:        return errorInvalidParameter;
+  0068 a605     [2]             LDA   #5
+  006a 2009     [3]             BRA   L75 ;abs = 0075
+  006c          L6C:    
+  597:      }
+  598:    }
+  599:    else
+  600:    {
+  601:      /* Allocation of a message buffer failed. */
+  602:      CommUtil_Print("Message allocation failed!\n\r", gAllowToBlock_d);
+  006c 450000   [3]             LDHX  @"Message allocation failed!\012\015"
+  006f ac000078 [8]             CALL  App_SendAssociateRequest:120
+  603:      return errorAllocFailed;
+  0073 a604     [2]             LDA   #4
+  0075          L75:    
+  604:    }
+  605:  }
+  0075 a704     [2]             AIS   #4
+  0077 8d       [7]             RTC   
+  0078          L78:    
+  0078 a601     [2]             LDA   #1
+  007a ac000000 [8]             CALL  CommUtil_Print
+  007e 8d       [7]             RTC   
+  606:  
+  607:  /******************************************************************************
+  608:  * The App_HandleAssociateConfirm(nwkMessage_t *pMsg) function will handle the
+  609:  * Associate confirm message received from the MLME when the Association
+  610:  * procedure has completed. The message contains the short address that the
+  611:  * coordinator has assigned to us. This address is 0xfffe if we did not specify
+  612:  * the gCapInfoAllocAddr_c flag in the capability info field of the Associate
+  613:  * request. The address and address mode are saved in global variables. They
+  614:  * will be used in the next demo application when sending data.
+  615:  *
+  616:  ******************************************************************************/
+  617:  static uint8_t App_HandleAssociateConfirm(nwkMessage_t *pMsg)
+  618:  {
   0000 89       [2]             PSHX  
   0001 8b       [2]             PSHH  
-  616:    /* This is our own extended address (MAC address). It cannot be modified. */
-  617:    extern uint8_t aExtendedAddress[8];
-  618:    
-  619:    /* If the coordinator assigns a short address of 0xfffe then,
-  620:       that means we must use our own extended address in all
-  621:       communications with the coordinator. Otherwise, we use
-  622:       the short address assigned to us. */
-  623:    if ( pMsg->msgData.associateCnf.status == gSuccess_c) 
+  619:    /* This is our own extended address (MAC address). It cannot be modified. */
+  620:    extern uint8_t aExtendedAddress[8];
+  621:    
+  622:    /* If the coordinator assigns a short address of 0xfffe then,
+  623:       that means we must use our own extended address in all
+  624:       communications with the coordinator. Otherwise, we use
+  625:       the short address assigned to us. */
+  626:    if ( pMsg->msgData.associateCnf.status == gSuccess_c) 
   0002 6d03     [4]             TST   3,X
   0004 2633     [3]             BNE   L39 ;abs = 0039
-  624:    {
-  625:  
-  626:  	  if( (pMsg->msgData.associateCnf.assocShortAddress[0] >= 0xFE) && 
+  627:    {
+  628:  
+  629:  	  if( (pMsg->msgData.associateCnf.assocShortAddress[0] >= 0xFE) && 
   0006 e601     [3]             LDA   1,X
   0008 a1fe     [2]             CMP   #-2
   000a 2516     [3]             BCS   L22 ;abs = 0022
-  627:  	      (pMsg->msgData.associateCnf.assocShortAddress[1] == 0xFF) )
+  630:  	      (pMsg->msgData.associateCnf.assocShortAddress[1] == 0xFF) )
   000c e602     [3]             LDA   2,X
   000e 4c       [1]             INCA  
   000f 2611     [3]             BNE   L22 ;abs = 0022
-  628:  	  {
-  629:  	    mAddrMode = gAddrModeLong_c;
+  631:  	  {
+  632:  	    mAddrMode = gAddrModeLong_c;
   0011 a603     [2]             LDA   #3
   0013 c70000   [4]             STA   mAddrMode
-  630:  	    FLib_MemCpy(maMyAddress, (void *)aExtendedAddress, 8);
+  633:  	    FLib_MemCpy(maMyAddress, (void *)aExtendedAddress, 8);
   0016 450000   [3]             LDHX  @maMyAddress
   0019 89       [2]             PSHX  
   001a 8b       [2]             PSHH  
   001b 450000   [3]             LDHX  @aExtendedAddress
   001e a608     [2]             LDA   #8
-  631:  	  }
+  634:  	  }
   0020 200f     [3]             BRA   L31 ;abs = 0031
   0022          L22:    
-  632:  	  else
-  633:  	  {
-  634:  	    mAddrMode = gAddrModeShort_c;
+  635:  	  else
+  636:  	  {
+  637:  	    mAddrMode = gAddrModeShort_c;
   0022 a602     [2]             LDA   #2
   0024 c70000   [4]             STA   mAddrMode
-  635:  	    FLib_MemCpy(maMyAddress, pMsg->msgData.associateCnf.assocShortAddress, 2);
+  638:  	    FLib_MemCpy(maMyAddress, pMsg->msgData.associateCnf.assocShortAddress, 2);
   0027 450000   [3]             LDHX  @maMyAddress
   002a 89       [2]             PSHX  
   002b 8b       [2]             PSHH  
@@ -1177,194 +1180,198 @@ ANSI-C/cC++ Compiler for HC08 V-5.0.45 Build 14019, Jan 20 2014
   0031          L31:    
   0031 ac000000 [8]             CALL  FLib_MemCpy
   0035 a702     [2]             AIS   #2
-  636:  	  }
-  637:  	    return gSuccess_c;
+  639:  	  }
+  640:  	    return gSuccess_c;
   0037 4f       [1]             CLRA  
   0038 65       [3]             SKIP2 L3B ;abs = 003b
   0039          L39:    
-  638:    } 
-  639:    
-  640:    else 
-  641:    {
-  642:  	return pMsg->msgData.associateCnf.status; 
+  641:    } 
+  642:    
+  643:    else 
+  644:    {
+  645:  	return pMsg->msgData.associateCnf.status; 
   0039 e603     [3]             LDA   3,X
   003b          L3B:    
-  643:    }
-  644:  }
+  646:    }
+  647:  }
   003b a702     [2]             AIS   #2
   003d 8d       [7]             RTC   
-  645:  /******************************************************************************
-  646:  * The App_HandleMlmeInput(nwkMessage_t *pMsg) function will handle various
-  647:  * messages from the MLME, e.g. poll confirm.
-  648:  *
-  649:  * The function may return either of the following values:
-  650:  *   errorNoError:   The message was processed.
-  651:  *   errorNoMessage: The message pointer is NULL.
-  652:  ******************************************************************************/
-  653:  static uint8_t App_HandleMlmeInput(nwkMessage_t *pMsg)
-  654:  {
-  655:    if(pMsg == NULL)
+  648:  /******************************************************************************
+  649:  * The App_HandleMlmeInput(nwkMessage_t *pMsg) function will handle various
+  650:  * messages from the MLME, e.g. poll confirm.
+  651:  *
+  652:  * The function may return either of the following values:
+  653:  *   errorNoError:   The message was processed.
+  654:  *   errorNoMessage: The message pointer is NULL.
+  655:  ******************************************************************************/
+  656:  static uint8_t App_HandleMlmeInput(nwkMessage_t *pMsg)
+  657:  {
+  658:    if(pMsg == NULL)
   0000 650000   [3]             CPHX  #0
   0003 2603     [3]             BNE   L8 ;abs = 0008
-  656:      return errorNoMessage;
+  659:      return errorNoMessage;
   0005 a603     [2]             LDA   #3
   0007 8d       [7]             RTC   
   0008          L8:     
-  657:    
-  658:    /* Handle the incoming message. The type determines the sort of processing.*/
-  659:    switch(pMsg->msgType) {
+  660:    
+  661:    /* Handle the incoming message. The type determines the sort of processing.*/
+  662:    switch(pMsg->msgType) {
   0008 f6       [3]             LDA   ,X
   0009 a110     [2]             CMP   #16
   000b 260e     [3]             BNE   L1B ;abs = 001b
-  660:    case gNwkPollCnf_c:
-  661:      if(pMsg->msgData.pollCnf.status != gSuccess_c)
+  663:    case gNwkPollCnf_c:
+  664:      if(pMsg->msgData.pollCnf.status != gSuccess_c)
   000d 6d01     [4]             TST   1,X
   000f 270a     [3]             BEQ   L1B ;abs = 001b
-  662:      {
-  663:        /* The Poll Confirm status was not successful. Usually this happens if
-  664:           no data was available at the coordinator. In this case we start
-  665:           polling at a lower rate to conserve power. */
-  666:        mPollInterval = mDefaultValueOfPollIntervalSlow_c;
+  665:      {
+  666:        /* The Poll Confirm status was not successful. Usually this happens if
+  667:           no data was available at the coordinator. In this case we start
+  668:           polling at a lower rate to conserve power. */
+  669:        mPollInterval = mDefaultValueOfPollIntervalSlow_c;
   0011 450334   [3]             LDHX  #820
   0014 960000   [5]             STHX  mPollInterval
-  667:        
-  668:        /* If we get to this point, then no data was available, and we
-  669:           allow a new poll request. Otherwise, we wait for the data
-  670:           indication before allowing the next poll request. */
-  671:        mWaitPollConfirm = FALSE;
+  670:        
+  671:        /* If we get to this point, then no data was available, and we
+  672:           allow a new poll request. Otherwise, we wait for the data
+  673:           indication before allowing the next poll request. */
+  674:        mWaitPollConfirm = FALSE;
   0017 4f       [1]             CLRA  
   0018 c70000   [4]             STA   mWaitPollConfirm
   001b          L1B:    
-  672:      }
-  673:      break;
-  674:    }
-  675:    return errorNoError;
+  675:      }
+  676:      break;
+  677:    }
+  678:    return errorNoError;
   001b 4f       [1]             CLRA  
-  676:  }
+  679:  }
   001c 8d       [7]             RTC   
-  677:  
-  678:  /******************************************************************************
-  679:  * The App_HandleMcpsInput(mcpsToNwkMessage_t *pMsgIn) function will handle 
-  680:  * messages from the MCPS, e.g. Data Confirm, and Data Indication.
-  681:  *
-  682:  ******************************************************************************/
-  683:  static void App_HandleMcpsInput(mcpsToNwkMessage_t *pMsgIn)
-  684:  {
+  680:  
+  681:  /******************************************************************************
+  682:  * The App_HandleMcpsInput(mcpsToNwkMessage_t *pMsgIn) function will handle 
+  683:  * messages from the MCPS, e.g. Data Confirm, and Data Indication.
+  684:  *
+  685:  ******************************************************************************/
+  686:  static void App_HandleMcpsInput(mcpsToNwkMessage_t *pMsgIn)
+  687:  {
   0000 89       [2]             PSHX  
   0001 8b       [2]             PSHH  
   0002 a7fe     [2]             AIS   #-2
-  685:    switch(pMsgIn->msgType)
+  688:    switch(pMsgIn->msgType)
   0004 f6       [3]             LDA   ,X
   0005 2704     [3]             BEQ   LB ;abs = 000b
-  0007 4b29     [4]             DBNZA L32 ;abs = 0032
+  0007 4b32     [4]             DBNZA L3B ;abs = 003b
   0009 200b     [3]             BRA   L16 ;abs = 0016
   000b          LB:     
-  686:    {
-  687:      /* The MCPS-Data confirm is sent by the MAC to the network 
-  688:         or application layer when data has been sent. */
-  689:    case gMcpsDataCnf_c:
-  690:      if(mcPendingPackets)
+  689:    {
+  690:      /* The MCPS-Data confirm is sent by the MAC to the network 
+  691:         or application layer when data has been sent. */
+  692:    case gMcpsDataCnf_c:
+  693:      if(mcPendingPackets)
   000b c60000   [4]             LDA   mcPendingPackets
-  000e 2722     [3]             BEQ   L32 ;abs = 0032
-  691:        mcPendingPackets--;
+  000e 272b     [3]             BEQ   L3B ;abs = 003b
+  694:        mcPendingPackets--;
   0010 450000   [3]             LDHX  @mcPendingPackets
   0013 7a       [4]             DEC   ,X
-  0014 201c     [3]             BRA   L32 ;abs = 0032
+  0014 2025     [3]             BRA   L3B ;abs = 003b
   0016          L16:    
-  692:      break;
-  693:  
-  694:    case gMcpsDataInd_c:
-  695:      /* Copy the received data to the serial terminal interface. */
-  696:      CommUtil_Tx(pMsgIn->msgData.dataInd.pMsdu, pMsgIn->msgData.dataInd.msduLength);
+  695:      break;
+  696:  
+  697:    case gMcpsDataInd_c:
+  698:      /* Copy the received data to the serial terminal interface. */
+  699:      CommUtil_Tx(pMsgIn->msgData.dataInd.pMsdu, pMsgIn->msgData.dataInd.msduLength);
   0016 9ece29   [5]             LDHX  41,X
   0019 9eff01   [5]             STHX  1,SP
   001c 9efe03   [5]             LDHX  3,SP
   001f e617     [3]             LDA   23,X
   0021 9efe01   [5]             LDHX  1,SP
   0024 ac000000 [8]             CALL  CommUtil_Tx
-  697:      /* Since we received data, the coordinator might have more to send. We 
-  698:         reduce the polling interval to raise the throughput while data is
-  699:         available. */
-  700:      mPollInterval = mDefaultValueOfPollIntervalFast_c;
-  0028 ae52     [2]             LDX   #82
-  002a 8c       [1]             CLRH  
-  002b 960000   [5]             STHX  mPollInterval
-  701:      /* Allow another MLME-Poll request. */
-  702:      mWaitPollConfirm = FALSE;
-  002e 4f       [1]             CLRA  
-  002f c70000   [4]             STA   mWaitPollConfirm
-  0032          L32:    
-  703:      break;
-  704:    }
-  705:  }
-  0032 a704     [2]             AIS   #4
-  0034 8d       [7]             RTC   
-  706:  
-  707:  /******************************************************************************
-  708:  * The App_WaitMsg(nwkMessage_t *pMsg, uint8_t msgType) function does not, as
-  709:  * the name implies, wait for a message, thus blocking the execution of the
-  710:  * state machine. Instead the function analyzes the supplied message to 
-  711:  * determine whether or not the message is of the expected type.
-  712:  * The function may return either of the following values:
-  713:  *   errorNoError: The message was of the expected type.
-  714:  *   errorNoMessage: The message pointer is NULL.
-  715:  *   errorWrongConfirm: The message is not of the expected type.
-  716:  *
-  717:  ******************************************************************************/
-  718:  static uint8_t App_WaitMsg(nwkMessage_t *pMsg, uint8_t msgType)
-  719:  {
-  720:    /* Do we have a message? If not, the exit with error code */
-  721:    if(pMsg == NULL)
+  700:      CommUtil_Print("\n\r", gAllowToBlock_d);
+  0028 450000   [3]             LDHX  @"\012\015"
+  002b a601     [2]             LDA   #1
+  002d ac000000 [8]             CALL  CommUtil_Print
+  701:      /* Since we received data, the coordinator might have more to send. We 
+  702:         reduce the polling interval to raise the throughput while data is
+  703:         available. */
+  704:      mPollInterval = mDefaultValueOfPollIntervalFast_c;
+  0031 ae52     [2]             LDX   #82
+  0033 8c       [1]             CLRH  
+  0034 960000   [5]             STHX  mPollInterval
+  705:      /* Allow another MLME-Poll request. */
+  706:      mWaitPollConfirm = FALSE;
+  0037 4f       [1]             CLRA  
+  0038 c70000   [4]             STA   mWaitPollConfirm
+  003b          L3B:    
+  707:      break;
+  708:    }
+  709:  }
+  003b a704     [2]             AIS   #4
+  003d 8d       [7]             RTC   
+  710:  
+  711:  /******************************************************************************
+  712:  * The App_WaitMsg(nwkMessage_t *pMsg, uint8_t msgType) function does not, as
+  713:  * the name implies, wait for a message, thus blocking the execution of the
+  714:  * state machine. Instead the function analyzes the supplied message to 
+  715:  * determine whether or not the message is of the expected type.
+  716:  * The function may return either of the following values:
+  717:  *   errorNoError: The message was of the expected type.
+  718:  *   errorNoMessage: The message pointer is NULL.
+  719:  *   errorWrongConfirm: The message is not of the expected type.
+  720:  *
+  721:  ******************************************************************************/
+  722:  static uint8_t App_WaitMsg(nwkMessage_t *pMsg, uint8_t msgType)
+  723:  {
+  724:    /* Do we have a message? If not, the exit with error code */
+  725:    if(pMsg == NULL)
   0000 650000   [3]             CPHX  #0
   0003 2603     [3]             BNE   L8 ;abs = 0008
-  722:      return errorNoMessage;
+  726:      return errorNoMessage;
   0005 a603     [2]             LDA   #3
   0007 8d       [7]             RTC   
   0008          L8:     
-  723:  
-  724:    /* Is it the expected message type? If not then exit with error code */
-  725:    if(pMsg->msgType != msgType)
+  727:  
+  728:    /* Is it the expected message type? If not then exit with error code */
+  729:    if(pMsg->msgType != msgType)
   0008 f1       [3]             CMP   ,X
   0009 2703     [3]             BEQ   LE ;abs = 000e
-  726:      return errorWrongConfirm;
+  730:      return errorWrongConfirm;
   000b a601     [2]             LDA   #1
   000d 8d       [7]             RTC   
   000e          LE:     
-  727:  
-  728:    /* Found the expected message. Return with success code */
-  729:    return errorNoError;
-  000e 4f       [1]             CLRA  
-  730:  }
-  000f 8d       [7]             RTC   
   731:  
-  732:  /******************************************************************************
-  733:  * The App_TransmitCommData() function will perform (single/multi buffered)
-  734:  * data transmissions of data received by the serial terminal interface. Data could also come from
-  735:  * other sources such as sensors etc. This is completely determined by the
-  736:  * application. The constant mDefaultValueOfMaxPendingDataPackets_c determine the maximum
-  737:  * number of packets pending for transmission in the MAC. A global variable
-  738:  * is incremented each time a data packet is sent to the MCPS, and decremented
-  739:  * when the corresponding MCPS-Data Confirm message is received. If the counter
-  740:  * reaches the defined maximum no more data buffers are allocated until the
-  741:  * counter is decreased below the maximum number of pending packets.
-  742:  *
-  743:  * The function uses the coordinator information gained during the Active Scan,
-  744:  * and the short address assigned to us by coordinator, for building an MCPS-
-  745:  * Data Request message. The message is sent to the MCPS service access point
-  746:  * in the MAC.
-  747:  ******************************************************************************/
-  748:  static void App_TransmitCommData(void)
-  749:  {   
-  750:    static uint8_t keysBuffer[mMaxKeysToReceive_c];
-  751:    static uint8_t keysReceived = 0;
-  752:    
-  753:    /* get data from serial terminal interface */
-  754:    if( keysReceived < mMaxKeysToReceive_c ) 
+  732:    /* Found the expected message. Return with success code */
+  733:    return errorNoError;
+  000e 4f       [1]             CLRA  
+  734:  }
+  000f 8d       [7]             RTC   
+  735:  
+  736:  /******************************************************************************
+  737:  * The App_TransmitCommData() function will perform (single/multi buffered)
+  738:  * data transmissions of data received by the serial terminal interface. Data could also come from
+  739:  * other sources such as sensors etc. This is completely determined by the
+  740:  * application. The constant mDefaultValueOfMaxPendingDataPackets_c determine the maximum
+  741:  * number of packets pending for transmission in the MAC. A global variable
+  742:  * is incremented each time a data packet is sent to the MCPS, and decremented
+  743:  * when the corresponding MCPS-Data Confirm message is received. If the counter
+  744:  * reaches the defined maximum no more data buffers are allocated until the
+  745:  * counter is decreased below the maximum number of pending packets.
+  746:  *
+  747:  * The function uses the coordinator information gained during the Active Scan,
+  748:  * and the short address assigned to us by coordinator, for building an MCPS-
+  749:  * Data Request message. The message is sent to the MCPS service access point
+  750:  * in the MAC.
+  751:  ******************************************************************************/
+  752:  static void App_TransmitCommData(void)
+  753:  {   
+  754:    static uint8_t keysBuffer[mMaxKeysToReceive_c];
+  755:    static uint8_t keysReceived = 0;
+  756:    
+  757:    /* get data from serial terminal interface */
+  758:    if( keysReceived < mMaxKeysToReceive_c ) 
   0000 c60000   [4]             LDA   keysReceived
   0003 a120     [2]             CMP   #32
   0005 2414     [3]             BCC   L1B ;abs = 001b
-  755:    {
-  756:      if(Comm_GetByteFromRxBuffer(&keysBuffer[keysReceived])) 
+  759:    {
+  760:      if(Comm_GetByteFromRxBuffer(&keysBuffer[keysReceived])) 
   0007 ab00     [2]             ADD   @keysBuffer
   0009 87       [2]             PSHA  
   000a 4f       [1]             CLRA  
@@ -1375,41 +1382,41 @@ ANSI-C/cC++ Compiler for HC08 V-5.0.45 Build 14019, Jan 20 2014
   0010 ac000000 [8]             CALL  Uart1_GetByteFromRxBuffer
   0014 4d       [1]             TSTA  
   0015 2704     [3]             BEQ   L1B ;abs = 001b
-  757:      {
-  758:      keysReceived++;
+  761:      {
+  762:      keysReceived++;
   0017 450000   [3]             LDHX  @keysReceived
   001a 7c       [4]             INC   ,X
   001b          L1B:    
-  759:      }
-  760:    }
-  761:  	/* Use multi buffering for increased TX performance. It does not really
-  762:       have any effect at a UART baud rate of 19200bps but serves as an
-  763:       example of how the throughput may be improved in a real-world 
-  764:       application where the data rate is of concern. */
-  765:    if( (mcPendingPackets < mDefaultValueOfMaxPendingDataPackets_c) && (mpPacket == NULL) ) 
+  763:      }
+  764:    }
+  765:  	/* Use multi buffering for increased TX performance. It does not really
+  766:       have any effect at a UART baud rate of 19200bps but serves as an
+  767:       example of how the throughput may be improved in a real-world 
+  768:       application where the data rate is of concern. */
+  769:    if( (mcPendingPackets < mDefaultValueOfMaxPendingDataPackets_c) && (mpPacket == NULL) ) 
   001b c60000   [4]             LDA   mcPendingPackets
   001e a102     [2]             CMP   #2
   0020 240e     [3]             BCC   L30 ;abs = 0030
   0022 320000   [5]             LDHX  mpPacket
   0025 2609     [3]             BNE   L30 ;abs = 0030
-  766:    {
-  767:      /* If the maximum number of pending data buffes is below maximum limit 
-  768:         and we do not have a data buffer already then allocate one. */
-  769:      mpPacket = MSG_Alloc(gMaxRxTxDataLength_c);
+  770:    {
+  771:      /* If the maximum number of pending data buffes is below maximum limit 
+  772:         and we do not have a data buffer already then allocate one. */
+  773:      mpPacket = MSG_Alloc(gMaxRxTxDataLength_c);
   0027 a69c     [2]             LDA   #-100
   0029 ac000000 [8]             CALL  MM_Alloc
   002d 960000   [5]             STHX  mpPacket
   0030          L30:    
-  770:    }
-  771:  
-  772:    if(mpPacket != NULL)
+  774:    }
+  775:  
+  776:    if(mpPacket != NULL)
   0030 320000   [5]             LDHX  mpPacket
   0033 2603     [3]             BNE   L38 ;abs = 0038
   0035 cc00be   [4]             JMP   LBE ;abs = 00be
   0038          L38:    
-  773:    {
-  774:      /* get data from serial terminal interface */        
-  775:        mpPacket->msgData.dataReq.pMsdu = (uint8_t*)(&(mpPacket->msgData.dataReq.pMsdu)) + sizeof(uint8_t*);
+  777:    {
+  778:      /* get data from serial terminal interface */        
+  779:        mpPacket->msgData.dataReq.pMsdu = (uint8_t*)(&(mpPacket->msgData.dataReq.pMsdu)) + sizeof(uint8_t*);
   0038 af27     [2]             AIX   #39
   003a 9f       [1]             TXA   
   003b 8b       [2]             PSHH  
@@ -1417,7 +1424,7 @@ ANSI-C/cC++ Compiler for HC08 V-5.0.45 Build 14019, Jan 20 2014
   003f e726     [3]             STA   38,X
   0041 86       [3]             PULA  
   0042 e725     [3]             STA   37,X
-  776:        FLib_MemCpy(mpPacket->msgData.dataReq.pMsdu, (uint8_t*) keysBuffer, keysReceived);
+  780:        FLib_MemCpy(mpPacket->msgData.dataReq.pMsdu, (uint8_t*) keysBuffer, keysReceived);
   0044 9ece25   [5]             LDHX  37,X
   0047 89       [2]             PSHX  
   0048 8b       [2]             PSHH  
@@ -1425,15 +1432,15 @@ ANSI-C/cC++ Compiler for HC08 V-5.0.45 Build 14019, Jan 20 2014
   004c c60000   [4]             LDA   keysReceived
   004f ac000000 [8]             CALL  FLib_MemCpy
   0053 a702     [2]             AIS   #2
-  777:        /* Data was available in the serial terminal interface receive buffer. Now create an
-  778:           MCPS-Data Request message containing the serial terminal interface data. */
-  779:        mpPacket->msgType = gMcpsDataReq_c;
+  781:        /* Data was available in the serial terminal interface receive buffer. Now create an
+  782:           MCPS-Data Request message containing the serial terminal interface data. */
+  783:        mpPacket->msgType = gMcpsDataReq_c;
   0055 320000   [5]             LDHX  mpPacket
   0058 7f       [4]             CLR   ,X
-  780:        /* Create the header using coordinator information gained during 
-  781:           the scan procedure. Also use the short address we were assigned
-  782:           by the coordinator during association. */
-  783:        FLib_MemCpy(mpPacket->msgData.dataReq.dstAddr, mCoordInfo.coordAddress, 8);
+  784:        /* Create the header using coordinator information gained during 
+  785:           the scan procedure. Also use the short address we were assigned
+  786:           by the coordinator during association. */
+  787:        FLib_MemCpy(mpPacket->msgData.dataReq.dstAddr, mCoordInfo.coordAddress, 8);
   0059 af01     [2]             AIX   #1
   005b 89       [2]             PSHX  
   005c 8b       [2]             PSHH  
@@ -1441,7 +1448,7 @@ ANSI-C/cC++ Compiler for HC08 V-5.0.45 Build 14019, Jan 20 2014
   0060 a608     [2]             LDA   #8
   0062 ac000000 [8]             CALL  FLib_MemCpy
   0066 a702     [2]             AIS   #2
-  784:        FLib_MemCpy(mpPacket->msgData.dataReq.srcAddr, maMyAddress, 8);
+  788:        FLib_MemCpy(mpPacket->msgData.dataReq.srcAddr, maMyAddress, 8);
   0068 320000   [5]             LDHX  mpPacket
   006b af0c     [2]             AIX   #12
   006d 89       [2]             PSHX  
@@ -1450,73 +1457,73 @@ ANSI-C/cC++ Compiler for HC08 V-5.0.45 Build 14019, Jan 20 2014
   0072 a608     [2]             LDA   #8
   0074 ac000000 [8]             CALL  FLib_MemCpy
   0078 a702     [2]             AIS   #2
-  785:        FLib_MemCpy(mpPacket->msgData.dataReq.dstPanId, mCoordInfo.coordPanId, 2);
+  789:        FLib_MemCpy(mpPacket->msgData.dataReq.dstPanId, mCoordInfo.coordPanId, 2);
   007a 320000   [5]             LDHX  mpPacket
   007d af09     [2]             AIX   #9
   007f ac0000ce [8]             CALL  App_TransmitCommData:206
-  786:        FLib_MemCpy(mpPacket->msgData.dataReq.srcPanId, mCoordInfo.coordPanId, 2);
+  790:        FLib_MemCpy(mpPacket->msgData.dataReq.srcPanId, mCoordInfo.coordPanId, 2);
   0083 320000   [5]             LDHX  mpPacket
   0086 af14     [2]             AIX   #20
   0088 ac0000ce [8]             CALL  App_TransmitCommData:206
-  787:        mpPacket->msgData.dataReq.dstAddrMode = mCoordInfo.coordAddrMode;
+  791:        mpPacket->msgData.dataReq.dstAddrMode = mCoordInfo.coordAddrMode;
   008c c6000a   [4]             LDA   mCoordInfo:10
   008f 320000   [5]             LDHX  mpPacket
   0092 e70b     [3]             STA   11,X
-  788:        mpPacket->msgData.dataReq.srcAddrMode = mAddrMode;
+  792:        mpPacket->msgData.dataReq.srcAddrMode = mAddrMode;
   0094 c60000   [4]             LDA   mAddrMode
   0097 e716     [3]             STA   22,X
-  789:        mpPacket->msgData.dataReq.msduLength = keysReceived;
+  793:        mpPacket->msgData.dataReq.msduLength = keysReceived;
   0099 c60000   [4]             LDA   keysReceived
   009c e717     [3]             STA   23,X
-  790:        /* Request MAC level acknowledgement of the data packet */
-  791:        mpPacket->msgData.dataReq.txOptions = gTxOptsAck_c;
+  794:        /* Request MAC level acknowledgement of the data packet */
+  795:        mpPacket->msgData.dataReq.txOptions = gTxOptsAck_c;
   009e a601     [2]             LDA   #1
   00a0 e719     [3]             STA   25,X
-  792:        /* Give the data packet a handle. The handle is
-  793:           returned in the MCPS-Data Confirm message. */
-  794:        mpPacket->msgData.dataReq.msduHandle = mMsduHandle++;
+  796:        /* Give the data packet a handle. The handle is
+  797:           returned in the MCPS-Data Confirm message. */
+  798:        mpPacket->msgData.dataReq.msduHandle = mMsduHandle++;
   00a2 c60000   [4]             LDA   mMsduHandle
   00a5 e718     [3]             STA   24,X
   00a7 4c       [1]             INCA  
   00a8 c70000   [4]             STA   mMsduHandle
-  795:  #ifdef gMAC2006_d
-  796:        mpPacket->msgData.dataReq.securityLevel = 0;
+  799:  #ifdef gMAC2006_d
+  800:        mpPacket->msgData.dataReq.securityLevel = 0;
   00ab 6f1a     [5]             CLR   26,X
-  797:  #endif //gMAC2006_d      
-  798:        
-  799:        /* Send the Data Request to the MCPS */
-  800:        (void)MSG_Send(NWK_MCPS, mpPacket);
+  801:  #endif //gMAC2006_d      
+  802:        
+  803:        /* Send the Data Request to the MCPS */
+  804:        (void)MSG_Send(NWK_MCPS, mpPacket);
   00ad ac000000 [8]             CALL  NWK_MCPS_SapHandler
-  801:        /* Prepare for another data buffer */
-  802:        mpPacket = NULL;
+  805:        /* Prepare for another data buffer */
+  806:        mpPacket = NULL;
   00b1 5f       [1]             CLRX  
   00b2 8c       [1]             CLRH  
   00b3 960000   [5]             STHX  mpPacket
-  803:        mcPendingPackets++;
+  807:        mcPendingPackets++;
   00b6 450000   [3]             LDHX  @mcPendingPackets
   00b9 7c       [4]             INC   ,X
-  804:        /* Receive another pressed keys */
-  805:        keysReceived = 0;
+  808:        /* Receive another pressed keys */
+  809:        keysReceived = 0;
   00ba 4f       [1]             CLRA  
   00bb c70000   [4]             STA   keysReceived
   00be          LBE:    
-  806:    }
-  807:        
-  808:    /* If the keysBuffer[] wasn't send over the air because there are too many pending packets, */
-  809:    /* try to send it later   */
-  810:    if (keysReceived)
+  810:    }
+  811:        
+  812:    /* If the keysBuffer[] wasn't send over the air because there are too many pending packets, */
+  813:    /* try to send it later   */
+  814:    if (keysReceived)
   00be c60000   [4]             LDA   keysReceived
   00c1 270a     [3]             BEQ   LCD ;abs = 00cd
-  811:    {
-  812:    TS_SendEvent(gAppTaskID_c, gAppEvtRxFromComm_c);
+  815:    {
+  816:    TS_SendEvent(gAppTaskID_c, gAppEvtRxFromComm_c);
   00c3 c60000   [4]             LDA   gAppTaskID_c
   00c6 ae02     [2]             LDX   #2
   00c8 8c       [1]             CLRH  
   00c9 ac000000 [8]             CALL  TS_SendEvent
   00cd          LCD:    
-  813:    }
-  814:  
-  815:  }
+  817:    }
+  818:  
+  819:  }
   00cd 8d       [7]             RTC   
   00ce          LCE:    
   00ce 89       [2]             PSHX  
@@ -1526,49 +1533,49 @@ ANSI-C/cC++ Compiler for HC08 V-5.0.45 Build 14019, Jan 20 2014
   00d5 ac000000 [8]             CALL  FLib_MemCpy
   00d9 a702     [2]             AIS   #2
   00db 8d       [7]             RTC   
-  816:  
-  817:  /******************************************************************************
-  818:  * The AppPollWaitTimeout() function will check if it is time to send out an
-  819:  * MLME-Poll request in order to receive data from the coordinator. If its time,
-  820:  * and we are permitted then a poll request is created and sent.
-  821:  * 
-  822:  * The function uses the coordinator information gained during the Active Scan
-  823:  * for building the MLME-Poll Request message. The message is sent to the MLME
-  824:  * service access point in the MAC.
-  825:  ******************************************************************************/
-  826:  static void    AppPollWaitTimeout(uint8_t tmr)
-  827:  { 
+  820:  
+  821:  /******************************************************************************
+  822:  * The AppPollWaitTimeout() function will check if it is time to send out an
+  823:  * MLME-Poll request in order to receive data from the coordinator. If its time,
+  824:  * and we are permitted then a poll request is created and sent.
+  825:  * 
+  826:  * The function uses the coordinator information gained during the Active Scan
+  827:  * for building the MLME-Poll Request message. The message is sent to the MLME
+  828:  * service access point in the MAC.
+  829:  ******************************************************************************/
+  830:  static void    AppPollWaitTimeout(uint8_t tmr)
+  831:  { 
   0000 87       [2]             PSHA  
   0001 a7fe     [2]             AIS   #-2
-  828:    
-  829:    /* Just to avoid the compiler warning */
-  830:    tmr++;
+  832:    
+  833:    /* Just to avoid the compiler warning */
+  834:    tmr++;
   0003 95       [2]             TSX   
   0004 6c02     [5]             INC   2,X
-  831:    
-  832:    /* Check if we are permitted, and if it is time to send a poll request.
-  833:       The poll interval is adjusted dynamically to the current band-width
-  834:       requirements. */
-  835:    if(mWaitPollConfirm == FALSE)
+  835:    
+  836:    /* Check if we are permitted, and if it is time to send a poll request.
+  837:       The poll interval is adjusted dynamically to the current band-width
+  838:       requirements. */
+  839:    if(mWaitPollConfirm == FALSE)
   0006 c60000   [4]             LDA   mWaitPollConfirm
   0009 2648     [3]             BNE   L53 ;abs = 0053
-  836:    {
-  837:      /* This is an MLME-POLL.req command. */
-  838:      mlmeMessage_t *pMlmeMsg = MSG_AllocType(mlmeMessage_t);
+  840:    {
+  841:      /* This is an MLME-POLL.req command. */
+  842:      mlmeMessage_t *pMlmeMsg = MSG_AllocType(mlmeMessage_t);
   000b a623     [2]             LDA   #35
   000d ac000000 [8]             CALL  MM_Alloc
   0011 9eff01   [5]             STHX  1,SP
-  839:      if(pMlmeMsg)
+  843:      if(pMlmeMsg)
   0014 273d     [3]             BEQ   L53 ;abs = 0053
-  840:      {
-  841:        /* Create the Poll Request message data. */
-  842:        pMlmeMsg->msgType = gMlmePollReq_c;
+  844:      {
+  845:        /* Create the Poll Request message data. */
+  846:        pMlmeMsg->msgType = gMlmePollReq_c;
   0016 9efe01   [5]             LDHX  1,SP
   0019 a60c     [2]             LDA   #12
   001b f7       [2]             STA   ,X
-  843:   
-  844:        /* Use the coordinator information we got from the Active Scan. */
-  845:        FLib_MemCpy(pMlmeMsg->msgData.pollReq.coordAddress, mCoordInfo.coordAddress, 8);
+  847:   
+  848:        /* Use the coordinator information we got from the Active Scan. */
+  849:        FLib_MemCpy(pMlmeMsg->msgData.pollReq.coordAddress, mCoordInfo.coordAddress, 8);
   001c af01     [2]             AIX   #1
   001e 89       [2]             PSHX  
   001f 8b       [2]             PSHH  
@@ -1576,7 +1583,7 @@ ANSI-C/cC++ Compiler for HC08 V-5.0.45 Build 14019, Jan 20 2014
   0023 a608     [2]             LDA   #8
   0025 ac000000 [8]             CALL  FLib_MemCpy
   0029 a702     [2]             AIS   #2
-  846:        FLib_MemCpy(pMlmeMsg->msgData.pollReq.coordPanId, mCoordInfo.coordPanId, 2);
+  850:        FLib_MemCpy(pMlmeMsg->msgData.pollReq.coordPanId, mCoordInfo.coordPanId, 2);
   002b 9efe01   [5]             LDHX  1,SP
   002e af09     [2]             AIX   #9
   0030 89       [2]             PSHX  
@@ -1585,34 +1592,34 @@ ANSI-C/cC++ Compiler for HC08 V-5.0.45 Build 14019, Jan 20 2014
   0035 a602     [2]             LDA   #2
   0037 ac000000 [8]             CALL  FLib_MemCpy
   003b a702     [2]             AIS   #2
-  847:        pMlmeMsg->msgData.pollReq.coordAddrMode = mCoordInfo.coordAddrMode;
+  851:        pMlmeMsg->msgData.pollReq.coordAddrMode = mCoordInfo.coordAddrMode;
   003d 9efe01   [5]             LDHX  1,SP
   0040 c6000a   [4]             LDA   mCoordInfo:10
   0043 e70b     [3]             STA   11,X
-  848:  #ifndef gMAC2006_d      
-  849:        pMlmeMsg->msgData.pollReq.securityEnable = FALSE;
-  850:  #else
-  851:        pMlmeMsg->msgData.pollReq.securityLevel = 0;
+  852:  #ifndef gMAC2006_d      
+  853:        pMlmeMsg->msgData.pollReq.securityEnable = FALSE;
+  854:  #else
+  855:        pMlmeMsg->msgData.pollReq.securityLevel = 0;
   0045 6f0c     [5]             CLR   12,X
-  852:  #endif //gMAC2006_d      
-  853:        
-  854:        /* Send the Poll Request to the MLME. */
-  855:        if(MSG_Send(NWK_MLME, pMlmeMsg) == gSuccess_c)
+  856:  #endif //gMAC2006_d      
+  857:        
+  858:        /* Send the Poll Request to the MLME. */
+  859:        if(MSG_Send(NWK_MLME, pMlmeMsg) == gSuccess_c)
   0047 ac000000 [8]             CALL  NWK_MLME_SapHandler
   004b 4d       [1]             TSTA  
   004c 2605     [3]             BNE   L53 ;abs = 0053
-  856:        {
-  857:          /* Do not allow another Poll request before the confirm is received. */
-  858:          mWaitPollConfirm = TRUE;
+  860:        {
+  861:          /* Do not allow another Poll request before the confirm is received. */
+  862:          mWaitPollConfirm = TRUE;
   004e a601     [2]             LDA   #1
   0050 c70000   [4]             STA   mWaitPollConfirm
   0053          L53:    
-  859:  
-  860:        }
-  861:      }
-  862:    }
-  863:   /* Restart timer. */
-  864:   TMR_StartSingleShotTimer(mTimer_c, mPollInterval, AppPollWaitTimeout);
+  863:  
+  864:        }
+  865:      }
+  866:    }
+  867:   /* Restart timer. */
+  868:   TMR_StartSingleShotTimer(mTimer_c, mPollInterval, AppPollWaitTimeout);
   0053 c60000   [4]             LDA   mTimer_c
   0056 87       [2]             PSHA  
   0057 320000   [5]             LDHX  mPollInterval
@@ -1627,210 +1634,210 @@ ANSI-C/cC++ Compiler for HC08 V-5.0.45 Build 14019, Jan 20 2014
   0064 a600     [2]             LDA   @AppPollWaitTimeout:PAGE
   0066 87       [2]             PSHA  
   0067 ac000000 [8]             CALL  TMR_StartSingleShotTimer
-  865:  }
+  869:  }
   006b a70b     [2]             AIS   #11
   006d 8d       [7]             RTC   
-  866:  
-  867:  /*****************************************************************************
-  868:  * Function to handle a generic key press. Called for all keys.
-  869:  *****************************************************************************/
-  870:  /****NEWCODE: MODIFIED FUNC, ADDED PARAMETER keyPressed ****/
-  871:  static void App_HandleGenericKey(uint8_t keyPressed)
-  872:  {
-  873:  
-  874:    /****NEWCODE: ADDED SWITCH****/
-  875:    switch(gState)
+  870:  
+  871:  /*****************************************************************************
+  872:  * Function to handle a generic key press. Called for all keys.
+  873:  *****************************************************************************/
+  874:  /****NEWCODE: MODIFIED FUNC, ADDED PARAMETER keyPressed ****/
+  875:  static void App_HandleGenericKey(uint8_t keyPressed)
+  876:  {
+  877:  
+  878:    /****NEWCODE: ADDED SWITCH****/
+  879:    switch(gState)
   0000 ce0000   [4]             LDX   gState
   0003 2706     [3]             BEQ   LB ;abs = 000b
   0005 a305     [2]             CPX   #5
   0007 2631     [3]             BNE   L3A ;abs = 003a
   0009 202b     [3]             BRA   L36 ;abs = 0036
   000b          LB:     
-  876:    {
-  877:      case stateInit:
-  878:        StopLed1Flashing();
+  880:    {
+  881:      case stateInit:
+  882:        StopLed1Flashing();
   000b a601     [2]             LDA   #1
   000d ac000000 [8]             CALL  LED_StopFlash
-  879:        StopLed2Flashing();
+  883:        StopLed2Flashing();
   0011 a602     [2]             LDA   #2
   0013 ac000000 [8]             CALL  LED_StopFlash
-  880:        StopLed3Flashing();
+  884:        StopLed3Flashing();
   0017 a604     [2]             LDA   #4
   0019 ac000000 [8]             CALL  LED_StopFlash
-  881:        StopLed4Flashing();
+  885:        StopLed4Flashing();
   001d a608     [2]             LDA   #8
   001f ac000000 [8]             CALL  LED_StopFlash
-  882:        Led1Off();
+  886:        Led1Off();
   0023 1000     [5]             BSET  0,0
-  883:        Led2Off();
+  887:        Led2Off();
   0025 1800     [5]             BSET  4,0
-  884:        Led3Off();
+  888:        Led3Off();
   0027 1006     [5]             BSET  0,6
-  885:        Led4Off();
+  889:        Led4Off();
   0029 1206     [5]             BSET  1,6
-  886:        LCD_ClearDisplay();
-  887:        LCD_WriteString(1,"Application");
-  888:        LCD_WriteString(2,"    started");     
-  889:        TS_SendEvent(gAppTaskID_c, gAppEvtDummyEvent_c);       
+  890:        LCD_ClearDisplay();
+  891:        LCD_WriteString(1,"Application");
+  892:        LCD_WriteString(2,"    started");     
+  893:        TS_SendEvent(gAppTaskID_c, gAppEvtDummyEvent_c);       
   002b c60000   [4]             LDA   gAppTaskID_c
   002e ae01     [2]             LDX   #1
   0030 8c       [1]             CLRH  
   0031 ac000000 [8]             CALL  TS_SendEvent
-  890:      break;
+  894:      break;
   0035 8d       [7]             RTC   
   0036          L36:    
-  891:      case stateListen:
-  892:      /****NEWCODE: PRESS BUTTON HANDLER - Declared on MyNewTask ****/
-  893:        MyTaskButtonPress(keyPressed);
+  895:      case stateListen:
+  896:      /****NEWCODE: PRESS BUTTON HANDLER - Declared on MyNewTask ****/
+  897:        MyTaskButtonPress(keyPressed);
   0036 ac000000 [8]             CALL  MyTaskButtonPress
   003a          L3A:    
-  894:      /****NEWCODE: PRESS BUTTON HANDLER - Declared on MyNewTask ****/
-  895:  
-  896:      break;
-  897:  
-  898:    }
-  899:    /****NEWCODE: ADDED SWITCH****/
-  900:  }
-  003a 8d       [7]             RTC   
+  898:      /****NEWCODE: PRESS BUTTON HANDLER - Declared on MyNewTask ****/
+  899:  
+  900:      break;
   901:  
-  902:  /*****************************************************************************
-  903:  * Handles all key events for this device.
-  904:  * Interface assumptions: None
-  905:  * Return value: None
-  906:  *****************************************************************************/
-  907:  #if (gMC1323xMatrixKBD_d == TRUE)
-  908:  static void App_HandleKeys(uint8_t events, uint8_t pressedKey)   
-  909:  {
-  910:   (void)events;
-  911:   (void)pressedKey;
-  912:   App_HandleGenericKey(pressedKey);
+  902:    }
+  903:    /****NEWCODE: ADDED SWITCH****/
+  904:  }
+  003a 8d       [7]             RTC   
+  905:  
+  906:  /*****************************************************************************
+  907:  * Handles all key events for this device.
+  908:  * Interface assumptions: None
+  909:  * Return value: None
+  910:  *****************************************************************************/
+  911:  #if (gMC1323xMatrixKBD_d == TRUE)
+  912:  static void App_HandleKeys(uint8_t events, uint8_t pressedKey)   
+  913:  {
+  914:   (void)events;
+  915:   (void)pressedKey;
+  916:   App_HandleGenericKey(pressedKey);
   0000 ac000000 [8]             CALL  App_HandleGenericKey
-  913:  }
+  917:  }
   0004 8d       [7]             RTC   
-  914:  #else
-  915:  static void App_HandleKeys(key_event_t events)
-  916:  {
-  917:    switch ( events ) 
-  918:      { 
-  919:        case gKBD_EventSW1_c:
-  920:        case gKBD_EventSW2_c:
-  921:        case gKBD_EventSW3_c:
-  922:        case gKBD_EventSW4_c:
-  923:        case gKBD_EventLongSW1_c:
-  924:        case gKBD_EventLongSW2_c:
-  925:        case gKBD_EventLongSW3_c:
-  926:        case gKBD_EventLongSW4_c:
-  927:          App_HandleGenericKey(pressedKey);
-  928:  	    break;	
-  929:      }    
-  930:  }
-  931:  #endif //gMC1323xMatrixKBD_d
-  932:  /*****************************************************************************
-  933:  * The DeepSleepWakeupStackProc(void) function is called each time the 
-  934:  * application exits the DeepSleep mode .
-  935:  * 
-  936:  * Return value:
-  937:  *     None
-  938:  *****************************************************************************/
-  939:  void DeepSleepWakeupStackProc(void){
-  940:    return;
-  941:  }
+  918:  #else
+  919:  static void App_HandleKeys(key_event_t events)
+  920:  {
+  921:    switch ( events ) 
+  922:      { 
+  923:        case gKBD_EventSW1_c:
+  924:        case gKBD_EventSW2_c:
+  925:        case gKBD_EventSW3_c:
+  926:        case gKBD_EventSW4_c:
+  927:        case gKBD_EventLongSW1_c:
+  928:        case gKBD_EventLongSW2_c:
+  929:        case gKBD_EventLongSW3_c:
+  930:        case gKBD_EventLongSW4_c:
+  931:          App_HandleGenericKey(pressedKey);
+  932:  	    break;	
+  933:      }    
+  934:  }
+  935:  #endif //gMC1323xMatrixKBD_d
+  936:  /*****************************************************************************
+  937:  * The DeepSleepWakeupStackProc(void) function is called each time the 
+  938:  * application exits the DeepSleep mode .
+  939:  * 
+  940:  * Return value:
+  941:  *     None
+  942:  *****************************************************************************/
+  943:  void DeepSleepWakeupStackProc(void){
+  944:    return;
+  945:  }
   0000 8d       [7]             RTC   
-  942:  
-  943:  /******************************************************************************
-  944:  * The following functions are called by the MAC to put messages into the
-  945:  * Application's queue. They need to be defined even if they are not used
-  946:  * in order to avoid linker errors.
-  947:  ******************************************************************************/
-  948:  
-  949:  uint8_t MLME_NWK_SapHandler(nwkMessage_t * pMsg)
-  950:  {
+  946:  
+  947:  /******************************************************************************
+  948:  * The following functions are called by the MAC to put messages into the
+  949:  * Application's queue. They need to be defined even if they are not used
+  950:  * in order to avoid linker errors.
+  951:  ******************************************************************************/
+  952:  
+  953:  uint8_t MLME_NWK_SapHandler(nwkMessage_t * pMsg)
+  954:  {
   0000 89       [2]             PSHX  
   0001 8b       [2]             PSHH  
-  951:    /* Put the incoming MLME message in the applications input queue. */
-  952:    MSG_Queue(&mMlmeNwkInputQueue, pMsg);
+  955:    /* Put the incoming MLME message in the applications input queue. */
+  956:    MSG_Queue(&mMlmeNwkInputQueue, pMsg);
   0002 450000   [3]             LDHX  @mMlmeNwkInputQueue
   0005 89       [2]             PSHX  
   0006 8b       [2]             PSHH  
   0007 9efe03   [5]             LDHX  3,SP
   000a ac000000 [8]             CALL  List_AddTail
   000e a702     [2]             AIS   #2
-  953:    TS_SendEvent(gAppTaskID_c, gAppEvtMessageFromMLME_c);
+  957:    TS_SendEvent(gAppTaskID_c, gAppEvtMessageFromMLME_c);
   0010 c60000   [4]             LDA   gAppTaskID_c
   0013 ae04     [2]             LDX   #4
   0015 8c       [1]             CLRH  
   0016 ac000000 [8]             CALL  TS_SendEvent
-  954:    return gSuccess_c;
+  958:    return gSuccess_c;
   001a 4f       [1]             CLRA  
-  955:  }
+  959:  }
   001b a702     [2]             AIS   #2
   001d 8d       [7]             RTC   
-  956:  
-  957:  uint8_t MCPS_NWK_SapHandler(mcpsToNwkMessage_t *pMsg)
-  958:  {
+  960:  
+  961:  uint8_t MCPS_NWK_SapHandler(mcpsToNwkMessage_t *pMsg)
+  962:  {
   0000 89       [2]             PSHX  
   0001 8b       [2]             PSHH  
-  959:    /* Put the incoming MCPS message in the applications input queue. */
-  960:    MSG_Queue(&mMcpsNwkInputQueue, pMsg);
+  963:    /* Put the incoming MCPS message in the applications input queue. */
+  964:    MSG_Queue(&mMcpsNwkInputQueue, pMsg);
   0002 450000   [3]             LDHX  @mMcpsNwkInputQueue
   0005 89       [2]             PSHX  
   0006 8b       [2]             PSHH  
   0007 9efe03   [5]             LDHX  3,SP
   000a ac000000 [8]             CALL  List_AddTail
   000e a702     [2]             AIS   #2
-  961:    TS_SendEvent(gAppTaskID_c, gAppEvtMessageFromMCPS_c);
+  965:    TS_SendEvent(gAppTaskID_c, gAppEvtMessageFromMCPS_c);
   0010 c60000   [4]             LDA   gAppTaskID_c
   0013 ae08     [2]             LDX   #8
   0015 8c       [1]             CLRH  
   0016 ac000000 [8]             CALL  TS_SendEvent
-  962:    return gSuccess_c;
+  966:    return gSuccess_c;
   001a 4f       [1]             CLRA  
-  963:  }
+  967:  }
   001b a702     [2]             AIS   #2
   001d 8d       [7]             RTC   
-  964:  
-  965:  uint8_t ASP_APP_SapHandler(aspToAppMsg_t *pMsg)
-  966:  {
-  967:    /* If the message is not handled anywhere it must be freed. */
-  968:    MSG_Free(pMsg);
+  968:  
+  969:  uint8_t ASP_APP_SapHandler(aspToAppMsg_t *pMsg)
+  970:  {
+  971:    /* If the message is not handled anywhere it must be freed. */
+  972:    MSG_Free(pMsg);
   0000 ac000000 [8]             CALL  MM_Free
-  969:    return gSuccess_c;
+  973:    return gSuccess_c;
   0004 4f       [1]             CLRA  
-  970:  }
+  974:  }
   0005 8d       [7]             RTC   
-  971:  
-  972:  /******************************************************************************/
-  973:  
-  974:  
   975:  
-  976:  /* NEWCODE: Added function to send package over the air with the active button number */
+  976:  /******************************************************************************/
   977:  
-  978:  void genericDataTransfer(uint8_t *ptrPDU, uint8_t lengthPDU){
+  978:  
+  979:  
+  980:  /* NEWCODE: Added function to send package over the air with the active button number */
+  981:  
+  982:  void genericDataTransfer(uint8_t *ptrPDU, uint8_t lengthPDU){
   0000 89       [2]             PSHX  
   0001 8b       [2]             PSHH  
-  979:  
-  980:    if( (mcPendingPackets < mDefaultValueOfMaxPendingDataPackets_c) && (mpBtnPacket == NULL) ) 
+  983:  
+  984:    if( (mcPendingPackets < mDefaultValueOfMaxPendingDataPackets_c) && (mpBtnPacket == NULL) ) 
   0002 c60000   [4]             LDA   mcPendingPackets
   0005 a102     [2]             CMP   #2
   0007 240e     [3]             BCC   L17 ;abs = 0017
   0009 320000   [5]             LDHX  mpBtnPacket
   000c 2609     [3]             BNE   L17 ;abs = 0017
-  981:    {
-  982:      /* If the maximum number of pending data buffes is below maximum limit 
-  983:         and we do not have a data buffer already then allocate one. */
-  984:      mpBtnPacket = MSG_Alloc(gMaxRxTxDataLength_c);
+  985:    {
+  986:      /* If the maximum number of pending data buffes is below maximum limit 
+  987:         and we do not have a data buffer already then allocate one. */
+  988:      mpBtnPacket = MSG_Alloc(gMaxRxTxDataLength_c);
   000e a69c     [2]             LDA   #-100
   0010 ac000000 [8]             CALL  MM_Alloc
   0014 960000   [5]             STHX  mpBtnPacket
   0017          L17:    
-  985:    }
-  986:  
-  987:    if(mpBtnPacket != NULL)
+  989:    }
+  990:  
+  991:    if(mpBtnPacket != NULL)
   0017 320000   [5]             LDHX  mpBtnPacket
   001a 277c     [3]             BEQ   L98 ;abs = 0098
-  988:    {
-  989:      /* get data from serial terminal interface */        
-  990:        mpBtnPacket->msgData.dataReq.pMsdu = (uint8_t*)(&(mpBtnPacket->msgData.dataReq.pMsdu)) + sizeof(uint8_t*);
+  992:    {
+  993:      /* get data from serial terminal interface */        
+  994:        mpBtnPacket->msgData.dataReq.pMsdu = (uint8_t*)(&(mpBtnPacket->msgData.dataReq.pMsdu)) + sizeof(uint8_t*);
   001c af27     [2]             AIX   #39
   001e 9f       [1]             TXA   
   001f 8b       [2]             PSHH  
@@ -1838,7 +1845,7 @@ ANSI-C/cC++ Compiler for HC08 V-5.0.45 Build 14019, Jan 20 2014
   0023 e726     [3]             STA   38,X
   0025 86       [3]             PULA  
   0026 e725     [3]             STA   37,X
-  991:        FLib_MemCpy(mpBtnPacket->msgData.dataReq.pMsdu, (uint8_t*) ptrPDU, 9);
+  995:        FLib_MemCpy(mpBtnPacket->msgData.dataReq.pMsdu, (uint8_t*) ptrPDU, 9);
   0028 9ece25   [5]             LDHX  37,X
   002b 89       [2]             PSHX  
   002c 8b       [2]             PSHH  
@@ -1846,15 +1853,15 @@ ANSI-C/cC++ Compiler for HC08 V-5.0.45 Build 14019, Jan 20 2014
   0030 a609     [2]             LDA   #9
   0032 ac000000 [8]             CALL  FLib_MemCpy
   0036 a702     [2]             AIS   #2
-  992:        /* Data was available in the serial terminal interface receive buffer. Now create an
-  993:           MCPS-Data Request message containing the serial terminal interface data. */
-  994:        mpBtnPacket->msgType = gMcpsDataReq_c;
+  996:        /* Data was available in the serial terminal interface receive buffer. Now create an
+  997:           MCPS-Data Request message containing the serial terminal interface data. */
+  998:        mpBtnPacket->msgType = gMcpsDataReq_c;
   0038 320000   [5]             LDHX  mpBtnPacket
   003b 7f       [4]             CLR   ,X
-  995:        /* Create the header using coordinator information gained during 
-  996:           the scan procedure. Also use the short address we were assigned
-  997:           by the coordinator during association. */
-  998:        FLib_MemCpy(mpBtnPacket->msgData.dataReq.dstAddr, mCoordInfo.coordAddress, 8);
+  999:        /* Create the header using coordinator information gained during 
+ 1000:           the scan procedure. Also use the short address we were assigned
+ 1001:           by the coordinator during association. */
+ 1002:        FLib_MemCpy(mpBtnPacket->msgData.dataReq.dstAddr, mCoordInfo.coordAddress, 8);
   003c af01     [2]             AIX   #1
   003e 89       [2]             PSHX  
   003f 8b       [2]             PSHH  
@@ -1862,7 +1869,7 @@ ANSI-C/cC++ Compiler for HC08 V-5.0.45 Build 14019, Jan 20 2014
   0043 a608     [2]             LDA   #8
   0045 ac000000 [8]             CALL  FLib_MemCpy
   0049 a702     [2]             AIS   #2
-  999:        FLib_MemCpy(mpBtnPacket->msgData.dataReq.srcAddr, maMyAddress, 8);
+ 1003:        FLib_MemCpy(mpBtnPacket->msgData.dataReq.srcAddr, maMyAddress, 8);
   004b 320000   [5]             LDHX  mpBtnPacket
   004e af0c     [2]             AIX   #12
   0050 89       [2]             PSHX  
@@ -1871,51 +1878,51 @@ ANSI-C/cC++ Compiler for HC08 V-5.0.45 Build 14019, Jan 20 2014
   0055 a608     [2]             LDA   #8
   0057 ac000000 [8]             CALL  FLib_MemCpy
   005b a702     [2]             AIS   #2
- 1000:        FLib_MemCpy(mpBtnPacket->msgData.dataReq.dstPanId, mCoordInfo.coordPanId, 2);
+ 1004:        FLib_MemCpy(mpBtnPacket->msgData.dataReq.dstPanId, mCoordInfo.coordPanId, 2);
   005d 320000   [5]             LDHX  mpBtnPacket
   0060 af09     [2]             AIX   #9
   0062 ac00009b [8]             CALL  genericDataTransfer:155
- 1001:        FLib_MemCpy(mpBtnPacket->msgData.dataReq.srcPanId, mCoordInfo.coordPanId, 2);
+ 1005:        FLib_MemCpy(mpBtnPacket->msgData.dataReq.srcPanId, mCoordInfo.coordPanId, 2);
   0066 320000   [5]             LDHX  mpBtnPacket
   0069 af14     [2]             AIX   #20
   006b ac00009b [8]             CALL  genericDataTransfer:155
- 1002:        mpBtnPacket->msgData.dataReq.dstAddrMode = mCoordInfo.coordAddrMode;
+ 1006:        mpBtnPacket->msgData.dataReq.dstAddrMode = mCoordInfo.coordAddrMode;
   006f c6000a   [4]             LDA   mCoordInfo:10
   0072 320000   [5]             LDHX  mpBtnPacket
   0075 e70b     [3]             STA   11,X
- 1003:        mpBtnPacket->msgData.dataReq.srcAddrMode = mAddrMode;
+ 1007:        mpBtnPacket->msgData.dataReq.srcAddrMode = mAddrMode;
   0077 c60000   [4]             LDA   mAddrMode
   007a e716     [3]             STA   22,X
- 1004:        mpBtnPacket->msgData.dataReq.msduLength = 9;
+ 1008:        mpBtnPacket->msgData.dataReq.msduLength = 9;
   007c a609     [2]             LDA   #9
   007e e717     [3]             STA   23,X
- 1005:        /* Request MAC level acknowledgement of the data packet */
- 1006:        mpBtnPacket->msgData.dataReq.txOptions = gTxOptsAck_c;
+ 1009:        /* Request MAC level acknowledgement of the data packet */
+ 1010:        mpBtnPacket->msgData.dataReq.txOptions = gTxOptsAck_c;
   0080 a601     [2]             LDA   #1
   0082 e719     [3]             STA   25,X
- 1007:        /* Give the data packet a handle. The handle is
- 1008:           returned in the MCPS-Data Confirm message. */
- 1009:        mpBtnPacket->msgData.dataReq.msduHandle = mMsduHandle++;
+ 1011:        /* Give the data packet a handle. The handle is
+ 1012:           returned in the MCPS-Data Confirm message. */
+ 1013:        mpBtnPacket->msgData.dataReq.msduHandle = mMsduHandle++;
   0084 c60000   [4]             LDA   mMsduHandle
   0087 e718     [3]             STA   24,X
   0089 4c       [1]             INCA  
   008a c70000   [4]             STA   mMsduHandle
- 1010:    #ifdef gMAC2006_d
- 1011:          mpBtnPacket->msgData.dataReq.securityLevel = 0;
+ 1014:    #ifdef gMAC2006_d
+ 1015:          mpBtnPacket->msgData.dataReq.securityLevel = 0;
   008d 6f1a     [5]             CLR   26,X
- 1012:    #endif //gMAC2006_d      
- 1013:        
- 1014:        /* Send the Data Request to the MCPS */
- 1015:        (void)MSG_Send(NWK_MCPS, mpBtnPacket);
+ 1016:    #endif //gMAC2006_d      
+ 1017:        
+ 1018:        /* Send the Data Request to the MCPS */
+ 1019:        (void)MSG_Send(NWK_MCPS, mpBtnPacket);
   008f ac000000 [8]             CALL  NWK_MCPS_SapHandler
- 1016:        /* Prepare for another data buffer */
- 1017:        mpBtnPacket = NULL;
+ 1020:        /* Prepare for another data buffer */
+ 1021:        mpBtnPacket = NULL;
   0093 5f       [1]             CLRX  
   0094 8c       [1]             CLRH  
   0095 960000   [5]             STHX  mpBtnPacket
   0098          L98:    
- 1018:    }
- 1019:  }
+ 1022:    }
+ 1023:  }
   0098 a702     [2]             AIS   #2
   009a 8d       [7]             RTC   
   009b          L9B:    
@@ -1926,6 +1933,6 @@ ANSI-C/cC++ Compiler for HC08 V-5.0.45 Build 14019, Jan 20 2014
   00a2 ac000000 [8]             CALL  FLib_MemCpy
   00a6 a702     [2]             AIS   #2
   00a8 8d       [7]             RTC   
- 1020:  
- 1021:  /* NEWCODE: Added function to send package over the air with the active button number */
- 1022:  
+ 1024:  
+ 1025:  /* NEWCODE: Added function to send package over the air with the active button number */
+ 1026:  

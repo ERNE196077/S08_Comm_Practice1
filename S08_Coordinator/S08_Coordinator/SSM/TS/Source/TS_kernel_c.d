@@ -1,5 +1,4 @@
 
-
 SSM/TS/Source/TS_kernel_c.obj: \
 	../SSM/TS/Source/TS_kernel.c \
 	C:/Users/ernesto/Documents/Workspace/S08_Coordinator/S08_Coordinator/PLM/Source/Common/Interface/HCS08_Prefix.h \

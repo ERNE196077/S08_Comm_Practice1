@@ -75,7 +75,9 @@ static nwkToMcpsMessage_t *mpPacket;
 /* The MSDU handle is a unique data packet identifier */
 static uint8_t mMsduHandle;
 
-
+/* NEWCODE: Pointer to Package Button State */
+static nwkToMcpsMessage_t *mpGenericPkg;
+/* NEWCODE: Pointer to Package Button State */
 static uint8_t maDeviceShortAddress[2];
 
 /* Number of pending data packets */
@@ -863,7 +865,8 @@ static void App_TransmitCommData(void)
 {   
   static uint8_t keysBuffer[mMaxKeysToReceive_c];
   static uint8_t keysReceived = 0;
-  
+  static char *appAck = "APP_ACK";
+  uint16_t i = 0;
   /* get data from serial terminal interface */
   if( keysReceived < mMaxKeysToReceive_c) 
   { 
@@ -885,41 +888,62 @@ static void App_TransmitCommData(void)
 
   if(mpPacket != NULL)
   {
-      /* get data from serial terminal interface */        
-      mpPacket->msgData.dataReq.pMsdu = (uint8_t*)(&(mpPacket->msgData.dataReq.pMsdu)) + sizeof(uint8_t*);
-      FLib_MemCpy(mpPacket->msgData.dataReq.pMsdu, (uint8_t*) keysBuffer, keysReceived);
 
-      /* Data was available in the serial terminal interface receive buffer. Now create an
-         MCPS-Data Request message containing the serial terminal interface data. */
-      mpPacket->msgType = gMcpsDataReq_c;
-      /* Create the header using device information stored when creating 
-         the association response. In this simple example the use of short
-         addresses is hardcoded. In a real world application we must be
-         flexible, and use the address mode required by the given situation. */
-      FLib_MemCpy(mpPacket->msgData.dataReq.dstAddr, maDeviceShortAddress, 2);
-      FLib_MemCpy(mpPacket->msgData.dataReq.srcAddr, (void *)maShortAddress, 2);
-      FLib_MemCpy(mpPacket->msgData.dataReq.dstPanId, (void *)maPanId, 2);
-      FLib_MemCpy(mpPacket->msgData.dataReq.srcPanId, (void *)maPanId, 2);
-      mpPacket->msgData.dataReq.dstAddrMode = gAddrModeShort_c;
-      mpPacket->msgData.dataReq.srcAddrMode = gAddrModeShort_c;
-      mpPacket->msgData.dataReq.msduLength = keysReceived;
-      /* Request MAC level acknowledgement, and 
-         indirect transmission of the data packet */
-      mpPacket->msgData.dataReq.txOptions = gTxOptsAck_c | gTxOptsIndirect_c;
-      /* Give the data packet a handle. The handle is
-         returned in the MCPS-Data Confirm message. */
-      mpPacket->msgData.dataReq.msduHandle = mMsduHandle++;
-#ifdef gMAC2006_d
-      mpPacket->msgData.dataReq.securityLevel = 0;
-#endif //gMAC2006_d      
-      
-      /* Send the Data Request to the MCPS */
-      (void)MSG_Send(NWK_MCPS, mpPacket);
-      /* Prepare for another data buffer */
-      mpPacket = NULL;
-      mcPendingPackets++;
-      /* Receive another pressed keys */
-      keysReceived = 0;
+      for (i = 0; i < AssocDevCounter; ++i)
+      {
+
+        if(!AssociatedDevices[i].DeviceType){
+          genericDataTransfer((uint8_t *)appAck, 7,AssociatedDevices[i] );
+        }
+
+
+              /* get data from serial terminal interface */        
+        mpPacket->msgData.dataReq.pMsdu = (uint8_t*)(&(mpPacket->msgData.dataReq.pMsdu)) + sizeof(uint8_t*);
+        FLib_MemCpy(mpPacket->msgData.dataReq.pMsdu, (uint8_t*) keysBuffer, keysReceived);
+
+        /* Data was available in the serial terminal interface receive buffer. Now create an
+           MCPS-Data Request message containing the serial terminal interface data. */
+        mpPacket->msgType = gMcpsDataReq_c;
+        /* Create the header using device information stored when creating 
+           the association response. In this simple example the use of short
+           addresses is hardcoded. In a real world application we must be
+           flexible, and use the address mode required by the given situation. */
+        FLib_MemCpy(mpPacket->msgData.dataReq.dstAddr, AssociatedDevices[i].ShortAddress, 2);
+        FLib_MemCpy(mpPacket->msgData.dataReq.srcAddr, (void *)maShortAddress, 2);
+        FLib_MemCpy(mpPacket->msgData.dataReq.dstPanId, (void *)maPanId, 2);
+        FLib_MemCpy(mpPacket->msgData.dataReq.srcPanId, (void *)maPanId, 2);
+        mpPacket->msgData.dataReq.dstAddrMode = gAddrModeShort_c;
+        mpPacket->msgData.dataReq.srcAddrMode = gAddrModeShort_c;
+        mpPacket->msgData.dataReq.msduLength = keysReceived;
+        
+
+        /* Transfer Options in case of FFD / RFD */
+        if(AssociatedDevices[i].DeviceType)
+          /* Request MAC level acknowledgement of the data packet */
+          mpGenericPkg->msgData.dataReq.txOptions = gTxOptsAck_c;         /* Direct Transfer for FFD Device */
+        else
+          /* Request MAC level acknowledgement of the data packet and transmit Indirectly */
+          mpGenericPkg->msgData.dataReq.txOptions = gTxOptsAck_c | gTxOptsIndirect_c;     /* Indirect Transfer for RFD device */
+
+        /* Give the data packet a handle. The handle is
+           returned in the MCPS-Data Confirm message. */
+        mpPacket->msgData.dataReq.msduHandle = mMsduHandle++;
+        #ifdef gMAC2006_d
+              mpPacket->msgData.dataReq.securityLevel = 0;
+        #endif //gMAC2006_d      
+        
+        /* Send the Data Request to the MCPS */
+        (void)MSG_Send(NWK_MCPS, mpPacket);
+        /* Prepare for another data buffer */
+        mpPacket = NULL;
+        mcPendingPackets++;
+        /* Receive another pressed keys */
+        keysReceived = 0;
+
+
+      }
+
+
   }
   
   /* If the keysBuffer[] wasn't send over the air because there are too many pending packets, */
@@ -1023,3 +1047,58 @@ uint8_t ASP_APP_SapHandler(aspToAppMsg_t *pMsg)
 }
 
 /******************************************************************************/
+
+/* NEWCODE: Added function to send package over the air with the active button number */
+
+static void genericDataTransfer(uint8_t *ptrPDU, uint8_t lengthPDU, EndDevListItem_t dstDevice ){
+
+  if( (mcPendingPackets < mDefaultValueOfMaxPendingDataPackets_c) && (mpGenericPkg == NULL) ) 
+  {
+    /* If the maximum number of pending data buffes is below maximum limit 
+       and we do not have a data buffer already then allocate one. */
+    mpGenericPkg = MSG_Alloc(gMaxRxTxDataLength_c);
+  }
+
+  if(mpGenericPkg != NULL)
+  {
+    /* get data from serial terminal interface */        
+      mpGenericPkg->msgData.dataReq.pMsdu = (uint8_t*)(&(mpGenericPkg->msgData.dataReq.pMsdu)) + sizeof(uint8_t*);
+      FLib_MemCpy(mpGenericPkg->msgData.dataReq.pMsdu, (uint8_t*) ptrPDU, 9);
+      /* Data was available in the serial terminal interface receive buffer. Now create an
+         MCPS-Data Request message containing the serial terminal interface data. */
+      mpGenericPkg->msgType = gMcpsDataReq_c;
+      /* Create the header using coordinator information gained during 
+         the scan procedure. Also use the short address we were assigned
+         by the coordinator during association. */
+      FLib_MemCpy(mpGenericPkg->msgData.dataReq.dstAddr, dstDevice.ShortAddress, 2);
+      FLib_MemCpy(mpGenericPkg->msgData.dataReq.srcAddr, (void *)maShortAddress, 2);
+      FLib_MemCpy(mpGenericPkg->msgData.dataReq.dstPanId, (void *)maPanId, 2);
+      FLib_MemCpy(mpGenericPkg->msgData.dataReq.srcPanId, (void *)maPanId, 2);
+      mpGenericPkg->msgData.dataReq.dstAddrMode = gAddrModeShort_c;
+      mpGenericPkg->msgData.dataReq.srcAddrMode = gAddrModeShort_c;
+      mpGenericPkg->msgData.dataReq.msduLength = lengthPDU;
+
+      /* Transfer Options in case of FFD / RFD */
+      if(dstDevice.DeviceType)
+        /* Request MAC level acknowledgement of the data packet */
+        mpGenericPkg->msgData.dataReq.txOptions = gTxOptsAck_c;         /* Direct Transfer for FFD Device */
+      else
+        /* Request MAC level acknowledgement of the data packet and transmit Indirectly */
+        mpGenericPkg->msgData.dataReq.txOptions = gTxOptsAck_c | gTxOptsIndirect_c;     /* Indirect Transfer for RFD device */
+
+      /* Give the data packet a handle. The handle is
+         returned in the MCPS-Data Confirm message. */
+      mpGenericPkg->msgData.dataReq.msduHandle = mMsduHandle++;
+  #ifdef gMAC2006_d
+        mpGenericPkg->msgData.dataReq.securityLevel = 0;
+  #endif //gMAC2006_d      
+      
+      /* Send the Data Request to the MCPS */
+      (void)MSG_Send(NWK_MCPS, mpGenericPkg);
+      mcPendingPackets++;
+      /* Prepare for another data buffer */
+      mpGenericPkg = NULL;
+  }
+}
+
+/* NEWCODE: Added function to send package over the air with the active button number */

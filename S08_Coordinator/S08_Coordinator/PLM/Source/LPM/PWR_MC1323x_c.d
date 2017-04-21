@@ -1,5 +1,4 @@
 
-
 PLM/Source/LPM/PWR_MC1323x_c.obj: \
 	../PLM/Source/LPM/PWR_MC1323x.c \
 	C:/Users/ernesto/Documents/Workspace/S08_Coordinator/S08_Coordinator/PLM/Source/Common/Interface/HCS08_Prefix.h \

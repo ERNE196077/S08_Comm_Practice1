@@ -81,16 +81,16 @@ Telec_c.obj (802.15.4_MAC2006_FFD_S08MC1323x.Lib)Model: BANKED,        Lang: ANS
 *********************************************************************************************
 STARTUP SECTION
 ---------------------------------------------------------------------------------------------
-Entry point: 0x57E5 (_Startup)
+Entry point: 0x57E8 (_Startup)
 _startupData is allocated at 0x2080 and uses 12 Bytes
 extern struct _tagStartup {
   unsigned flags          0
-  _PFunc   main           0x6E7E    (main)
+  _PFunc   main           0x6E8B    (main)
   long     stackOffset    0x2FF
   unsigned nofZeroOut     2
   _Range   pZeroOut       0x80     1
-                          0x300     2957
-  _Copy    *toCopyDownBeg 0x7F6A
+                          0x300     2958
+  _Copy    *toCopyDownBeg 0x7F77
 } _startupData;
 
 *********************************************************************************************
@@ -98,36 +98,36 @@ SECTION-ALLOCATION SECTION
 Section Name                    Size  Type     From       To       Segment
 ---------------------------------------------------------------------------------------------
 MY_ZEROPAGE                        1   R/W       0x80       0x80   ZERO_PAGE_RAM
-.data                            112   R/W      0x300      0x36F   APP_RAM
+.data                            113   R/W      0x300      0x370   APP_RAM
 NON_BANKED                      4391     R     0x4000     0x5126   APP_CODE_1
-.copy                            118     R     0x7F6A     0x7FDF   APP_CODE_1
+.copy                            119     R     0x7F77     0x7FED   APP_CODE_1
 .rodata                          456     R     0x5127     0x52EE   APP_CODE_1
-.rodata1                        1084     R     0x52EF     0x572A   APP_CODE_1
-.text                          10063     R     0x581B     0x7F69   APP_CODE_1
+.rodata1                        1087     R     0x52EF     0x572D   APP_CODE_1
+.text                          10073     R     0x581E     0x7F76   APP_CODE_1
 .startData                        40     R     0x2080     0x20A7   APP_STARTUP_STRUC_FLASH
 FREESCALE_PROD_DATA               78     R     0xFF50     0xFF9D   FREESCALE_PROD_FLASH
 NV_REGISTERS_SECTION              16     R     0xFFB0     0xFFBF   RES_NV_REGISTERS_FLASH
 .stack                           512   R/W      0x100      0x2FF   APP_STACK_RAM
 IRQ_VECTOR_SECTION                62     R     0xFFC0     0xFFFD   RES_IRQ_VECTORS_TABLE_FLASH
-.bss                             573   R/W      0x370      0x5AC   APP_RAM
-.init                            238     R     0x572D     0x581A   APP_CODE_1
-.common                         2270   R/W      0x5AD      0xE8A   APP_RAM
-_STARTUP                           2   R/W      0xE8B      0xE8C   APP_RAM
-RESET_VECTOR_SECTION               2     R     0x572B     0x572C   APP_CODE_1
+.bss                             573   R/W      0x371      0x5AD   APP_RAM
+.init                            238     R     0x5730     0x581D   APP_CODE_1
+.common                         2270   R/W      0x5AE      0xE8B   APP_RAM
+_STARTUP                           2   R/W      0xE8C      0xE8D   APP_RAM
+RESET_VECTOR_SECTION               2     R     0x572E     0x572F   APP_CODE_1
 APP_CODE_2_0                   15927     R     0xC000     0xFE36   APP_CODE_2
 PPAGE_0_1                       8292     R     0x8000     0xA063   PPAGE_0
 PPAGE_2_2                      15316     R    0x28000    0x2BBD3   PPAGE_2
 RES_RESET_VECTOR_FLASH_vect          2     R     0xFFFE     0xFFFF   RES_RESET_VECTOR_FLASH
 
 Summary of section sizes per section type:
-READ_ONLY (R):        DB15 (dec:    56085)
-READ_WRITE (R/W):      D8E (dec:     3470)
+READ_ONLY (R):        DB23 (dec:    56099)
+READ_WRITE (R/W):      D8F (dec:     3471)
 
 *********************************************************************************************
 VECTOR-ALLOCATION SECTION
     Address     InitValue   InitFunction
 ---------------------------------------------------------------------------------------------
-     0xFFFE        0x57E5   _Startup
+     0xFFFE        0x57E8   _Startup
 
 *********************************************************************************************
 OBJECT-ALLOCATION SECTION
@@ -135,153 +135,153 @@ OBJECT-ALLOCATION SECTION
 ---------------------------------------------------------------------------------------------
 MODULE:                 -- ZtcMain_c.obj --
 - PROCEDURES:
-     ZTC_TaskEventMonitor                      581B       1       1       6   .text       
+     ZTC_TaskEventMonitor                      581E       1       1       6   .text       
 - VARIABLES:
 MODULE:                 -- TS_kernel_c.obj --
 - PROCEDURES:
-     TS_CreateTask                             581C      B6     182      13   .text       
-     TS_Init                                   58D2      32      50       2   .text       
-     TS_SendEvent                              5904      28      40      78   .text       
-     TS_Scheduler                              592C      7B     123       2   .text       
+     TS_CreateTask                             581F      B6     182      13   .text       
+     TS_Init                                   58D5      32      50       2   .text       
+     TS_SendEvent                              5907      28      40      78   .text       
+     TS_Scheduler                              592F      7B     123       2   .text       
 - VARIABLES:
-     maTsTaskTable                              5AD      3C      60      19   .common     
-     maTsTaskIDsByPriority                      5E9       A      10       8   .common     
-     gIdleTaskID                                5F3       1       1       1   .common     
+     maTsTaskTable                              5AE      3C      60      19   .common     
+     maTsTaskIDsByPriority                      5EA       A      10       8   .common     
+     gIdleTaskID                                5F4       1       1       1   .common     
 MODULE:                 -- CommUtil_c.obj --
 - PROCEDURES:
-     CommUtil_Tx                               59A7      23      35       4   .text       
-     CommUtil_Print                            59CA      41      65      10   .text       
-     HexToAscii                                5A0B      10      16       4   .text       
-     CommUtil_PrintHex                         5A1B      E4     228      16   .text       
+     CommUtil_Tx                               59AA      23      35       4   .text       
+     CommUtil_Print                            59CD      41      65      12   .text       
+     HexToAscii                                5A0E      10      16       4   .text       
+     CommUtil_PrintHex                         5A1E      E4     228      16   .text       
 - VARIABLES:
 MODULE:                 -- Uart_c.obj --
 - PROCEDURES:
-     Uart_ClearErrors                          5AFF       A      10       2   .text       
-     Uart1_GetByteFromRxBuffer                 5B09      61      97       4   .text       
-     Uart1_IsTxActive                          5B6A      10      16       6   .text       
-     Uart_ModuleInit                           5B7A      20      32       2   .text       
-     Uart1_SetRxCallBack                       5B9A      29      41       2   .text       
-     Uart1_SetBaud                             5BC3      4C      76       4   .text       
-     Uart1_Transmit                            5C0F      76     118       6   .text       
-     Uart_Task                                 5C85      66     102       2   .text       
-     Uart_TaskInit                             5CEB      15      21       2   .text       
-     Uart1_EnableFlow                          5D00      11      17       4   .text       
-     Uart1_DisableFlow                         5D11       7       7       2   .text       
+     Uart_ClearErrors                          5B02       A      10       2   .text       
+     Uart1_GetByteFromRxBuffer                 5B0C      61      97       4   .text       
+     Uart1_IsTxActive                          5B6D      10      16       6   .text       
+     Uart_ModuleInit                           5B7D      20      32       2   .text       
+     Uart1_SetRxCallBack                       5B9D      29      41       2   .text       
+     Uart1_SetBaud                             5BC6      4C      76       4   .text       
+     Uart1_Transmit                            5C12      76     118       6   .text       
+     Uart_Task                                 5C88      66     102       2   .text       
+     Uart_TaskInit                             5CEE      15      21       2   .text       
+     Uart1_EnableFlow                          5D03      11      17       4   .text       
+     Uart1_DisableFlow                         5D14       7       7       2   .text       
      Uart1_ErrorIsr                            4000       C      12       1   NON_BANKED  
      Uart1_RxIsr                               400C      6E     110       1   NON_BANKED  
      Uart1_TxIsr                               407A      C9     201       2   NON_BANKED  
 - VARIABLES:
-     uart1_ungetFlag                            370       1       1       2   .bss        
-     Uart1_TxCompleteFlag                       371       1       1       2   .bss        
-     maSci1TxCallbackLeadingIndex               372       1       1       5   .bss        
-     maSci1TxCallbackTrailingIndex              373       1       1       5   .bss        
-     pfSci1RxCallBack                           374       3       3       6   .bss        
-     mUart1FlowDisableCounter                   377       1       1       4   .bss        
-     uart1_ungetByte                            378       1       1       1   .bss        
-     maSci1TxBufRefTable                        379       F      15      10   .bss        
-     maSci1TxBufLenTable                        388       3       3       6   .bss        
-     mSci1TxCurIndex                            38B       1       1       4   .bss        
-     mSci1TxBufRefLeadingIndex                  38C       1       1       4   .bss        
-     mSci1TxBufRefTrailingIndex                 38D       1       1       8   .bss        
-     maSci1TxCallbackTable                      38E       F      15       8   .bss        
-     maSci1RxBuf                                39D      20      32       2   .bss        
-     mSci1RxBufLeadingIndex                     3BD       1       1       5   .bss        
-     mSci1RxBufTrailingIndex                    3BE       1       1       8   .bss        
-     gUartTaskId                                5F4       1       1       3   .common     
-     mSci1RxBufferByteCount                     5F5       1       1       7   .common     
+     uart1_ungetFlag                            371       1       1       2   .bss        
+     Uart1_TxCompleteFlag                       372       1       1       2   .bss        
+     maSci1TxCallbackLeadingIndex               373       1       1       5   .bss        
+     maSci1TxCallbackTrailingIndex              374       1       1       5   .bss        
+     pfSci1RxCallBack                           375       3       3       6   .bss        
+     mUart1FlowDisableCounter                   378       1       1       4   .bss        
+     uart1_ungetByte                            379       1       1       1   .bss        
+     maSci1TxBufRefTable                        37A       F      15      10   .bss        
+     maSci1TxBufLenTable                        389       3       3       6   .bss        
+     mSci1TxCurIndex                            38C       1       1       4   .bss        
+     mSci1TxBufRefLeadingIndex                  38D       1       1       4   .bss        
+     mSci1TxBufRefTrailingIndex                 38E       1       1       8   .bss        
+     maSci1TxCallbackTable                      38F       F      15       8   .bss        
+     maSci1RxBuf                                39E      20      32       2   .bss        
+     mSci1RxBufLeadingIndex                     3BE       1       1       5   .bss        
+     mSci1RxBufTrailingIndex                    3BF       1       1       8   .bss        
+     gUartTaskId                                5F5       1       1       3   .common     
+     mSci1RxBufferByteCount                     5F6       1       1       7   .common     
 MODULE:                 -- Timer_c.obj --
 - PROCEDURES:
-     TMR_Init                                  5D18      18      24       2   .text       
-     TMR_AllocateTimer                         5D30      1E      30      12   .text       
-     TMR_IsTimerActive                         5D4E       C      12       4   .text       
-     TMR_StartTimer                            5D5A      B3     179      14   .text       
-     TMR_StartLowPowerTimer                    5E0D      23      35       2   .text       
-     TMR_StartIntervalTimer                    5E30      21      33       4   .text       
-     TMR_StartSingleShotTimer                  5E51      21      33       4   .text       
-     TMR_StopTimer                             5E72      48      72      20   .text       
-     TMR_Task                                  5EBA     1B5     437       7   .text       
-     TMR_EnableTimer                           606F      3D      61       4   .text       
-     TMR_GetTimerStatus                        60AC       8       8      10   .text       
-     TMR_SetTimerStatus                        60B4       F      15       8   .text       
-     TMR_GetTimerType                          60C3       8       8       6   .text       
-     TMR_SetTimerType                          60CB       F      15       2   .text       
+     TMR_Init                                  5D1B      18      24       2   .text       
+     TMR_AllocateTimer                         5D33      1E      30      12   .text       
+     TMR_IsTimerActive                         5D51       C      12       4   .text       
+     TMR_StartTimer                            5D5D      B3     179      14   .text       
+     TMR_StartLowPowerTimer                    5E10      23      35       2   .text       
+     TMR_StartIntervalTimer                    5E33      21      33       4   .text       
+     TMR_StartSingleShotTimer                  5E54      21      33       4   .text       
+     TMR_StopTimer                             5E75      48      72      20   .text       
+     TMR_Task                                  5EBD     1B5     437       7   .text       
+     TMR_EnableTimer                           6072      3D      61       4   .text       
+     TMR_GetTimerStatus                        60AF       8       8      10   .text       
+     TMR_SetTimerStatus                        60B7       F      15       8   .text       
+     TMR_GetTimerType                          60C6       8       8       6   .text       
+     TMR_SetTimerType                          60CE       F      15       2   .text       
      TMR_InterruptHandler                      4143      14      20       1   NON_BANKED  
 - VARIABLES:
-     numberOfActiveTimers                       3BF       1       1       4   .bss        
-     numberOfLowPowerActiveTimers               3C0       1       1       4   .bss        
-     previousTimeInTicks                        3C1       2       2       3   .bss        
-     timerHardwareIsRunning                     3C3       1       1       2   .bss        
-     maTmrTimerTable                            3C4      EE     238       4   .bss        
-     maTmrTimerStatusTable                      4B2      22      34       7   .bss        
-     mTmrRead16bitReg                           4D4       2       2       6   .bss        
-     gTimerTaskID                               4D6       1       1       5   .bss        
+     numberOfActiveTimers                       3C0       1       1       4   .bss        
+     numberOfLowPowerActiveTimers               3C1       1       1       4   .bss        
+     previousTimeInTicks                        3C2       2       2       3   .bss        
+     timerHardwareIsRunning                     3C4       1       1       2   .bss        
+     maTmrTimerTable                            3C5      EE     238       4   .bss        
+     maTmrTimerStatusTable                      4B3      22      34       7   .bss        
+     mTmrRead16bitReg                           4D5       2       2       6   .bss        
+     gTimerTaskID                               4D7       1       1       5   .bss        
 MODULE:                 -- SPI_c.obj --
 - PROCEDURES:
-     SPI1_Init                                 60DA       2       2       2   .text       
+     SPI1_Init                                 60DD       2       2       2   .text       
 - VARIABLES:
 MODULE:                 -- RSTHal_c.obj --
 - PROCEDURES:
-     RST_GetResetStatus                        60DC       7       7       2   .text       
+     RST_GetResetStatus                        60DF       7       7       2   .text       
 - VARIABLES:
-     gRSTResetStatus                            5F6       1       1       1   .common     
+     gRSTResetStatus                            5F7       1       1       1   .common     
 MODULE:                 -- Led_c.obj --
 - PROCEDURES:
-     LED_Init                                  60E3       C      12       2   .text       
-     LED_TurnOffLed                            60EF      19      25       4   .text       
-     LED_TurnOffAllLeds                        6108       7       7       8   .text       
-     LED_StartFlash                            610F      1F      31       8   .text       
-     LED_StopFlash                             612E      16      22       8   .text       
-     LED_FlashTimeout                          6144      4E      78       2   .text       
+     LED_Init                                  60E6       C      12       2   .text       
+     LED_TurnOffLed                            60F2      19      25       4   .text       
+     LED_TurnOffAllLeds                        610B       7       7       8   .text       
+     LED_StartFlash                            6112      1F      31       8   .text       
+     LED_StopFlash                             6131      16      22       8   .text       
+     LED_FlashTimeout                          6147      4E      78       2   .text       
 - VARIABLES:
      mLEDTimerID                                300       1       1       3   .data       
-     mLedFlashingLEDs                           4D7       1       1       9   .bss        
-     mfLedInSerialMode                          5F7       1       1       1   .common     
+     mLedFlashingLEDs                           4D8       1       1       9   .bss        
+     mfLedInSerialMode                          5F8       1       1       1   .common     
 MODULE:                 -- PWRLib_c.obj --
 - PROCEDURES:
-     PWRLib_Init                               6192      2B      43       2   .text       
+     PWRLib_Init                               6195      2B      43       2   .text       
 - VARIABLES:
-     PWRLib_ICGMode                             4D8       1       1       1   .bss        
+     PWRLib_ICGMode                             4D9       1       1       1   .bss        
      PWRLib_MCU_WakeupReason                     80       1       1       5   MY_ZEROPAGE 
-     PWRLib_StackPS                             5F8       1       1       1   .common     
+     PWRLib_StackPS                             5F9       1       1       1   .common     
 MODULE:                 -- PWR_MC1323x_c.obj --
 - PROCEDURES:
-     PWR_DisallowDeviceToSleep                 61BD       E      14       2   .text       
+     PWR_DisallowDeviceToSleep                 61C0       E      14       2   .text       
 - VARIABLES:
-     mLPMFlag                                   4D9       1       1       1   .bss        
+     mLPMFlag                                   4DA       1       1       1   .bss        
 MODULE:                 -- Keyboard_c.obj --
 - PROCEDURES:
-     KBD_Init                                  61CB      23      35       2   .text       
-     KBD_KeySwitchPortGet                      61EE       5       5       2   .text       
-     KBD_PortGet                               61F3      14      20       2   .text       
-     KBD_KeyCheck                              6207      2A      42       2   .text       
-     KBD_MatrixSetRows                         6231      1A      26      16   .text       
-     KBD_MatrixActivateRow                     624B      3C      60       8   .text       
-     KBD_MatrixDeactivateRow                   6287      1B      27       2   .text       
-     KBD_KeyMatrixGet                          62A2      90     144       2   .text       
-     KBD_KeyScan                               6332      86     134       2   .text       
-     KBD_FinishScan                            63B8       F      15       2   .text       
+     KBD_Init                                  61CE      23      35       2   .text       
+     KBD_KeySwitchPortGet                      61F1       5       5       2   .text       
+     KBD_PortGet                               61F6      14      20       2   .text       
+     KBD_KeyCheck                              620A      2A      42       2   .text       
+     KBD_MatrixSetRows                         6234      1A      26      16   .text       
+     KBD_MatrixActivateRow                     624E      3C      60       8   .text       
+     KBD_MatrixDeactivateRow                   628A      1B      27       2   .text       
+     KBD_KeyMatrixGet                          62A5      90     144       2   .text       
+     KBD_KeyScan                               6335      86     134       2   .text       
+     KBD_FinishScan                            63BB       F      15       2   .text       
      Switch_Press_ISR                          4157      27      39       1   NON_BANKED  
 - VARIABLES:
      mKeyRowPorts                               301       A      10       6   .data       
      mKeyScanTimerID                            30B       1       1       2   .data       
-     mKeyState                                  4DA       1       1       4   .bss        
-     mLongKeyCount                              4DB       1       1       3   .bss        
-     mSwitch_SCAN                               4DC       2       2       3   .bss        
-     mpfKeyFunction                             4DE       3       3       4   .bss        
-     pressedKey                                 5F9       1       1       4   .common     
+     mKeyState                                  4DB       1       1       4   .bss        
+     mLongKeyCount                              4DC       1       1       3   .bss        
+     mSwitch_SCAN                               4DD       2       2       3   .bss        
+     mpfKeyFunction                             4DF       3       3       4   .bss        
+     pressedKey                                 5FA       1       1       4   .common     
 MODULE:                 -- FunctionLib_c.obj --
 - PROCEDURES:
-     FLib_MemCpy                               63C7      1D      29     246   .text       
-     FLib_MemCpyDir                            63E4      1E      30       2   .text       
-     FLib_MemInPlaceCpy                        6402      49      73      12   .text       
-     FLib_MemCpyReverseOrder                   644B      2B      43      24   .text       
-     FLib_MemCmp                               6476      2D      45      38   .text       
-     FLib_MemSet                               64A3      18      24      38   .text       
-     FLib_MemSet16                             64BB      23      35       2   .text       
-     FLib_AddrModeToLength                     64DE       C      12      32   .text       
-     FLib_AddOffsetToPointer                   64EA       8       8      26   .text       
-     FLib_ArrayAddArray                        64F2      40      64      24   .text       
-     FLib_ArrayAddByte                         6532      18      24      14   .text       
+     FLib_MemCpy                               63CA      1D      29     246   .text       
+     FLib_MemCpyDir                            63E7      1E      30       2   .text       
+     FLib_MemInPlaceCpy                        6405      49      73      12   .text       
+     FLib_MemCpyReverseOrder                   644E      2B      43      24   .text       
+     FLib_MemCmp                               6479      2D      45      38   .text       
+     FLib_MemSet                               64A6      18      24      38   .text       
+     FLib_MemSet16                             64BE      23      35       2   .text       
+     FLib_AddrModeToLength                     64E1       C      12      32   .text       
+     FLib_AddOffsetToPointer                   64ED       8       8      26   .text       
+     FLib_ArrayAddArray                        64F5      40      64      24   .text       
+     FLib_ArrayAddByte                         6535      18      24      14   .text       
 - VARIABLES:
 MODULE:                 -- NV_Data_c.obj --
 - PROCEDURES:
@@ -290,20 +290,20 @@ MODULE:                 -- NV_Data_c.obj --
      gHardwareParameters                       FF72      2C      44      10   FREESCALE_PROD_DATA
 MODULE:                 -- PlatformInit_c.obj --
 - PROCEDURES:
-     PlatformPortInit                          654A      2A      42       2   .text       
-     Platform_Init                             6574      1C      28       2   .text       
-     Init_802_15_4                             6590      30      48       2   .text       
+     PlatformPortInit                          654D      2A      42       2   .text       
+     Platform_Init                             6577      1C      28       2   .text       
+     Init_802_15_4                             6593      30      48       2   .text       
 - VARIABLES:
 MODULE:                 -- crt0_c.obj --
 - PROCEDURES:
-     loadByte                                  572D       E      14       5   .init       
-     Init                                      573B      40      64       1   .init       
-     Copy_Down                                 577B      3F      63       1   .init       
-     Finish                                    57BA      2B      43       1   .init       
-     _Startup                                  57E5      36      54       1   .init       
+     loadByte                                  5730       E      14       5   .init       
+     Init                                      573E      40      64       1   .init       
+     Copy_Down                                 577E      3F      63       1   .init       
+     Finish                                    57BD      2B      43       1   .init       
+     _Startup                                  57E8      36      54       1   .init       
 - VARIABLES:
      _startupData                              2080       C      12       6   .startData  
-     pStack                                     E8B       2       2       2   _STARTUP    
+     pStack                                     E8C       2       2       2   _STARTUP    
      none_volatile_struct                      FFB0      10      16       1   NV_REGISTERS_SECTION
 - LABELS:
      __SEG_START_SSTACK                         100       0       0       1               
@@ -314,12 +314,12 @@ MODULE:                 -- dummyisr_c.obj --
 - VARIABLES:
 MODULE:                 -- icg_c.obj --
 - PROCEDURES:
-     PowerManager_WaitForPowerUp               65C0      16      22       2   .text       
+     PowerManager_WaitForPowerUp               65C3      16      22       2   .text       
 - VARIABLES:
 MODULE:                 -- isrvectors_c.obj --
 - PROCEDURES:
 - VARIABLES:
-     Reset_vector                              572B       2       2       1   RESET_VECTOR_SECTION
+     Reset_vector                              572E       2       2       1   RESET_VECTOR_SECTION
      ISR_vectors                               FFC0      3E      62       1   IRQ_VECTOR_SECTION
 MODULE:                 -- PhyISR_c.obj --
 - PROCEDURES:
@@ -335,8 +335,8 @@ MODULE:                 -- PhyISR_c.obj --
      PhyHandlerRxWtrmrk_ISR                    437A       9       9       1   NON_BANKED  
 - VARIABLES:
      pTimer1Isr                                 30C       3       3       4   .data       
-     mpRxParams                                 4E1       2       2       5   .bss        
-     mPhyLastRxLQI                              5FA       1       1       1   .common     
+     mpRxParams                                 4E2       2       2       5   .bss        
+     mPhyLastRxLQI                              5FB       1       1       1   .common     
 MODULE:                 -- PhyPacketProcessor_c.obj --
 - PROCEDURES:
      PhyInit                                   4383      71     113       2   NON_BANKED  
@@ -354,7 +354,7 @@ MODULE:                 -- PhyPacketProcessor_c.obj --
      PhyPp_RemoveFromIndirect                  452D       8       8       2   NON_BANKED  
      PhyGetRandomNo                            4535      9C     156       2   NON_BANKED  
 - VARIABLES:
-     i                                          5FB       1       1       3   .common     
+     i                                          5FC       1       1       3   .common     
 MODULE:                 -- PhyPlmeData_c.obj --
 - PROCEDURES:
      PhyPdDataRequest                          45D1      6A     106       1   NON_BANKED  
@@ -377,24 +377,24 @@ MODULE:                 -- PhyTime_c.obj --
 - VARIABLES:
 MODULE:                 -- MApp_c.obj --
 - PROCEDURES:
-     MApp_init                                 65D6      7B     123       2   .text       
-     AppTask                                   6651     24C     588      58   .text       
-     App_CommRxCallBack                        689D      1B      27       2   .text       
-     App_StartScan                             68B8      5F      95      10   .text       
-     App_HandleScanActiveConfirm               6917      95     149       2   .text       
-     App_SendAssociateRequest                  69AC      7E     126      10   .text       
-     App_HandleAssociateConfirm                6A2A      3E      62       2   .text       
-     App_HandleMlmeInput                       6A68      1D      29       2   .text       
-     App_HandleMcpsInput                       6A85      35      53       2   .text       
-     App_WaitMsg                               6ABA      10      16       6   .text       
-     App_TransmitCommData                      6ACA      DC     220       7   .text       
-     AppPollWaitTimeout                        6BA6      6E     110       4   .text       
-     App_HandleGenericKey                      6C14      3B      59       2   .text       
-     App_HandleKeys                            6C4F       5       5       2   .text       
-     MLME_NWK_SapHandler                       6C54      1E      30       8   .text       
-     MCPS_NWK_SapHandler                       6C72      1E      30      12   .text       
-     ASP_APP_SapHandler                        6C90       6       6       2   .text       
-     genericDataTransfer                       6C96      A9     169       6   .text       
+     MApp_init                                 65D9      7B     123       2   .text       
+     AppTask                                   6654     24C     588      58   .text       
+     App_CommRxCallBack                        68A0      1B      27       2   .text       
+     App_StartScan                             68BB      5F      95      10   .text       
+     App_HandleScanActiveConfirm               691A      95     149       2   .text       
+     App_SendAssociateRequest                  69AF      7F     127      10   .text       
+     App_HandleAssociateConfirm                6A2E      3E      62       2   .text       
+     App_HandleMlmeInput                       6A6C      1D      29       2   .text       
+     App_HandleMcpsInput                       6A89      3E      62       2   .text       
+     App_WaitMsg                               6AC7      10      16       6   .text       
+     App_TransmitCommData                      6AD7      DC     220       7   .text       
+     AppPollWaitTimeout                        6BB3      6E     110       4   .text       
+     App_HandleGenericKey                      6C21      3B      59       2   .text       
+     App_HandleKeys                            6C5C       5       5       2   .text       
+     MLME_NWK_SapHandler                       6C61      1E      30       8   .text       
+     MCPS_NWK_SapHandler                       6C7F      1E      30      12   .text       
+     ASP_APP_SapHandler                        6C9D       6       6       2   .text       
+     genericDataTransfer                       6CA3      A9     169       6   .text       
 - VARIABLES:
      STRING...Press.any.switch.o.2             52EF      40      64       1   .rodata1    
      STRING.Received.an.MLME.Bea.3             532F      2C      44       1   .rodata1    
@@ -422,65 +422,67 @@ MODULE:                 -- MApp_c.obj --
      STRING.Done...25                          5686       7       7       1   .rodata1    
      STRING.Invalid.parameter....26            568D      15      21       1   .rodata1    
      STRING.Message.allocation.f.27            56A2      1D      29       1   .rodata1    
+     STRING....28                              56BF       3       3       1   .rodata1    
      mTimer_c                                   34C       1       1       3   .data       
-     keysReceived.61                            4E3       1       1       6   .bss        
-     mCoordInfo                                 4E4      1F      31      21   .bss        
-     maMyAddress                                503       8       8       5   .bss        
-     mAddrMode                                  50B       1       1       5   .bss        
-     mpPacket                                   50C       2       2      10   .bss        
-     mpBtnPacket                                50E       2       2      10   .bss        
-     mMsduHandle                                510       1       1       4   .bss        
-     mcPendingPackets                           511       1       1       6   .bss        
-     mWaitPollConfirm                           512       1       1       5   .bss        
-     mPollInterval                              513       2       2       5   .bss        
-     mMlmeNwkInputQueue                         515       4       4       4   .bss        
-     mMcpsNwkInputQueue                         519       4       4       4   .bss        
-     keysBuffer.60                              51D      20      32       3   .bss        
-     gState                                     5FC       1       1       6   .common     
+     EndDeviceConfig                            34D       1       1       1   .data       
+     keysReceived.62                            4E4       1       1       6   .bss        
+     mCoordInfo                                 4E5      1F      31      21   .bss        
+     maMyAddress                                504       8       8       5   .bss        
+     mAddrMode                                  50C       1       1       5   .bss        
+     mpPacket                                   50D       2       2      10   .bss        
+     mpBtnPacket                                50F       2       2      10   .bss        
+     mMsduHandle                                511       1       1       4   .bss        
+     mcPendingPackets                           512       1       1       6   .bss        
+     mWaitPollConfirm                           513       1       1       5   .bss        
+     mPollInterval                              514       2       2       5   .bss        
+     mMlmeNwkInputQueue                         516       4       4       4   .bss        
+     mMcpsNwkInputQueue                         51A       4       4       4   .bss        
+     keysBuffer.61                              51E      20      32       3   .bss        
+     gState                                     5FD       1       1       6   .common     
 MODULE:                 -- MyNewTask_c.obj --
 - PROCEDURES:
-     MyNewTask                                 6D3F      95     149       2   .text       
-     MyNewTaskInit                             6DD4      27      39       2   .text       
-     myTaskTimerCallback                       6DFB       B      11       4   .text       
-     MyTaskButtonPress                         6E06      78     120      10   .text       
+     MyNewTask                                 6D4C      95     149       2   .text       
+     MyNewTaskInit                             6DE1      27      39       2   .text       
+     myTaskTimerCallback                       6E08       B      11       4   .text       
+     MyTaskButtonPress                         6E13      78     120      10   .text       
 - VARIABLES:
-     STRING.Counter.1.1                        56BF       A      10       1   .rodata1    
-     STRING.Counter.2.2                        56C9       A      10       1   .rodata1    
-     STRING.Counter.3.3                        56D3       A      10       1   .rodata1    
-     STRING.Counter.4.4                        56DD       A      10       1   .rodata1    
-     STRING.Switch.1.Pressed.5                 56E7      11      17       1   .rodata1    
-     STRING.Switch.2.Pressed.6                 56F8      11      17       1   .rodata1    
-     STRING.Switch.3.Pressed.7                 5709      11      17       1   .rodata1    
-     STRING.Switch.4.Pressed.8                 571A      11      17       1   .rodata1    
-     strCounter1                                34D       2       2       1   .data       
-     strCounter2                                34F       2       2       1   .data       
-     strCounter3                                351       2       2       1   .data       
-     strCounter4                                353       2       2       1   .data       
-     ledsState                                  53D       1       1       7   .bss        
-     myTimerID                                  5FD       1       1       5   .common     
-     myNewTaskID                                5FE       1       1       3   .common     
-     tmpString                                  5FF       2       2       2   .common     
+     STRING.Counter.1.1                        56C2       A      10       1   .rodata1    
+     STRING.Counter.2.2                        56CC       A      10       1   .rodata1    
+     STRING.Counter.3.3                        56D6       A      10       1   .rodata1    
+     STRING.Counter.4.4                        56E0       A      10       1   .rodata1    
+     STRING.Switch.1.Pressed.5                 56EA      11      17       1   .rodata1    
+     STRING.Switch.2.Pressed.6                 56FB      11      17       1   .rodata1    
+     STRING.Switch.3.Pressed.7                 570C      11      17       1   .rodata1    
+     STRING.Switch.4.Pressed.8                 571D      11      17       1   .rodata1    
+     strCounter1                                34E       2       2       1   .data       
+     strCounter2                                350       2       2       1   .data       
+     strCounter3                                352       2       2       1   .data       
+     strCounter4                                354       2       2       1   .data       
+     ledsState                                  53E       1       1       7   .bss        
+     myTimerID                                  5FE       1       1       5   .common     
+     myNewTaskID                                5FF       1       1       3   .common     
+     tmpString                                  600       2       2       2   .common     
 MODULE:                 -- MApp_init_c.obj --
 - PROCEDURES:
-     main                                      6E7E      42      66       2   .text       
-     IdleTask                                  6EC0       1       1       2   .text       
-     Init_MacExtendedAddress                   6EC1      38      56       2   .text       
-     BeeAppAssert                              6EF9       8       8       2   .text       
+     main                                      6E8B      42      66       2   .text       
+     IdleTask                                  6ECD       1       1       2   .text       
+     Init_MacExtendedAddress                   6ECE      38      56       2   .text       
+     BeeAppAssert                              6F06       8       8       2   .text       
 - VARIABLES:
-     gAppTaskID_c                               601       1       1       9   .common     
+     gAppTaskID_c                               602       1       1       9   .common     
 MODULE:                 -- MacInit_c.obj --
 - PROCEDURES:
-     MacInit                                   6F01       5       5       2   .text       
-     TS_PlaceHolderTaskInit                    6F06       1       1       2   .text       
-     MacTaskInit                               6F07      6B     107       2   .text       
+     MacInit                                   6F0E       5       5       2   .text       
+     TS_PlaceHolderTaskInit                    6F13       1       1       2   .text       
+     MacTaskInit                               6F14      6B     107       2   .text       
 - VARIABLES:
      MacTaskTable                              5127       9       9       6   .rodata     
-     gMacTaskID_c                               602       1       1      23   .common     
+     gMacTaskID_c                               603       1       1      23   .common     
 MODULE:                 -- GlobalVars_c.obj --
 - PROCEDURES:
-     MM_InitMsgTracking                        6F72       1       1       2   .text       
-     MM_AddMsgToTrackingArray                  6F73       1       1       2   .text       
-     MM_UpdateMsgTracking                      6F74       2       2       6   .text       
+     MM_InitMsgTracking                        6F7F       1       1       2   .text       
+     MM_AddMsgToTrackingArray                  6F80       1       1       2   .text       
+     MM_UpdateMsgTracking                      6F81       2       2       6   .text       
 - VARIABLES:
      poolInfo                                  5130       9       9       1   .rodata     
      gNumKeyTableEntries                       5139       1       1       5   .rodata     
@@ -489,16 +491,16 @@ MODULE:                 -- GlobalVars_c.obj --
      gNumKeyUsageListEntries                   513C       1       1       3   .rodata     
      gNumDeviceTableEntries                    513D       1       1       3   .rodata     
      gNumSecurityLevelTableEntries             513E       1       1       3   .rodata     
-     pLastPool                                  355       2       2       4   .data       
-     pSecondLastPool                            357       2       2       5   .data       
-     maMacHeap                                  603     442    1090       1   .common     
-     maMmPools                                  A45      12      18       4   .common     
-     gPIBKeyTable                               A57      32      50       1   .common     
-     gPIBKeyIdLookupDescriptorTable             A89      28      40       2   .common     
-     gPIBKeyDeviceDescriptorTable               AB1       C      12       2   .common     
-     gPIBKeyUsageDescriptorTable                ABD       8       8       2   .common     
-     gPIBDeviceTable                            AC5      22      34       1   .common     
-     gPIBSecurityLevelTable                     AE7       8       8       1   .common     
+     pLastPool                                  356       2       2       4   .data       
+     pSecondLastPool                            358       2       2       5   .data       
+     maMacHeap                                  604     442    1090       1   .common     
+     maMmPools                                  A46      12      18       4   .common     
+     gPIBKeyTable                               A58      32      50       1   .common     
+     gPIBKeyIdLookupDescriptorTable             A8A      28      40       2   .common     
+     gPIBKeyDeviceDescriptorTable               AB2       C      12       2   .common     
+     gPIBKeyUsageDescriptorTable                ABE       8       8       2   .common     
+     gPIBDeviceTable                            AC6      22      34       1   .common     
+     gPIBSecurityLevelTable                     AE8       8       8       1   .common     
 MODULE:                 -- rtshc08.o (ansibim.lib) --
 - PROCEDURES:
      _PUSH_ARGS_L                              4756      20      32       2   NON_BANKED  
@@ -546,44 +548,44 @@ MODULE:                 -- rtshc08.o (ansibim.lib) --
 - VARIABLES:
 MODULE:                 -- PhyMacMsg_c.obj (802.15.4_MAC2006_FFD_S08MC1323x.Lib) --
 - PROCEDURES:
-     MM_Init                                   6F76      8E     142       2   .text       
-     List_ClearAnchor                          7004       4       4      26   .text       
-     List_AddTail                              7008      45      69      24   .text       
-     List_AddHead                              704D      3F      63      14   .text       
-     List_RemoveHead                           708C      2B      43      24   .text       
-     List_Remove                               70B7      53      83       8   .text       
-     List_GetFirst                             710A      1B      27      16   .text       
-     List_GetNext                              7125      20      32      10   .text       
-     MM_AddToPool                              7145      20      32       2   .text       
-     MM_AllocPool                              7165      4A      74       2   .text       
-     MM_Alloc                                  71AF       8       8      48   .text       
-     MM_Free                                   71B7      5B      91     104   .text       
-     MM_AllocFast                              7212      58      88       8   .text       
-     MM_SetPrivatePool                         726A      13      19       8   .text       
+     MM_Init                                   6F83      8E     142       2   .text       
+     List_ClearAnchor                          7011       4       4      26   .text       
+     List_AddTail                              7015      45      69      24   .text       
+     List_AddHead                              705A      3F      63      14   .text       
+     List_RemoveHead                           7099      2B      43      24   .text       
+     List_Remove                               70C4      53      83       8   .text       
+     List_GetFirst                             7117      1B      27      16   .text       
+     List_GetNext                              7132      20      32      10   .text       
+     MM_AddToPool                              7152      20      32       2   .text       
+     MM_AllocPool                              7172      4A      74       2   .text       
+     MM_Alloc                                  71BC       8       8      48   .text       
+     MM_Free                                   71C4      5B      91     104   .text       
+     MM_AllocFast                              721F      58      88       8   .text       
+     MM_SetPrivatePool                         7277      13      19       8   .text       
 - VARIABLES:
-     gFreeMessagesCount                         AEF       1       1       7   .common     
+     gFreeMessagesCount                         AF0       1       1       7   .common     
 MODULE:                 -- SmApi_c.obj (802.15.4_MAC2006_FFD_S08MC1323x.Lib) --
 - PROCEDURES:
-     SmApi_UndefState                          727D       1       1       6   .text       
+     SmApi_UndefState                          728A       1       1       6   .text       
 - VARIABLES:
 MODULE:                 -- SecurityLib_c.obj (802.15.4_MAC2006_FFD_S08MC1323x.Lib) --
 - PROCEDURES:
-     CCM_XorN                                  727E      1E      30       6   .text       
-     CCM_CreateAB0                             729C      24      36       6   .text       
-     CCM_GetBlockLength                        72C0       7       7       4   .text       
-     SecLib_CcmStar                            72C7     273     627      11   .text       
+     CCM_XorN                                  728B      1E      30       6   .text       
+     CCM_CreateAB0                             72A9      24      36       6   .text       
+     CCM_GetBlockLength                        72CD       7       7       4   .text       
+     SecLib_CcmStar                            72D4     273     627      11   .text       
 - VARIABLES:
 MODULE:                 -- SecurityApply_c.obj (802.15.4_MAC2006_FFD_S08MC1323x.Lib) --
 - PROCEDURES:
-     Sec_TraverseBeacon                        753A      2E      46       2   .text       
-     Sec_LookupKeyDescriptor                   7568     10F     271      10   .text       
-     Sec_BeaconRetrieveKeyTxFrame              7677      EF     239       3   .text       
-     Sec_RetrieveKeyTxFrame                    7766     12A     298       3   .text       
-     Sec_DetermineNonPayloadLen                7890      2B      43       4   .text       
-     Sec_SecureTxFrame                         78BB     18C     396      11   .text       
-     Sec_CreateSecurityHeader                  7A47      9D     157       6   .text       
-     Sec_UnsecureRxFrame                       7AE4     270     624      10   .text       
-     Sec_RetrieveRxSecurityMaterial            7D54     216     534      10   .text       
+     Sec_TraverseBeacon                        7547      2E      46       2   .text       
+     Sec_LookupKeyDescriptor                   7575     10F     271      10   .text       
+     Sec_BeaconRetrieveKeyTxFrame              7684      EF     239       3   .text       
+     Sec_RetrieveKeyTxFrame                    7773     12A     298       3   .text       
+     Sec_DetermineNonPayloadLen                789D      2B      43       4   .text       
+     Sec_SecureTxFrame                         78C8     18C     396      11   .text       
+     Sec_CreateSecurityHeader                  7A54      9D     157       6   .text       
+     Sec_UnsecureRxFrame                       7AF1     270     624      10   .text       
+     Sec_RetrieveRxSecurityMaterial            7D61     216     534      10   .text       
      Sec_CheckRxSecurityLevel                  C000     110     272       6   APP_CODE_2_0
      Sec_SecurityLevelCompare                  C110      2D      45       4   APP_CODE_2_0
      Sec_CheckRxKeyPolicy                      C13D      A3     163       4   APP_CODE_2_0
@@ -621,13 +623,13 @@ MODULE:                 -- PacketManager_c.obj (802.15.4_MAC2006_FFD_S08MC1323x.
      PacManToPp_RemoveFromIndirect             CD43      3E      62       6   APP_CODE_2_0
      PacManToPp_ClearHwIndirect                CD81      18      24       2   APP_CODE_2_0
 - VARIABLES:
-     mPacManDirectPackets_D2C                   AF0       4       4       6   .common     
-     mPacManDirectPackets_C2D                   AF4       4       4       5   .common     
-     mPacManIndirectPackets                     AF8       4       4      14   .common     
-     mPacManIndirectBroadcastPkts               AFC       4       4       6   .common     
-     mPacManGuardPacket                         B00       1       1       9   .common     
-     gpPacketToPurge                            B01       2       2       4   .common     
-     mPpIndirectQueueAddr                       B03      18      24       9   .common     
+     mPacManDirectPackets_D2C                   AF1       4       4       6   .common     
+     mPacManDirectPackets_C2D                   AF5       4       4       5   .common     
+     mPacManIndirectPackets                     AF9       4       4      14   .common     
+     mPacManIndirectBroadcastPkts               AFD       4       4       6   .common     
+     mPacManGuardPacket                         B01       1       1       9   .common     
+     gpPacketToPurge                            B02       2       2       4   .common     
+     mPpIndirectQueueAddr                       B04      18      24       9   .common     
 MODULE:                 -- PacketLib_c.obj (802.15.4_MAC2006_FFD_S08MC1323x.Lib) --
 - PROCEDURES:
      PacLib_IsCoordRealignOnOrphan             CD99      63      99       2   APP_CODE_2_0
@@ -652,11 +654,11 @@ MODULE:                 -- MacPib_c.obj (802.15.4_MAC2006_FFD_S08MC1323x.Lib) --
      gMacDeviceDescriptorOffsetTable           519E       6       6       2   .rodata     
      gMacSecurityLevelDescriptorOffsetTable       51A4       5       5       2   .rodata     
      gMacVendorPibOffsetTable                  51A9      14      20       2   .rodata     
-     gMacPib                                    B1B      9B     155     391   .common     
+     gMacPib                                    B1C      9B     155     391   .common     
 MODULE:                 -- MacConst_c.obj (802.15.4_MAC2006_FFD_S08MC1323x.Lib) --
 - PROCEDURES:
 - VARIABLES:
-     aExtendedAddress                           BB6       8       8      18   .common     
+     aExtendedAddress                           BB7       8       8      18   .common     
 MODULE:                 -- ClockManager_c.obj (802.15.4_MAC2006_FFD_S08MC1323x.Lib) --
 - PROCEDURES:
      CM_InitOnStartup                          D75C      23      35       2   APP_CODE_2_0
@@ -669,20 +671,20 @@ MODULE:                 -- ClockManager_c.obj (802.15.4_MAC2006_FFD_S08MC1323x.L
      CM_SetNextClockBoundary                   D863      10      16      46   APP_CODE_2_0
      CM_SetCurClock                            D873      33      51      24   APP_CODE_2_0
 - VARIABLES:
-     mCMBackoff                                 359       1       1       3   .data       
-     mCM_ClockOffset                            53E       4       4      40   .bss        
-     mCM_CurrentClock                           542       4       4      45   .bss        
-     mCM_CurrentClockAbs                        546       4       4      16   .bss        
-     mCM_TimeNeededInNextCAP                    54A       2       2      19   .bss        
-     mCM_WaitTime                               54C       2       2      12   .bss        
-     aMinSetupTime_s                            BBE       1       1      17   .common     
-     aMinSetupTimeCritical_s                    BBF       1       1       2   .common     
-     aMinSetupTimeVeryCritical_s                BC0       1       1       2   .common     
-     mCM_DelayUntilNextAction                   BC1       1       1       9   .common     
-     mCM_NextClockBoundary                      BC2       4       4      51   .common     
-     mCM_BleEndTime                             BC6       4       4      13   .common     
-     CM_RandomBackoff                           BCA       2       2       4   .common     
-     mEnableCriticalTiming                      BCC       1       1       5   .common     
+     mCMBackoff                                 35A       1       1       3   .data       
+     mCM_ClockOffset                            53F       4       4      40   .bss        
+     mCM_CurrentClock                           543       4       4      45   .bss        
+     mCM_CurrentClockAbs                        547       4       4      16   .bss        
+     mCM_TimeNeededInNextCAP                    54B       2       2      19   .bss        
+     mCM_WaitTime                               54D       2       2      12   .bss        
+     aMinSetupTime_s                            BBF       1       1      17   .common     
+     aMinSetupTimeCritical_s                    BC0       1       1       2   .common     
+     aMinSetupTimeVeryCritical_s                BC1       1       1       2   .common     
+     mCM_DelayUntilNextAction                   BC2       1       1       9   .common     
+     mCM_NextClockBoundary                      BC3       4       4      51   .common     
+     mCM_BleEndTime                             BC7       4       4      13   .common     
+     CM_RandomBackoff                           BCB       2       2       4   .common     
+     mEnableCriticalTiming                      BCD       1       1       5   .common     
 MODULE:                 -- AsmDriver_c.obj (802.15.4_MAC2006_FFD_S08MC1323x.Lib) --
 - PROCEDURES:
      Asm_Init                                  D8A6      3C      60       2   APP_CODE_2_0
@@ -711,15 +713,15 @@ MODULE:                 -- MacSeqMC1323X_c.obj (802.15.4_MAC2006_FFD_S08MC1323x.
      PhyTimeRxTimeoutIndication                4E1C      5B      91       6   NON_BANKED  
      PhyTimeStartEventIndication               4E77       5       5       1   NON_BANKED  
 - VARIABLES:
-     pCurrentSeqAction                          BCD       2       2      55   .common     
-     mpPendingSeqMemCompletion                  BCF       1       1       5   .common     
-     mSeqSubComponentStateMachine               BD0       4       4      71   .common     
-     mBufferedError                             BD4       1       1       3   .common     
-     mpSeqRxData                                BD5       2       2      38   .common     
-     mMacRxMask                                 BD7       1       1       4   .common     
-     gSeqInErrorState                           BD8       1       1       1   .common     
-     gSeqGotDataIndication                      BD9       1       1       5   .common     
-     gPendingSeqMemActionFinished               BDA       1       1       4   .common     
+     pCurrentSeqAction                          BCE       2       2      55   .common     
+     mpPendingSeqMemCompletion                  BD0       1       1       5   .common     
+     mSeqSubComponentStateMachine               BD1       4       4      71   .common     
+     mBufferedError                             BD5       1       1       3   .common     
+     mpSeqRxData                                BD6       2       2      38   .common     
+     mMacRxMask                                 BD8       1       1       4   .common     
+     gSeqInErrorState                           BD9       1       1       1   .common     
+     gSeqGotDataIndication                      BDA       1       1       5   .common     
+     gPendingSeqMemActionFinished               BDB       1       1       4   .common     
 MODULE:                 -- SeqRxMC1323X_c.obj (802.15.4_MAC2006_FFD_S08MC1323x.Lib) --
 - PROCEDURES:
      SeqWaitRxBuffer                           DA81      57      87       4   APP_CODE_2_0
@@ -734,50 +736,50 @@ MODULE:                 -- SeqRxMC1323X_c.obj (802.15.4_MAC2006_FFD_S08MC1323x.L
      SeqRx_PhyPlmeRxRequest                    4FEE      1F      31       6   NON_BANKED  
 - VARIABLES:
      frmCtrlTable                              51BD      10      16       3   .rodata     
-     gPollAckFPstate                            54E       1       1       2   .bss        
-     mCurrentClock                              54F       4       4       3   .bss        
-     dstsrc                                     553       1       1       1   .bss        
-     dst                                        554       1       1       2   .bss        
-     src                                        555       1       1       1   .bss        
-     frameControlLow                            556       1       1       3   .bss        
-     mDstLen                                    557       1       1       3   .bss        
-     mSrcLen                                    558       1       1       5   .bss        
-     mFrameType                                 559       1       1       3   .bss        
-     gRxTimeStamp24                             BDB       4       4       5   .common     
-     gRxTimeStamp                               BDF       2       2       1   .common     
-     mPhyRxParams                               BE1       5       5       2   .common     
-     seqToPhySavedRxPtr                         BE6       2       2       2   .common     
+     gPollAckFPstate                            54F       1       1       2   .bss        
+     mCurrentClock                              550       4       4       3   .bss        
+     dstsrc                                     554       1       1       1   .bss        
+     dst                                        555       1       1       2   .bss        
+     src                                        556       1       1       1   .bss        
+     frameControlLow                            557       1       1       3   .bss        
+     mDstLen                                    558       1       1       3   .bss        
+     mSrcLen                                    559       1       1       5   .bss        
+     mFrameType                                 55A       1       1       3   .bss        
+     gRxTimeStamp24                             BDC       4       4       5   .common     
+     gRxTimeStamp                               BE0       2       2       1   .common     
+     mPhyRxParams                               BE2       5       5       2   .common     
+     seqToPhySavedRxPtr                         BE7       2       2       2   .common     
 MODULE:                 -- SeqSubMainMC1323X_c.obj (802.15.4_MAC2006_FFD_S08MC1323x.Lib) --
 - PROCEDURES:
      SeqSubCompIdleState                       DC05     129     297      43   APP_CODE_2_0
 - VARIABLES:
-     cccaSetPending                             55A       1       1       4   .bss        
-     gCurrentPALevel                            BE8       1       1       1   .common     
-     gpaPowerLevelLimits                        BE9       2       2       1   .common     
+     cccaSetPending                             55B       1       1       4   .bss        
+     gCurrentPALevel                            BE9       1       1       1   .common     
+     gpaPowerLevelLimits                        BEA       2       2       1   .common     
 MODULE:                 -- SeqTxMC1323X_c.obj (802.15.4_MAC2006_FFD_S08MC1323x.Lib) --
 - PROCEDURES:
      SeqWaitTxConfirm                          DD2E     200     512      21   APP_CODE_2_0
      SetupTxCompleteClock                      500D      B8     184       2   NON_BANKED  
      SeqTx_PhyPdDataReq                        50C5      62      98       3   NON_BANKED  
 - VARIABLES:
-     seqToPhySavedTxPtr                         BEB       2       2       8   .common     
-     gLowLatencyTX                              BED       1       1       5   .common     
-     completeCCAClock                           BEE       4       4       3   .common     
-     startCcca                                  BF2       4       4       4   .common     
-     endCcca                                    BF6       4       4       2   .common     
-     difCcca                                    BFA       4       4       2   .common     
-     msduHandleLenSwap                          BFE       1       1      12   .common     
-     mRxOnTxParams                              BFF       5       5       1   .common     
+     seqToPhySavedTxPtr                         BEC       2       2       8   .common     
+     gLowLatencyTX                              BEE       1       1       5   .common     
+     completeCCAClock                           BEF       4       4       3   .common     
+     startCcca                                  BF3       4       4       4   .common     
+     endCcca                                    BF7       4       4       2   .common     
+     difCcca                                    BFB       4       4       2   .common     
+     msduHandleLenSwap                          BFF       1       1      12   .common     
+     mRxOnTxParams                              C00       5       5       1   .common     
 MODULE:                 -- MlmeStart_c.obj (802.15.4_MAC2006_FFD_S08MC1323x.Lib) --
 - PROCEDURES:
      MlmeStart_Init                            DF2E      E7     231       4   APP_CODE_2_0
      MlmeStart_Finish                          E015      1B      27       6   APP_CODE_2_0
      MlmeStartWaitTxResult                     E030      48      72       2   APP_CODE_2_0
 - VARIABLES:
-     gBeaconSecurityLevel                       C04       1       1       8   .common     
-     gBeaconKeyIdMode                           C05       1       1       3   .common     
-     gBeaconKeySource                           C06       8       8       3   .common     
-     gBeaconKeyIndex                            C0E       1       1       2   .common     
+     gBeaconSecurityLevel                       C05       1       1       8   .common     
+     gBeaconKeyIdMode                           C06       1       1       3   .common     
+     gBeaconKeySource                           C07       8       8       3   .common     
+     gBeaconKeyIndex                            C0F       1       1       2   .common     
 MODULE:                 -- MlmeScan_c.obj (802.15.4_MAC2006_FFD_S08MC1323x.Lib) --
 - PROCEDURES:
      MlmeScan_InitScan                         E078     11B     283       2   APP_CODE_2_0
@@ -789,24 +791,24 @@ MODULE:                 -- MlmeScan_c.obj (802.15.4_MAC2006_FFD_S08MC1323x.Lib) 
      MlmeOrphanScan                            E534      8E     142       2   APP_CODE_2_0
      MlmeScan_SendErrConfirm                   E5C2      29      41       6   APP_CODE_2_0
 - VARIABLES:
-     mScanChannels                              55B       3       3       7   .bss        
-     mChannelMask                               55E       1       1      10   .bss        
-     mCurrentMask                               55F       1       1       7   .bss        
-     mScanDuration                              560       1       1       5   .bss        
-     mScanChannel                               561       1       1       2   .bss        
-     mScanType                                  562       1       1       9   .bss        
-     mPanIdBackup                               563       2       2       5   .bss        
-     mResultListSize                            565       1       1      10   .bss        
-     mpScanResults                              566       2       2      14   .bss        
-     mResultsForCurrentBlock                    568       1       1       5   .bss        
-     mpDescriptorsBlock                         569       2       2       5   .bss        
-     mScanSecurityLevel                         56B       1       1       2   .bss        
-     mScanKeyIdMode                             56C       1       1       2   .bss        
-     mScanKeySource                             56D       8       8       2   .bss        
-     mScanKeyIndex                              575       1       1       2   .bss        
-     gMlmeScan_CheckBeacon                      C0F       1       1       8   .common     
-     gMlmeScan_CurrentChannel                   C10       1       1      10   .common     
-     gMlmeScan_FastEd                           C11       1       1       4   .common     
+     mScanChannels                              55C       3       3       7   .bss        
+     mChannelMask                               55F       1       1      10   .bss        
+     mCurrentMask                               560       1       1       7   .bss        
+     mScanDuration                              561       1       1       5   .bss        
+     mScanChannel                               562       1       1       2   .bss        
+     mScanType                                  563       1       1       9   .bss        
+     mPanIdBackup                               564       2       2       5   .bss        
+     mResultListSize                            566       1       1      10   .bss        
+     mpScanResults                              567       2       2      14   .bss        
+     mResultsForCurrentBlock                    569       1       1       5   .bss        
+     mpDescriptorsBlock                         56A       2       2       5   .bss        
+     mScanSecurityLevel                         56C       1       1       2   .bss        
+     mScanKeyIdMode                             56D       1       1       2   .bss        
+     mScanKeySource                             56E       8       8       2   .bss        
+     mScanKeyIndex                              576       1       1       2   .bss        
+     gMlmeScan_CheckBeacon                      C10       1       1       8   .common     
+     gMlmeScan_CurrentChannel                   C11       1       1      10   .common     
+     gMlmeScan_FastEd                           C12       1       1       4   .common     
 MODULE:                 -- MlmePanIdConflict_c.obj (802.15.4_MAC2006_FFD_S08MC1323x.Lib) --
 - PROCEDURES:
      MlmePanIdConflictDetected                 E5EB      26      38       2   APP_CODE_2_0
@@ -831,10 +833,10 @@ MODULE:                 -- MlmeInputHandler_c.obj (802.15.4_MAC2006_FFD_S08MC132
      hdrOffset                                 51CD       4       4       1   .rodata     
      remoteFrameDescOffsets                    51D1       9       9       1   .rodata     
      remoteFrameDesc                           51DA       D      13       1   .rodata     
-     mpMlmeIhPendingNwkMsg                      C12       2       2      46   .common     
-     mpMlmeIhPendingMemMsg                      C14       2       2      64   .common     
-     gMlmeCurrentMacFrameHeader                 C16      20      32      26   .common     
-     gAutoPollAllowed                           C36       1       1       7   .common     
+     mpMlmeIhPendingNwkMsg                      C13       2       2      46   .common     
+     mpMlmeIhPendingMemMsg                      C15       2       2      64   .common     
+     gMlmeCurrentMacFrameHeader                 C17      20      32      26   .common     
+     gAutoPollAllowed                           C37       1       1       7   .common     
 MODULE:                 -- MlmeMain_c.obj (802.15.4_MAC2006_FFD_S08MC1323x.Lib) --
 - PROCEDURES:
      Mlme_Init                                 EFE6      6D     109       2   APP_CODE_2_0
@@ -853,17 +855,17 @@ MODULE:                 -- MlmeMain_c.obj (802.15.4_MAC2006_FFD_S08MC1323x.Lib) 
 - VARIABLES:
      mPibAttributesRangeTable                  51E7      63      99       3   .rodata     
      gMacReadOnlyPibs                          524A      12      18       1   .rodata     
-     gMacTimerID                                35A       1       1       8   .data       
-     gSequencerTimerID                          35B       1       1       2   .data       
-     gMacRxTxPacketTimerID                      35C       1       1       4   .data       
-     gRxTxPacketCnt                             576       1       1       7   .bss        
-     gExpiryTimeNextService                     577       2       2      14   .bss        
-     gExpiryTimeCurCnt                          579       2       2      15   .bss        
-     gRxSecurityFailure                         C37       1       1       3   .common     
-     gCurrentRxTxPacketCnt                      C38       1       1       2   .common     
-     mMemMlmeInputQueue                         C39       4       4       6   .common     
-     mNwkMlmeInputQueue                         C3D       4       4       6   .common     
-     mNwkMcpsInputQueue                         C41       4       4       5   .common     
+     gMacTimerID                                35B       1       1       8   .data       
+     gSequencerTimerID                          35C       1       1       2   .data       
+     gMacRxTxPacketTimerID                      35D       1       1       4   .data       
+     gRxTxPacketCnt                             577       1       1       7   .bss        
+     gExpiryTimeNextService                     578       2       2      14   .bss        
+     gExpiryTimeCurCnt                          57A       2       2      15   .bss        
+     gRxSecurityFailure                         C38       1       1       3   .common     
+     gCurrentRxTxPacketCnt                      C39       1       1       2   .common     
+     mMemMlmeInputQueue                         C3A       4       4       6   .common     
+     mNwkMlmeInputQueue                         C3E       4       4       6   .common     
+     mNwkMcpsInputQueue                         C42       4       4       5   .common     
 MODULE:                 -- MlmeOutputHandler_c.obj (802.15.4_MAC2006_FFD_S08MC1323x.Lib) --
 - PROCEDURES:
      MlmeOh_Init                               FC70       9       9       2   APP_CODE_2_0
@@ -878,8 +880,8 @@ MODULE:                 -- MlmeOutputHandler_c.obj (802.15.4_MAC2006_FFD_S08MC13
      mBroadCastAddr                            525C       2       2       9   .rodata     
      maRuleTable                               525E      14      20       1   .rodata     
      mCmdFrameDescs                            5272      79     121       2   .rodata     
-     mpMlmeOhPendingNwkMsg                      C45       2       2      83   .common     
-     mpMlmeOhPendingMemMsg                      C47       2       2      17   .common     
+     mpMlmeOhPendingNwkMsg                      C46       2       2      83   .common     
+     mpMlmeOhPendingMemMsg                      C48       2       2      17   .common     
 MODULE:                 -- MlmeSm_c.obj (802.15.4_MAC2006_FFD_S08MC1323x.Lib) --
 - PROCEDURES:
      MlmeSm_Init                               83C5      11      17       2   PPAGE_0_1   
@@ -891,10 +893,10 @@ MODULE:                 -- MlmeSm_c.obj (802.15.4_MAC2006_FFD_S08MC1323x.Lib) --
      MlmeSmIdle                                8683     3EC    1004      72   PPAGE_0_1   
      MlmeSm_DisassociateRemovePANref           8A6F      1D      29       4   PPAGE_0_1   
 - VARIABLES:
-     gMlmeSm                                    35D       4       4      62   .data       
-     txCoordRealigCmdFlag                       57B       1       1       5   .bss        
-     startCurrentChannel                        C49       1       1       2   .common     
-     startCrtMacPanId                           C4A       2       2       4   .common     
+     gMlmeSm                                    35E       4       4      62   .data       
+     txCoordRealigCmdFlag                       57C       1       1       5   .bss        
+     startCurrentChannel                        C4A       1       1       2   .common     
+     startCrtMacPanId                           C4B       2       2       4   .common     
 MODULE:                 -- MlmeGts_c.obj (802.15.4_MAC2006_FFD_S08MC1323x.Lib) --
 - PROCEDURES:
      MlmeGts_SendRequest                       8A8C      6C     108       2   PPAGE_0_1   
@@ -923,22 +925,22 @@ MODULE:                 -- MlmeGts_c.obj (802.15.4_MAC2006_FFD_S08MC1323x.Lib) -
      gtsCalculateSlotExpiration                9606      1E      30       4   PPAGE_0_1   
      MemGts_GetNextSlot                        9624      FC     252       3   PPAGE_0_1   
 - VARIABLES:
-     gLastCapSlot                               C4C       1       1      10   .common     
-     gMlmeGtsAllocRequestSent                   C4D       1       1       8   .common     
-     gMlmeGtsBeaconsRemaining                   C4E       1       1       4   .common     
-     gMlmeGtsRequestedCharacteristics           C4F       1       1      10   .common     
-     gMlmeGtsSecurityLevel                      C50       1       1       2   .common     
-     gMlmeGtsKeyIdMode                          C51       1       1       2   .common     
-     gMlmeGtsKeySource                          C52       8       8       2   .common     
-     gMlmeGtsKeyIndex                           C5A       1       1       2   .common     
-     gGtsData                                   C5B      17      23       4   .common     
-     gGtsLen                                    C72       1       1       5   .common     
-     gGtsInfoArray                              C73      8C     140      27   .common     
-     gGtsGuardedAction                          CFF       1       1      13   .common     
-     gUpdateGtsData                             D00       1       1       4   .common     
-     pGtsAnchor                                 D01       2       2       3   .common     
-     gMlmeGtsAccess                             D03       1       1      16   .common     
-     gMemGtsAccess                              D04       1       1      12   .common     
+     gLastCapSlot                               C4D       1       1      10   .common     
+     gMlmeGtsAllocRequestSent                   C4E       1       1       8   .common     
+     gMlmeGtsBeaconsRemaining                   C4F       1       1       4   .common     
+     gMlmeGtsRequestedCharacteristics           C50       1       1      10   .common     
+     gMlmeGtsSecurityLevel                      C51       1       1       2   .common     
+     gMlmeGtsKeyIdMode                          C52       1       1       2   .common     
+     gMlmeGtsKeySource                          C53       8       8       2   .common     
+     gMlmeGtsKeyIndex                           C5B       1       1       2   .common     
+     gGtsData                                   C5C      17      23       4   .common     
+     gGtsLen                                    C73       1       1       5   .common     
+     gGtsInfoArray                              C74      8C     140      27   .common     
+     gGtsGuardedAction                          D00       1       1      13   .common     
+     gUpdateGtsData                             D01       1       1       4   .common     
+     pGtsAnchor                                 D02       2       2       3   .common     
+     gMlmeGtsAccess                             D04       1       1      16   .common     
+     gMemGtsAccess                              D05       1       1      12   .common     
 MODULE:                 -- MlmeAssociate_c.obj (802.15.4_MAC2006_FFD_S08MC1323x.Lib) --
 - PROCEDURES:
      MlmeAssociate_SendRequest                 9720      C6     198       2   PPAGE_0_1   
@@ -953,15 +955,15 @@ MODULE:                 -- MlmeAssociate_c.obj (802.15.4_MAC2006_FFD_S08MC1323x.
      MlmeAssociateIgnorePollConfirm            9AC4      16      22       2   PPAGE_0_1   
      MlmeAssociateWaitTimeout                  9ADA      76     118       4   PPAGE_0_1   
 - VARIABLES:
-     mAssociateCoordAddrMode                    D05       1       1       2   .common     
-     mAssociateSecurityEnable                   D06       1       1       2   .common     
-     mAssociateCoordAddress                     D07       8       8       1   .common     
-     mAssociateCoordPanId                       D0F       2       2       1   .common     
-     mWaitForAssociateResp                      D11       1       1       4   .common     
-     mAssociateSecurityLevel                    D12       1       1       2   .common     
-     mAssociateKeyIdMode                        D13       1       1       2   .common     
-     mAssociateKeySource                        D14       8       8       2   .common     
-     mAssociateKeyIndex                         D1C       1       1       2   .common     
+     mAssociateCoordAddrMode                    D06       1       1       2   .common     
+     mAssociateSecurityEnable                   D07       1       1       2   .common     
+     mAssociateCoordAddress                     D08       8       8       1   .common     
+     mAssociateCoordPanId                       D10       2       2       1   .common     
+     mWaitForAssociateResp                      D12       1       1       4   .common     
+     mAssociateSecurityLevel                    D13       1       1       2   .common     
+     mAssociateKeyIdMode                        D14       1       1       2   .common     
+     mAssociateKeySource                        D15       8       8       2   .common     
+     mAssociateKeyIndex                         D1D       1       1       2   .common     
 MODULE:                 -- MemTimer_c.obj (802.15.4_MAC2006_FFD_S08MC1323x.Lib) --
 - PROCEDURES:
      MemTimer_StartWait                        9B50      16      22       2   PPAGE_0_1   
@@ -977,9 +979,9 @@ MODULE:                 -- MemScan_c.obj (802.15.4_MAC2006_FFD_S08MC1323x.Lib) -
      MemScanChannelRx                          9DC8      68     104       4   PPAGE_0_1   
      MemScanOrphanRx                           9E30      AD     173       3   PPAGE_0_1   
 - VARIABLES:
-     gMemScan_ScanDuration                      D1D       4       4       9   .common     
-     gMemScan_ScanCompleted                     D21       1       1      13   .common     
-     mMaxDetectedEnergy                         D22       1       1       4   .common     
+     gMemScan_ScanDuration                      D1E       4       4       9   .common     
+     gMemScan_ScanCompleted                     D22       1       1      13   .common     
+     mMaxDetectedEnergy                         D23       1       1       4   .common     
 MODULE:                 -- MemData_c.obj (802.15.4_MAC2006_FFD_S08MC1323x.Lib) --
 - PROCEDURES:
      MemData_Init                              9EDD       6       6       2   PPAGE_0_1   
@@ -993,8 +995,8 @@ MODULE:                 -- MemData_c.obj (802.15.4_MAC2006_FFD_S08MC1323x.Lib) -
      MemData_StartRxEnableTrsHandler          28148      4A      74       2   PPAGE_2_2   
 - VARIABLES:
      mMemDataDefaultRxInterval_c               52EB       4       4       1   .rodata     
-     gNumTxNoAck                                57C       1       1       2   .bss        
-     mMemData                                   D23       1       1       4   .common     
+     gNumTxNoAck                                57D       1       1       2   .bss        
+     mMemData                                   D24       1       1       4   .common     
 MODULE:                 -- MemBeacon_c.obj (802.15.4_MAC2006_FFD_S08MC1323x.Lib) --
 - PROCEDURES:
      MemBeacon_Init                           28192       8       8       2   PPAGE_2_2   
@@ -1042,16 +1044,16 @@ MODULE:                 -- MemBeacon_c.obj (802.15.4_MAC2006_FFD_S08MC1323x.Lib)
      MemBcn_ProcessRxBeaconFnc                29271       F      15       2   PPAGE_2_2   
      MemBcn_WaitForBroadcast                  29280     12B     299       4   PPAGE_2_2   
 - VARIABLES:
-     mReceivedBeacon                            D24      AE     174       8   .common     
-     applySecDiff                               DD2       4       4      36   .common     
-     gMemBeaconCntr                             DD6       1       1       4   .common     
-     memBeaconTimeInfo                          DD7      1C      28     176   .common     
-     gBroadcastTransmitted                      DF3       1       1       3   .common     
-     gBroadcastRx                               DF4       1       1       3   .common     
-     gRxBrdCompleteClock                        DF5       4       4       3   .common     
-     gRxBrdBeaconEndCrtClock                    DF9       4       4       2   .common     
-     gRxBrdRxBrdEndCrtClock                     DFD       4       4       4   .common     
-     mMemBeacon                                 E01      20      32     104   .common     
+     mReceivedBeacon                            D25      AE     174       8   .common     
+     applySecDiff                               DD3       4       4      36   .common     
+     gMemBeaconCntr                             DD7       1       1       4   .common     
+     memBeaconTimeInfo                          DD8      1C      28     176   .common     
+     gBroadcastTransmitted                      DF4       1       1       3   .common     
+     gBroadcastRx                               DF5       1       1       3   .common     
+     gRxBrdCompleteClock                        DF6       4       4       3   .common     
+     gRxBrdBeaconEndCrtClock                    DFA       4       4       2   .common     
+     gRxBrdRxBrdEndCrtClock                     DFE       4       4       4   .common     
+     mMemBeacon                                 E02      20      32     104   .common     
 MODULE:                 -- MemBeaconSupport_c.obj (802.15.4_MAC2006_FFD_S08MC1323x.Lib) --
 - PROCEDURES:
      MemBeaconSupport_Init                    293AB      1E      30       2   PPAGE_2_2   
@@ -1063,13 +1065,13 @@ MODULE:                 -- MemBeaconSupport_c.obj (802.15.4_MAC2006_FFD_S08MC132
      UpdateBeaconTime                         298D2      2E      46       6   PPAGE_2_2   
      ProcessRxBeacon                          29900     116     278       2   PPAGE_2_2   
 - VARIABLES:
-     gmBackoffPeriod                            361       1       1       3   .data       
-     pReceivedBeacon                            E21       2       2       2   .common     
-     mBeaconExtAddrs                            E23      38      56       2   .common     
-     mBeaconShortAddrs                          E5B       E      14       2   .common     
-     mBeaconExtAddrCnt                          E69       1       1       8   .common     
-     mBeaconShortAddrCnt                        E6A       1       1       9   .common     
-     mLastBeaconCnt                             E6B       1       1       1   .common     
+     gmBackoffPeriod                            362       1       1       3   .data       
+     pReceivedBeacon                            E22       2       2       2   .common     
+     mBeaconExtAddrs                            E24      38      56       2   .common     
+     mBeaconShortAddrs                          E5C       E      14       2   .common     
+     mBeaconExtAddrCnt                          E6A       1       1       8   .common     
+     mBeaconShortAddrCnt                        E6B       1       1       9   .common     
+     mLastBeaconCnt                             E6C       1       1       1   .common     
 MODULE:                 -- MemInputHandler_c.obj (802.15.4_MAC2006_FFD_S08MC1323x.Lib) --
 - PROCEDURES:
      Mem_Init                                 29A16      19      25       2   PPAGE_2_2   
@@ -1081,9 +1083,9 @@ MODULE:                 -- MemInputHandler_c.obj (802.15.4_MAC2006_FFD_S08MC1323
      MemIh_SeqActionFinishedInd               29B8F      1E      30       4   PPAGE_2_2   
      MemIh_SeqDataInd                         29BAD      3C      60       2   PPAGE_2_2   
 - VARIABLES:
-     gpMemCurrSeqAction                         E6C       2       2      44   .common     
-     gpMemCurrMlmeMsg                           E6E       2       2      24   .common     
-     gpMemCurrRxPacket                          E70       2       2      16   .common     
+     gpMemCurrSeqAction                         E6D       2       2      44   .common     
+     gpMemCurrMlmeMsg                           E6F       2       2      24   .common     
+     gpMemCurrRxPacket                          E71       2       2      16   .common     
 MODULE:                 -- MemOutputHandler_c.obj (802.15.4_MAC2006_FFD_S08MC1323x.Lib) --
 - PROCEDURES:
      MemOh_Init                               29BE9      16      22       2   PPAGE_2_2   
@@ -1107,14 +1109,14 @@ MODULE:                 -- MemOutputHandler_c.obj (802.15.4_MAC2006_FFD_S08MC132
      MemOh_SendAspMsgIfPending                29E25       F      15       2   PPAGE_2_2   
      MemOh_SeqReadClockReq                    29E34       4       4      18   PPAGE_2_2   
 - VARIABLES:
-     mMemOhSeqActions                           57D      24      36      10   .bss        
-     mMemOhPendingSeqFinishActionReq            5A1       1       1       4   .bss        
-     mMemOhPendingCtrlEventId                   5A2       1       1       4   .bss        
-     mMemOhPendingLwrEventId                    5A3       1       1       4   .bss        
-     mpMemOhPendingMlmeMsg                      E72       2       2      43   .common     
-     mpMemOhPendingAspMsg                       E74       2       2       8   .common     
-     mpMemOhPendingSeqActionReq                 E76       2       2      66   .common     
-     mMemMode                                   E78       1       1      12   .common     
+     mMemOhSeqActions                           57E      24      36      10   .bss        
+     mMemOhPendingSeqFinishActionReq            5A2       1       1       4   .bss        
+     mMemOhPendingCtrlEventId                   5A3       1       1       4   .bss        
+     mMemOhPendingLwrEventId                    5A4       1       1       4   .bss        
+     mpMemOhPendingMlmeMsg                      E73       2       2      43   .common     
+     mpMemOhPendingAspMsg                       E75       2       2       8   .common     
+     mpMemOhPendingSeqActionReq                 E77       2       2      66   .common     
+     mMemMode                                   E79       1       1      12   .common     
 MODULE:                 -- MemSmControl_c.obj (802.15.4_MAC2006_FFD_S08MC1323x.Lib) --
 - PROCEDURES:
      MemCtrl_Init                             29E38      25      37       2   PPAGE_2_2   
@@ -1143,8 +1145,8 @@ MODULE:                 -- MemSmControl_c.obj (802.15.4_MAC2006_FFD_S08MC1323x.L
      MemCtrlBDevice                           2A592     136     310      20   PPAGE_2_2   
      MemCtrlBTreeMode                         2A6C8     103     259      13   PPAGE_2_2   
 - VARIABLES:
-     gMemCtrlSm                                 362       4       4     120   .data       
-     mMemSmCtrl                                 E79       7       7      62   .common     
+     gMemCtrlSm                                 363       4       4     120   .data       
+     mMemSmCtrl                                 E7A       7       7      62   .common     
 MODULE:                 -- MemSmLib_c.obj (802.15.4_MAC2006_FFD_S08MC1323x.Lib) --
 - PROCEDURES:
      MemSmLib_IsRxOnWhenIdle                  2A7CB      1A      26       6   PPAGE_2_2   
@@ -1157,7 +1159,7 @@ MODULE:                 -- MemSmLib_c.obj (802.15.4_MAC2006_FFD_S08MC1323x.Lib) 
      MemSmLib_CsmaCaRetry                     2A8C9      18      24      10   PPAGE_2_2   
      MemSmLib_StartSeqAction                  2A8E1     994    2452     128   PPAGE_2_2   
 - VARIABLES:
-     mPendingTxInfo                             E80       1       1       2   .common     
+     mPendingTxInfo                             E81       1       1       2   .common     
 MODULE:                 -- MemSmLower_c.obj (802.15.4_MAC2006_FFD_S08MC1323x.Lib) --
 - PROCEDURES:
      MemLwr_Init                              2B275      11      17       2   PPAGE_2_2   
@@ -1166,12 +1168,12 @@ MODULE:                 -- MemSmLower_c.obj (802.15.4_MAC2006_FFD_S08MC1323x.Lib
      MemLwrIdle                               2B3A5      E8     232      75   PPAGE_2_2   
      MemLwrWfSeqFinish                        2B48D      1C      28       2   PPAGE_2_2   
 - VARIABLES:
-     gMemLwrSm                                  366       4       4     208   .data       
-     mActionStartClock                          36A       2       2       2   .data       
-     mActionCompleteClock                       36C       4       4       5   .data       
-     pLastSEQState                              5A4       3       3       5   .bss        
-     mTimesInSEQState                           5A7       2       2       3   .bss        
-     gSeqRunningState                           5A9       1       1       4   .bss        
+     gMemLwrSm                                  367       4       4     208   .data       
+     mActionStartClock                          36B       2       2       2   .data       
+     mActionCompleteClock                       36D       4       4       5   .data       
+     pLastSEQState                              5A5       3       3       5   .bss        
+     mTimesInSEQState                           5A8       2       2       3   .bss        
+     gSeqRunningState                           5AA       1       1       4   .bss        
 MODULE:                 -- McpsConversion_c.obj (802.15.4_MAC2006_FFD_S08MC1323x.Lib) --
 - PROCEDURES:
      SendDataCnf                              2B4A9      44      68      10   PPAGE_2_2   
@@ -1198,15 +1200,15 @@ MODULE:                 -- ASPMain_c.obj (802.15.4_MAC2006_FFD_S08MC1323x.Lib) -
      Asp_EventISR                             2BBA2       E      14       2   PPAGE_2_2   
      Asp_ZbClock24ToByteArray                 2BBB0       F      15       2   PPAGE_2_2   
 - VARIABLES:
-     mMemAspInputQueue                          E81       4       4       5   .common     
-     mTempZbClock24                             E85       4       4       9   .common     
-     mAspBeaconStateIndications                 E89       1       1       2   .common     
-     gAspGotMemIdleInd                          E8A       1       1       1   .common     
+     mMemAspInputQueue                          E82       4       4       5   .common     
+     mTempZbClock24                             E86       4       4       9   .common     
+     mAspBeaconStateIndications                 E8A       1       1       2   .common     
+     gAspGotMemIdleInd                          E8B       1       1       1   .common     
 MODULE:                 -- Telec_c.obj (802.15.4_MAC2006_FFD_S08MC1323x.Lib) --
 - PROCEDURES:
      ASP_TestMain                             2BBBF      15      21       2   PPAGE_2_2   
 - VARIABLES:
-     mTelecTestState                            5AA       3       3       3   .bss        
+     mTelecTestState                            5AB       3       3       3   .bss        
 
 *********************************************************************************************
 MODULE STATISTIC
@@ -1234,7 +1236,7 @@ MODULE STATISTIC
   PhyPacketProcessor_c.obj                     1    590      0
   PhyPlmeData_c.obj                           61    335      0
   PhyTime_c.obj                                0     54      0
-  MApp_c.obj                                  92   1897    976
+  MApp_c.obj                                  93   1907    979
   MyNewTask_c.obj                             13    319    108
   MApp_init_c.obj                              1    131      0
   MacInit_c.obj                                1    113      9
@@ -1277,7 +1279,7 @@ MODULE STATISTIC
   MacMain_c.obj (802.15.4_MAC2006_FFD_S08MC1323x.Lib)     0    219      0
   ASPMain_c.obj (802.15.4_MAC2006_FFD_S08MC1323x.Lib)    10    267      0
   Telec_c.obj (802.15.4_MAC2006_FFD_S08MC1323x.Lib)     3     21      0
-  other                                      512     42    118
+  other                                      512     42    119
 
 *********************************************************************************************
 SECTION USE IN OBJECT-ALLOCATION SECTION
@@ -1317,10 +1319,10 @@ SECTION: ".text"
   Sec_UnsecureRxFrame Sec_RetrieveRxSecurityMaterial 
 SECTION: ".data"
   mLEDTimerID mKeyRowPorts mKeyScanTimerID pTimer1Isr gPhyCurrentChannel 
-  pwrOutIAR10 pwrOutIAR11 pwrOutIAR20 pwrOutCtrl mTimer_c strCounter1 
-  strCounter2 strCounter3 strCounter4 pLastPool pSecondLastPool mCMBackoff 
-  gMacTimerID gSequencerTimerID gMacRxTxPacketTimerID gMlmeSm gmBackoffPeriod 
-  gMemCtrlSm gMemLwrSm mActionStartClock mActionCompleteClock 
+  pwrOutIAR10 pwrOutIAR11 pwrOutIAR20 pwrOutCtrl mTimer_c EndDeviceConfig 
+  strCounter1 strCounter2 strCounter3 strCounter4 pLastPool pSecondLastPool 
+  mCMBackoff gMacTimerID gSequencerTimerID gMacRxTxPacketTimerID gMlmeSm 
+  gmBackoffPeriod gMemCtrlSm gMemLwrSm mActionStartClock mActionCompleteClock 
 SECTION: ".bss"
   uart1_ungetFlag Uart1_TxCompleteFlag maSci1TxCallbackLeadingIndex 
   maSci1TxCallbackTrailingIndex pfSci1RxCallBack mUart1FlowDisableCounter 
@@ -1330,9 +1332,9 @@ SECTION: ".bss"
   numberOfActiveTimers numberOfLowPowerActiveTimers previousTimeInTicks 
   timerHardwareIsRunning maTmrTimerTable maTmrTimerStatusTable mTmrRead16bitReg 
   gTimerTaskID mLedFlashingLEDs PWRLib_ICGMode mLPMFlag mKeyState mLongKeyCount 
-  mSwitch_SCAN mpfKeyFunction mpRxParams keysReceived.61 mCoordInfo maMyAddress 
+  mSwitch_SCAN mpfKeyFunction mpRxParams keysReceived.62 mCoordInfo maMyAddress 
   mAddrMode mpPacket mpBtnPacket mMsduHandle mcPendingPackets mWaitPollConfirm 
-  mPollInterval mMlmeNwkInputQueue mMcpsNwkInputQueue keysBuffer.60 ledsState 
+  mPollInterval mMlmeNwkInputQueue mMcpsNwkInputQueue keysBuffer.61 ledsState 
   mCM_ClockOffset mCM_CurrentClock mCM_CurrentClockAbs mCM_TimeNeededInNextCAP 
   mCM_WaitTime gPollAckFPstate mCurrentClock dstsrc dst src frameControlLow 
   mDstLen mSrcLen mFrameType cccaSetPending mScanChannels mChannelMask 
@@ -1369,9 +1371,10 @@ SECTION: ".rodata1"
   STRING.Done...21 STRING.Invalid.parameter....22 
   STRING.Message.allocation.f.23 STRING.Sending.the.MLME.Ass.24 
   STRING.Done...25 STRING.Invalid.parameter....26 
-  STRING.Message.allocation.f.27 STRING.Counter.1.1 STRING.Counter.2.2 
-  STRING.Counter.3.3 STRING.Counter.4.4 STRING.Switch.1.Pressed.5 
-  STRING.Switch.2.Pressed.6 STRING.Switch.3.Pressed.7 STRING.Switch.4.Pressed.8 
+  STRING.Message.allocation.f.27 STRING....28 STRING.Counter.1.1 
+  STRING.Counter.2.2 STRING.Counter.3.3 STRING.Counter.4.4 
+  STRING.Switch.1.Pressed.5 STRING.Switch.2.Pressed.6 STRING.Switch.3.Pressed.7 
+  STRING.Switch.4.Pressed.8 
 SECTION: "MY_ZEROPAGE"
   PWRLib_MCU_WakeupReason 
 SECTION: "NON_BANKED"
@@ -1575,256 +1578,257 @@ OBJECT LIST SORTED BY ADDRESS
      pwrOutIAR20                                32E       F      15       1   .data       
      pwrOutCtrl                                 33D       F      15       1   .data       
      mTimer_c                                   34C       1       1       3   .data       
-     strCounter1                                34D       2       2       1   .data       
-     strCounter2                                34F       2       2       1   .data       
-     strCounter3                                351       2       2       1   .data       
-     strCounter4                                353       2       2       1   .data       
-     pLastPool                                  355       2       2       4   .data       
-     pSecondLastPool                            357       2       2       5   .data       
-     mCMBackoff                                 359       1       1       3   .data       
-     gMacTimerID                                35A       1       1       8   .data       
-     gSequencerTimerID                          35B       1       1       2   .data       
-     gMacRxTxPacketTimerID                      35C       1       1       4   .data       
-     gMlmeSm                                    35D       4       4      62   .data       
-     gmBackoffPeriod                            361       1       1       3   .data       
-     gMemCtrlSm                                 362       4       4     120   .data       
-     gMemLwrSm                                  366       4       4     208   .data       
-     mActionStartClock                          36A       2       2       2   .data       
-     mActionCompleteClock                       36C       4       4       5   .data       
-     uart1_ungetFlag                            370       1       1       2   .bss        
-     Uart1_TxCompleteFlag                       371       1       1       2   .bss        
-     maSci1TxCallbackLeadingIndex               372       1       1       5   .bss        
-     maSci1TxCallbackTrailingIndex              373       1       1       5   .bss        
-     pfSci1RxCallBack                           374       3       3       6   .bss        
-     mUart1FlowDisableCounter                   377       1       1       4   .bss        
-     uart1_ungetByte                            378       1       1       1   .bss        
-     maSci1TxBufRefTable                        379       F      15      10   .bss        
-     maSci1TxBufLenTable                        388       3       3       6   .bss        
-     mSci1TxCurIndex                            38B       1       1       4   .bss        
-     mSci1TxBufRefLeadingIndex                  38C       1       1       4   .bss        
-     mSci1TxBufRefTrailingIndex                 38D       1       1       8   .bss        
-     maSci1TxCallbackTable                      38E       F      15       8   .bss        
-     maSci1RxBuf                                39D      20      32       2   .bss        
-     mSci1RxBufLeadingIndex                     3BD       1       1       5   .bss        
-     mSci1RxBufTrailingIndex                    3BE       1       1       8   .bss        
-     numberOfActiveTimers                       3BF       1       1       4   .bss        
-     numberOfLowPowerActiveTimers               3C0       1       1       4   .bss        
-     previousTimeInTicks                        3C1       2       2       3   .bss        
-     timerHardwareIsRunning                     3C3       1       1       2   .bss        
-     maTmrTimerTable                            3C4      EE     238       4   .bss        
-     maTmrTimerStatusTable                      4B2      22      34       7   .bss        
-     mTmrRead16bitReg                           4D4       2       2       6   .bss        
-     gTimerTaskID                               4D6       1       1       5   .bss        
-     mLedFlashingLEDs                           4D7       1       1       9   .bss        
-     PWRLib_ICGMode                             4D8       1       1       1   .bss        
-     mLPMFlag                                   4D9       1       1       1   .bss        
-     mKeyState                                  4DA       1       1       4   .bss        
-     mLongKeyCount                              4DB       1       1       3   .bss        
-     mSwitch_SCAN                               4DC       2       2       3   .bss        
-     mpfKeyFunction                             4DE       3       3       4   .bss        
-     mpRxParams                                 4E1       2       2       5   .bss        
-     keysReceived.61                            4E3       1       1       6   .bss        
-     mCoordInfo                                 4E4      1F      31      21   .bss        
-     maMyAddress                                503       8       8       5   .bss        
-     mAddrMode                                  50B       1       1       5   .bss        
-     mpPacket                                   50C       2       2      10   .bss        
-     mpBtnPacket                                50E       2       2      10   .bss        
-     mMsduHandle                                510       1       1       4   .bss        
-     mcPendingPackets                           511       1       1       6   .bss        
-     mWaitPollConfirm                           512       1       1       5   .bss        
-     mPollInterval                              513       2       2       5   .bss        
-     mMlmeNwkInputQueue                         515       4       4       4   .bss        
-     mMcpsNwkInputQueue                         519       4       4       4   .bss        
-     keysBuffer.60                              51D      20      32       3   .bss        
-     ledsState                                  53D       1       1       7   .bss        
-     mCM_ClockOffset                            53E       4       4      40   .bss        
-     mCM_CurrentClock                           542       4       4      45   .bss        
-     mCM_CurrentClockAbs                        546       4       4      16   .bss        
-     mCM_TimeNeededInNextCAP                    54A       2       2      19   .bss        
-     mCM_WaitTime                               54C       2       2      12   .bss        
-     gPollAckFPstate                            54E       1       1       2   .bss        
-     mCurrentClock                              54F       4       4       3   .bss        
-     dstsrc                                     553       1       1       1   .bss        
-     dst                                        554       1       1       2   .bss        
-     src                                        555       1       1       1   .bss        
-     frameControlLow                            556       1       1       3   .bss        
-     mDstLen                                    557       1       1       3   .bss        
-     mSrcLen                                    558       1       1       5   .bss        
-     mFrameType                                 559       1       1       3   .bss        
-     cccaSetPending                             55A       1       1       4   .bss        
-     mScanChannels                              55B       3       3       7   .bss        
-     mChannelMask                               55E       1       1      10   .bss        
-     mCurrentMask                               55F       1       1       7   .bss        
-     mScanDuration                              560       1       1       5   .bss        
-     mScanChannel                               561       1       1       2   .bss        
-     mScanType                                  562       1       1       9   .bss        
-     mPanIdBackup                               563       2       2       5   .bss        
-     mResultListSize                            565       1       1      10   .bss        
-     mpScanResults                              566       2       2      14   .bss        
-     mResultsForCurrentBlock                    568       1       1       5   .bss        
-     mpDescriptorsBlock                         569       2       2       5   .bss        
-     mScanSecurityLevel                         56B       1       1       2   .bss        
-     mScanKeyIdMode                             56C       1       1       2   .bss        
-     mScanKeySource                             56D       8       8       2   .bss        
-     mScanKeyIndex                              575       1       1       2   .bss        
-     gRxTxPacketCnt                             576       1       1       7   .bss        
-     gExpiryTimeNextService                     577       2       2      14   .bss        
-     gExpiryTimeCurCnt                          579       2       2      15   .bss        
-     txCoordRealigCmdFlag                       57B       1       1       5   .bss        
-     gNumTxNoAck                                57C       1       1       2   .bss        
-     mMemOhSeqActions                           57D      24      36      10   .bss        
-     mMemOhPendingSeqFinishActionReq            5A1       1       1       4   .bss        
-     mMemOhPendingCtrlEventId                   5A2       1       1       4   .bss        
-     mMemOhPendingLwrEventId                    5A3       1       1       4   .bss        
-     pLastSEQState                              5A4       3       3       5   .bss        
-     mTimesInSEQState                           5A7       2       2       3   .bss        
-     gSeqRunningState                           5A9       1       1       4   .bss        
-     mTelecTestState                            5AA       3       3       3   .bss        
-     maTsTaskTable                              5AD      3C      60      19   .common     
-     maTsTaskIDsByPriority                      5E9       A      10       8   .common     
-     gIdleTaskID                                5F3       1       1       1   .common     
-     gUartTaskId                                5F4       1       1       3   .common     
-     mSci1RxBufferByteCount                     5F5       1       1       7   .common     
-     gRSTResetStatus                            5F6       1       1       1   .common     
-     mfLedInSerialMode                          5F7       1       1       1   .common     
-     PWRLib_StackPS                             5F8       1       1       1   .common     
-     pressedKey                                 5F9       1       1       4   .common     
-     mPhyLastRxLQI                              5FA       1       1       1   .common     
-     i                                          5FB       1       1       3   .common     
-     gState                                     5FC       1       1       6   .common     
-     myTimerID                                  5FD       1       1       5   .common     
-     myNewTaskID                                5FE       1       1       3   .common     
-     tmpString                                  5FF       2       2       2   .common     
-     gAppTaskID_c                               601       1       1       9   .common     
-     gMacTaskID_c                               602       1       1      23   .common     
-     maMacHeap                                  603     442    1090       1   .common     
-     maMmPools                                  A45      12      18       4   .common     
-     gPIBKeyTable                               A57      32      50       1   .common     
-     gPIBKeyIdLookupDescriptorTable             A89      28      40       2   .common     
-     gPIBKeyDeviceDescriptorTable               AB1       C      12       2   .common     
-     gPIBKeyUsageDescriptorTable                ABD       8       8       2   .common     
-     gPIBDeviceTable                            AC5      22      34       1   .common     
-     gPIBSecurityLevelTable                     AE7       8       8       1   .common     
-     gFreeMessagesCount                         AEF       1       1       7   .common     
-     mPacManDirectPackets_D2C                   AF0       4       4       6   .common     
-     mPacManDirectPackets_C2D                   AF4       4       4       5   .common     
-     mPacManIndirectPackets                     AF8       4       4      14   .common     
-     mPacManIndirectBroadcastPkts               AFC       4       4       6   .common     
-     mPacManGuardPacket                         B00       1       1       9   .common     
-     gpPacketToPurge                            B01       2       2       4   .common     
-     mPpIndirectQueueAddr                       B03      18      24       9   .common     
-     gMacPib                                    B1B      9B     155     391   .common     
-     aExtendedAddress                           BB6       8       8      18   .common     
-     aMinSetupTime_s                            BBE       1       1      17   .common     
-     aMinSetupTimeCritical_s                    BBF       1       1       2   .common     
-     aMinSetupTimeVeryCritical_s                BC0       1       1       2   .common     
-     mCM_DelayUntilNextAction                   BC1       1       1       9   .common     
-     mCM_NextClockBoundary                      BC2       4       4      51   .common     
-     mCM_BleEndTime                             BC6       4       4      13   .common     
-     CM_RandomBackoff                           BCA       2       2       4   .common     
-     mEnableCriticalTiming                      BCC       1       1       5   .common     
-     pCurrentSeqAction                          BCD       2       2      55   .common     
-     mpPendingSeqMemCompletion                  BCF       1       1       5   .common     
-     mSeqSubComponentStateMachine               BD0       4       4      71   .common     
-     mBufferedError                             BD4       1       1       3   .common     
-     mpSeqRxData                                BD5       2       2      38   .common     
-     mMacRxMask                                 BD7       1       1       4   .common     
-     gSeqInErrorState                           BD8       1       1       1   .common     
-     gSeqGotDataIndication                      BD9       1       1       5   .common     
-     gPendingSeqMemActionFinished               BDA       1       1       4   .common     
-     gRxTimeStamp24                             BDB       4       4       5   .common     
-     gRxTimeStamp                               BDF       2       2       1   .common     
-     mPhyRxParams                               BE1       5       5       2   .common     
-     seqToPhySavedRxPtr                         BE6       2       2       2   .common     
-     gCurrentPALevel                            BE8       1       1       1   .common     
-     gpaPowerLevelLimits                        BE9       2       2       1   .common     
-     seqToPhySavedTxPtr                         BEB       2       2       8   .common     
-     gLowLatencyTX                              BED       1       1       5   .common     
-     completeCCAClock                           BEE       4       4       3   .common     
-     startCcca                                  BF2       4       4       4   .common     
-     endCcca                                    BF6       4       4       2   .common     
-     difCcca                                    BFA       4       4       2   .common     
-     msduHandleLenSwap                          BFE       1       1      12   .common     
-     mRxOnTxParams                              BFF       5       5       1   .common     
-     gBeaconSecurityLevel                       C04       1       1       8   .common     
-     gBeaconKeyIdMode                           C05       1       1       3   .common     
-     gBeaconKeySource                           C06       8       8       3   .common     
-     gBeaconKeyIndex                            C0E       1       1       2   .common     
-     gMlmeScan_CheckBeacon                      C0F       1       1       8   .common     
-     gMlmeScan_CurrentChannel                   C10       1       1      10   .common     
-     gMlmeScan_FastEd                           C11       1       1       4   .common     
-     mpMlmeIhPendingNwkMsg                      C12       2       2      46   .common     
-     mpMlmeIhPendingMemMsg                      C14       2       2      64   .common     
-     gMlmeCurrentMacFrameHeader                 C16      20      32      26   .common     
-     gAutoPollAllowed                           C36       1       1       7   .common     
-     gRxSecurityFailure                         C37       1       1       3   .common     
-     gCurrentRxTxPacketCnt                      C38       1       1       2   .common     
-     mMemMlmeInputQueue                         C39       4       4       6   .common     
-     mNwkMlmeInputQueue                         C3D       4       4       6   .common     
-     mNwkMcpsInputQueue                         C41       4       4       5   .common     
-     mpMlmeOhPendingNwkMsg                      C45       2       2      83   .common     
-     mpMlmeOhPendingMemMsg                      C47       2       2      17   .common     
-     startCurrentChannel                        C49       1       1       2   .common     
-     startCrtMacPanId                           C4A       2       2       4   .common     
-     gLastCapSlot                               C4C       1       1      10   .common     
-     gMlmeGtsAllocRequestSent                   C4D       1       1       8   .common     
-     gMlmeGtsBeaconsRemaining                   C4E       1       1       4   .common     
-     gMlmeGtsRequestedCharacteristics           C4F       1       1      10   .common     
-     gMlmeGtsSecurityLevel                      C50       1       1       2   .common     
-     gMlmeGtsKeyIdMode                          C51       1       1       2   .common     
-     gMlmeGtsKeySource                          C52       8       8       2   .common     
-     gMlmeGtsKeyIndex                           C5A       1       1       2   .common     
-     gGtsData                                   C5B      17      23       4   .common     
-     gGtsLen                                    C72       1       1       5   .common     
-     gGtsInfoArray                              C73      8C     140      27   .common     
-     gGtsGuardedAction                          CFF       1       1      13   .common     
-     gUpdateGtsData                             D00       1       1       4   .common     
-     pGtsAnchor                                 D01       2       2       3   .common     
-     gMlmeGtsAccess                             D03       1       1      16   .common     
-     gMemGtsAccess                              D04       1       1      12   .common     
-     mAssociateCoordAddrMode                    D05       1       1       2   .common     
-     mAssociateSecurityEnable                   D06       1       1       2   .common     
-     mAssociateCoordAddress                     D07       8       8       1   .common     
-     mAssociateCoordPanId                       D0F       2       2       1   .common     
-     mWaitForAssociateResp                      D11       1       1       4   .common     
-     mAssociateSecurityLevel                    D12       1       1       2   .common     
-     mAssociateKeyIdMode                        D13       1       1       2   .common     
-     mAssociateKeySource                        D14       8       8       2   .common     
-     mAssociateKeyIndex                         D1C       1       1       2   .common     
-     gMemScan_ScanDuration                      D1D       4       4       9   .common     
-     gMemScan_ScanCompleted                     D21       1       1      13   .common     
-     mMaxDetectedEnergy                         D22       1       1       4   .common     
-     mMemData                                   D23       1       1       4   .common     
-     mReceivedBeacon                            D24      AE     174       8   .common     
-     applySecDiff                               DD2       4       4      36   .common     
-     gMemBeaconCntr                             DD6       1       1       4   .common     
-     memBeaconTimeInfo                          DD7      1C      28     176   .common     
-     gBroadcastTransmitted                      DF3       1       1       3   .common     
-     gBroadcastRx                               DF4       1       1       3   .common     
-     gRxBrdCompleteClock                        DF5       4       4       3   .common     
-     gRxBrdBeaconEndCrtClock                    DF9       4       4       2   .common     
-     gRxBrdRxBrdEndCrtClock                     DFD       4       4       4   .common     
-     mMemBeacon                                 E01      20      32     104   .common     
-     pReceivedBeacon                            E21       2       2       2   .common     
-     mBeaconExtAddrs                            E23      38      56       2   .common     
-     mBeaconShortAddrs                          E5B       E      14       2   .common     
-     mBeaconExtAddrCnt                          E69       1       1       8   .common     
-     mBeaconShortAddrCnt                        E6A       1       1       9   .common     
-     mLastBeaconCnt                             E6B       1       1       1   .common     
-     gpMemCurrSeqAction                         E6C       2       2      44   .common     
-     gpMemCurrMlmeMsg                           E6E       2       2      24   .common     
-     gpMemCurrRxPacket                          E70       2       2      16   .common     
-     mpMemOhPendingMlmeMsg                      E72       2       2      43   .common     
-     mpMemOhPendingAspMsg                       E74       2       2       8   .common     
-     mpMemOhPendingSeqActionReq                 E76       2       2      66   .common     
-     mMemMode                                   E78       1       1      12   .common     
-     mMemSmCtrl                                 E79       7       7      62   .common     
-     mPendingTxInfo                             E80       1       1       2   .common     
-     mMemAspInputQueue                          E81       4       4       5   .common     
-     mTempZbClock24                             E85       4       4       9   .common     
-     mAspBeaconStateIndications                 E89       1       1       2   .common     
-     gAspGotMemIdleInd                          E8A       1       1       1   .common     
-     pStack                                     E8B       2       2       2   _STARTUP    
+     EndDeviceConfig                            34D       1       1       1   .data       
+     strCounter1                                34E       2       2       1   .data       
+     strCounter2                                350       2       2       1   .data       
+     strCounter3                                352       2       2       1   .data       
+     strCounter4                                354       2       2       1   .data       
+     pLastPool                                  356       2       2       4   .data       
+     pSecondLastPool                            358       2       2       5   .data       
+     mCMBackoff                                 35A       1       1       3   .data       
+     gMacTimerID                                35B       1       1       8   .data       
+     gSequencerTimerID                          35C       1       1       2   .data       
+     gMacRxTxPacketTimerID                      35D       1       1       4   .data       
+     gMlmeSm                                    35E       4       4      62   .data       
+     gmBackoffPeriod                            362       1       1       3   .data       
+     gMemCtrlSm                                 363       4       4     120   .data       
+     gMemLwrSm                                  367       4       4     208   .data       
+     mActionStartClock                          36B       2       2       2   .data       
+     mActionCompleteClock                       36D       4       4       5   .data       
+     uart1_ungetFlag                            371       1       1       2   .bss        
+     Uart1_TxCompleteFlag                       372       1       1       2   .bss        
+     maSci1TxCallbackLeadingIndex               373       1       1       5   .bss        
+     maSci1TxCallbackTrailingIndex              374       1       1       5   .bss        
+     pfSci1RxCallBack                           375       3       3       6   .bss        
+     mUart1FlowDisableCounter                   378       1       1       4   .bss        
+     uart1_ungetByte                            379       1       1       1   .bss        
+     maSci1TxBufRefTable                        37A       F      15      10   .bss        
+     maSci1TxBufLenTable                        389       3       3       6   .bss        
+     mSci1TxCurIndex                            38C       1       1       4   .bss        
+     mSci1TxBufRefLeadingIndex                  38D       1       1       4   .bss        
+     mSci1TxBufRefTrailingIndex                 38E       1       1       8   .bss        
+     maSci1TxCallbackTable                      38F       F      15       8   .bss        
+     maSci1RxBuf                                39E      20      32       2   .bss        
+     mSci1RxBufLeadingIndex                     3BE       1       1       5   .bss        
+     mSci1RxBufTrailingIndex                    3BF       1       1       8   .bss        
+     numberOfActiveTimers                       3C0       1       1       4   .bss        
+     numberOfLowPowerActiveTimers               3C1       1       1       4   .bss        
+     previousTimeInTicks                        3C2       2       2       3   .bss        
+     timerHardwareIsRunning                     3C4       1       1       2   .bss        
+     maTmrTimerTable                            3C5      EE     238       4   .bss        
+     maTmrTimerStatusTable                      4B3      22      34       7   .bss        
+     mTmrRead16bitReg                           4D5       2       2       6   .bss        
+     gTimerTaskID                               4D7       1       1       5   .bss        
+     mLedFlashingLEDs                           4D8       1       1       9   .bss        
+     PWRLib_ICGMode                             4D9       1       1       1   .bss        
+     mLPMFlag                                   4DA       1       1       1   .bss        
+     mKeyState                                  4DB       1       1       4   .bss        
+     mLongKeyCount                              4DC       1       1       3   .bss        
+     mSwitch_SCAN                               4DD       2       2       3   .bss        
+     mpfKeyFunction                             4DF       3       3       4   .bss        
+     mpRxParams                                 4E2       2       2       5   .bss        
+     keysReceived.62                            4E4       1       1       6   .bss        
+     mCoordInfo                                 4E5      1F      31      21   .bss        
+     maMyAddress                                504       8       8       5   .bss        
+     mAddrMode                                  50C       1       1       5   .bss        
+     mpPacket                                   50D       2       2      10   .bss        
+     mpBtnPacket                                50F       2       2      10   .bss        
+     mMsduHandle                                511       1       1       4   .bss        
+     mcPendingPackets                           512       1       1       6   .bss        
+     mWaitPollConfirm                           513       1       1       5   .bss        
+     mPollInterval                              514       2       2       5   .bss        
+     mMlmeNwkInputQueue                         516       4       4       4   .bss        
+     mMcpsNwkInputQueue                         51A       4       4       4   .bss        
+     keysBuffer.61                              51E      20      32       3   .bss        
+     ledsState                                  53E       1       1       7   .bss        
+     mCM_ClockOffset                            53F       4       4      40   .bss        
+     mCM_CurrentClock                           543       4       4      45   .bss        
+     mCM_CurrentClockAbs                        547       4       4      16   .bss        
+     mCM_TimeNeededInNextCAP                    54B       2       2      19   .bss        
+     mCM_WaitTime                               54D       2       2      12   .bss        
+     gPollAckFPstate                            54F       1       1       2   .bss        
+     mCurrentClock                              550       4       4       3   .bss        
+     dstsrc                                     554       1       1       1   .bss        
+     dst                                        555       1       1       2   .bss        
+     src                                        556       1       1       1   .bss        
+     frameControlLow                            557       1       1       3   .bss        
+     mDstLen                                    558       1       1       3   .bss        
+     mSrcLen                                    559       1       1       5   .bss        
+     mFrameType                                 55A       1       1       3   .bss        
+     cccaSetPending                             55B       1       1       4   .bss        
+     mScanChannels                              55C       3       3       7   .bss        
+     mChannelMask                               55F       1       1      10   .bss        
+     mCurrentMask                               560       1       1       7   .bss        
+     mScanDuration                              561       1       1       5   .bss        
+     mScanChannel                               562       1       1       2   .bss        
+     mScanType                                  563       1       1       9   .bss        
+     mPanIdBackup                               564       2       2       5   .bss        
+     mResultListSize                            566       1       1      10   .bss        
+     mpScanResults                              567       2       2      14   .bss        
+     mResultsForCurrentBlock                    569       1       1       5   .bss        
+     mpDescriptorsBlock                         56A       2       2       5   .bss        
+     mScanSecurityLevel                         56C       1       1       2   .bss        
+     mScanKeyIdMode                             56D       1       1       2   .bss        
+     mScanKeySource                             56E       8       8       2   .bss        
+     mScanKeyIndex                              576       1       1       2   .bss        
+     gRxTxPacketCnt                             577       1       1       7   .bss        
+     gExpiryTimeNextService                     578       2       2      14   .bss        
+     gExpiryTimeCurCnt                          57A       2       2      15   .bss        
+     txCoordRealigCmdFlag                       57C       1       1       5   .bss        
+     gNumTxNoAck                                57D       1       1       2   .bss        
+     mMemOhSeqActions                           57E      24      36      10   .bss        
+     mMemOhPendingSeqFinishActionReq            5A2       1       1       4   .bss        
+     mMemOhPendingCtrlEventId                   5A3       1       1       4   .bss        
+     mMemOhPendingLwrEventId                    5A4       1       1       4   .bss        
+     pLastSEQState                              5A5       3       3       5   .bss        
+     mTimesInSEQState                           5A8       2       2       3   .bss        
+     gSeqRunningState                           5AA       1       1       4   .bss        
+     mTelecTestState                            5AB       3       3       3   .bss        
+     maTsTaskTable                              5AE      3C      60      19   .common     
+     maTsTaskIDsByPriority                      5EA       A      10       8   .common     
+     gIdleTaskID                                5F4       1       1       1   .common     
+     gUartTaskId                                5F5       1       1       3   .common     
+     mSci1RxBufferByteCount                     5F6       1       1       7   .common     
+     gRSTResetStatus                            5F7       1       1       1   .common     
+     mfLedInSerialMode                          5F8       1       1       1   .common     
+     PWRLib_StackPS                             5F9       1       1       1   .common     
+     pressedKey                                 5FA       1       1       4   .common     
+     mPhyLastRxLQI                              5FB       1       1       1   .common     
+     i                                          5FC       1       1       3   .common     
+     gState                                     5FD       1       1       6   .common     
+     myTimerID                                  5FE       1       1       5   .common     
+     myNewTaskID                                5FF       1       1       3   .common     
+     tmpString                                  600       2       2       2   .common     
+     gAppTaskID_c                               602       1       1       9   .common     
+     gMacTaskID_c                               603       1       1      23   .common     
+     maMacHeap                                  604     442    1090       1   .common     
+     maMmPools                                  A46      12      18       4   .common     
+     gPIBKeyTable                               A58      32      50       1   .common     
+     gPIBKeyIdLookupDescriptorTable             A8A      28      40       2   .common     
+     gPIBKeyDeviceDescriptorTable               AB2       C      12       2   .common     
+     gPIBKeyUsageDescriptorTable                ABE       8       8       2   .common     
+     gPIBDeviceTable                            AC6      22      34       1   .common     
+     gPIBSecurityLevelTable                     AE8       8       8       1   .common     
+     gFreeMessagesCount                         AF0       1       1       7   .common     
+     mPacManDirectPackets_D2C                   AF1       4       4       6   .common     
+     mPacManDirectPackets_C2D                   AF5       4       4       5   .common     
+     mPacManIndirectPackets                     AF9       4       4      14   .common     
+     mPacManIndirectBroadcastPkts               AFD       4       4       6   .common     
+     mPacManGuardPacket                         B01       1       1       9   .common     
+     gpPacketToPurge                            B02       2       2       4   .common     
+     mPpIndirectQueueAddr                       B04      18      24       9   .common     
+     gMacPib                                    B1C      9B     155     391   .common     
+     aExtendedAddress                           BB7       8       8      18   .common     
+     aMinSetupTime_s                            BBF       1       1      17   .common     
+     aMinSetupTimeCritical_s                    BC0       1       1       2   .common     
+     aMinSetupTimeVeryCritical_s                BC1       1       1       2   .common     
+     mCM_DelayUntilNextAction                   BC2       1       1       9   .common     
+     mCM_NextClockBoundary                      BC3       4       4      51   .common     
+     mCM_BleEndTime                             BC7       4       4      13   .common     
+     CM_RandomBackoff                           BCB       2       2       4   .common     
+     mEnableCriticalTiming                      BCD       1       1       5   .common     
+     pCurrentSeqAction                          BCE       2       2      55   .common     
+     mpPendingSeqMemCompletion                  BD0       1       1       5   .common     
+     mSeqSubComponentStateMachine               BD1       4       4      71   .common     
+     mBufferedError                             BD5       1       1       3   .common     
+     mpSeqRxData                                BD6       2       2      38   .common     
+     mMacRxMask                                 BD8       1       1       4   .common     
+     gSeqInErrorState                           BD9       1       1       1   .common     
+     gSeqGotDataIndication                      BDA       1       1       5   .common     
+     gPendingSeqMemActionFinished               BDB       1       1       4   .common     
+     gRxTimeStamp24                             BDC       4       4       5   .common     
+     gRxTimeStamp                               BE0       2       2       1   .common     
+     mPhyRxParams                               BE2       5       5       2   .common     
+     seqToPhySavedRxPtr                         BE7       2       2       2   .common     
+     gCurrentPALevel                            BE9       1       1       1   .common     
+     gpaPowerLevelLimits                        BEA       2       2       1   .common     
+     seqToPhySavedTxPtr                         BEC       2       2       8   .common     
+     gLowLatencyTX                              BEE       1       1       5   .common     
+     completeCCAClock                           BEF       4       4       3   .common     
+     startCcca                                  BF3       4       4       4   .common     
+     endCcca                                    BF7       4       4       2   .common     
+     difCcca                                    BFB       4       4       2   .common     
+     msduHandleLenSwap                          BFF       1       1      12   .common     
+     mRxOnTxParams                              C00       5       5       1   .common     
+     gBeaconSecurityLevel                       C05       1       1       8   .common     
+     gBeaconKeyIdMode                           C06       1       1       3   .common     
+     gBeaconKeySource                           C07       8       8       3   .common     
+     gBeaconKeyIndex                            C0F       1       1       2   .common     
+     gMlmeScan_CheckBeacon                      C10       1       1       8   .common     
+     gMlmeScan_CurrentChannel                   C11       1       1      10   .common     
+     gMlmeScan_FastEd                           C12       1       1       4   .common     
+     mpMlmeIhPendingNwkMsg                      C13       2       2      46   .common     
+     mpMlmeIhPendingMemMsg                      C15       2       2      64   .common     
+     gMlmeCurrentMacFrameHeader                 C17      20      32      26   .common     
+     gAutoPollAllowed                           C37       1       1       7   .common     
+     gRxSecurityFailure                         C38       1       1       3   .common     
+     gCurrentRxTxPacketCnt                      C39       1       1       2   .common     
+     mMemMlmeInputQueue                         C3A       4       4       6   .common     
+     mNwkMlmeInputQueue                         C3E       4       4       6   .common     
+     mNwkMcpsInputQueue                         C42       4       4       5   .common     
+     mpMlmeOhPendingNwkMsg                      C46       2       2      83   .common     
+     mpMlmeOhPendingMemMsg                      C48       2       2      17   .common     
+     startCurrentChannel                        C4A       1       1       2   .common     
+     startCrtMacPanId                           C4B       2       2       4   .common     
+     gLastCapSlot                               C4D       1       1      10   .common     
+     gMlmeGtsAllocRequestSent                   C4E       1       1       8   .common     
+     gMlmeGtsBeaconsRemaining                   C4F       1       1       4   .common     
+     gMlmeGtsRequestedCharacteristics           C50       1       1      10   .common     
+     gMlmeGtsSecurityLevel                      C51       1       1       2   .common     
+     gMlmeGtsKeyIdMode                          C52       1       1       2   .common     
+     gMlmeGtsKeySource                          C53       8       8       2   .common     
+     gMlmeGtsKeyIndex                           C5B       1       1       2   .common     
+     gGtsData                                   C5C      17      23       4   .common     
+     gGtsLen                                    C73       1       1       5   .common     
+     gGtsInfoArray                              C74      8C     140      27   .common     
+     gGtsGuardedAction                          D00       1       1      13   .common     
+     gUpdateGtsData                             D01       1       1       4   .common     
+     pGtsAnchor                                 D02       2       2       3   .common     
+     gMlmeGtsAccess                             D04       1       1      16   .common     
+     gMemGtsAccess                              D05       1       1      12   .common     
+     mAssociateCoordAddrMode                    D06       1       1       2   .common     
+     mAssociateSecurityEnable                   D07       1       1       2   .common     
+     mAssociateCoordAddress                     D08       8       8       1   .common     
+     mAssociateCoordPanId                       D10       2       2       1   .common     
+     mWaitForAssociateResp                      D12       1       1       4   .common     
+     mAssociateSecurityLevel                    D13       1       1       2   .common     
+     mAssociateKeyIdMode                        D14       1       1       2   .common     
+     mAssociateKeySource                        D15       8       8       2   .common     
+     mAssociateKeyIndex                         D1D       1       1       2   .common     
+     gMemScan_ScanDuration                      D1E       4       4       9   .common     
+     gMemScan_ScanCompleted                     D22       1       1      13   .common     
+     mMaxDetectedEnergy                         D23       1       1       4   .common     
+     mMemData                                   D24       1       1       4   .common     
+     mReceivedBeacon                            D25      AE     174       8   .common     
+     applySecDiff                               DD3       4       4      36   .common     
+     gMemBeaconCntr                             DD7       1       1       4   .common     
+     memBeaconTimeInfo                          DD8      1C      28     176   .common     
+     gBroadcastTransmitted                      DF4       1       1       3   .common     
+     gBroadcastRx                               DF5       1       1       3   .common     
+     gRxBrdCompleteClock                        DF6       4       4       3   .common     
+     gRxBrdBeaconEndCrtClock                    DFA       4       4       2   .common     
+     gRxBrdRxBrdEndCrtClock                     DFE       4       4       4   .common     
+     mMemBeacon                                 E02      20      32     104   .common     
+     pReceivedBeacon                            E22       2       2       2   .common     
+     mBeaconExtAddrs                            E24      38      56       2   .common     
+     mBeaconShortAddrs                          E5C       E      14       2   .common     
+     mBeaconExtAddrCnt                          E6A       1       1       8   .common     
+     mBeaconShortAddrCnt                        E6B       1       1       9   .common     
+     mLastBeaconCnt                             E6C       1       1       1   .common     
+     gpMemCurrSeqAction                         E6D       2       2      44   .common     
+     gpMemCurrMlmeMsg                           E6F       2       2      24   .common     
+     gpMemCurrRxPacket                          E71       2       2      16   .common     
+     mpMemOhPendingMlmeMsg                      E73       2       2      43   .common     
+     mpMemOhPendingAspMsg                       E75       2       2       8   .common     
+     mpMemOhPendingSeqActionReq                 E77       2       2      66   .common     
+     mMemMode                                   E79       1       1      12   .common     
+     mMemSmCtrl                                 E7A       7       7      62   .common     
+     mPendingTxInfo                             E81       1       1       2   .common     
+     mMemAspInputQueue                          E82       4       4       5   .common     
+     mTempZbClock24                             E86       4       4       9   .common     
+     mAspBeaconStateIndications                 E8A       1       1       2   .common     
+     gAspGotMemIdleInd                          E8B       1       1       1   .common     
+     pStack                                     E8C       2       2       2   _STARTUP    
      Uart1_ErrorIsr                            4000       C      12       1   NON_BANKED  
      Uart1_RxIsr                               400C      6E     110       1   NON_BANKED  
      Uart1_TxIsr                               407A      C9     201       2   NON_BANKED  
@@ -1984,149 +1988,150 @@ OBJECT LIST SORTED BY ADDRESS
      STRING.Done...25                          5686       7       7       1   .rodata1    
      STRING.Invalid.parameter....26            568D      15      21       1   .rodata1    
      STRING.Message.allocation.f.27            56A2      1D      29       1   .rodata1    
-     STRING.Counter.1.1                        56BF       A      10       1   .rodata1    
-     STRING.Counter.2.2                        56C9       A      10       1   .rodata1    
-     STRING.Counter.3.3                        56D3       A      10       1   .rodata1    
-     STRING.Counter.4.4                        56DD       A      10       1   .rodata1    
-     STRING.Switch.1.Pressed.5                 56E7      11      17       1   .rodata1    
-     STRING.Switch.2.Pressed.6                 56F8      11      17       1   .rodata1    
-     STRING.Switch.3.Pressed.7                 5709      11      17       1   .rodata1    
-     STRING.Switch.4.Pressed.8                 571A      11      17       1   .rodata1    
-     Reset_vector                              572B       2       2       1   RESET_VECTOR_SECTION
-     loadByte                                  572D       E      14       5   .init       
-     Init                                      573B      40      64       1   .init       
-     Copy_Down                                 577B      3F      63       1   .init       
-     Finish                                    57BA      2B      43       1   .init       
-     _Startup                                  57E5      36      54       1   .init       
-     ZTC_TaskEventMonitor                      581B       1       1       6   .text       
-     TS_CreateTask                             581C      B6     182      13   .text       
-     TS_Init                                   58D2      32      50       2   .text       
-     TS_SendEvent                              5904      28      40      78   .text       
-     TS_Scheduler                              592C      7B     123       2   .text       
-     CommUtil_Tx                               59A7      23      35       4   .text       
-     CommUtil_Print                            59CA      41      65      10   .text       
-     HexToAscii                                5A0B      10      16       4   .text       
-     CommUtil_PrintHex                         5A1B      E4     228      16   .text       
-     Uart_ClearErrors                          5AFF       A      10       2   .text       
-     Uart1_GetByteFromRxBuffer                 5B09      61      97       4   .text       
-     Uart1_IsTxActive                          5B6A      10      16       6   .text       
-     Uart_ModuleInit                           5B7A      20      32       2   .text       
-     Uart1_SetRxCallBack                       5B9A      29      41       2   .text       
-     Uart1_SetBaud                             5BC3      4C      76       4   .text       
-     Uart1_Transmit                            5C0F      76     118       6   .text       
-     Uart_Task                                 5C85      66     102       2   .text       
-     Uart_TaskInit                             5CEB      15      21       2   .text       
-     Uart1_EnableFlow                          5D00      11      17       4   .text       
-     Uart1_DisableFlow                         5D11       7       7       2   .text       
-     TMR_Init                                  5D18      18      24       2   .text       
-     TMR_AllocateTimer                         5D30      1E      30      12   .text       
-     TMR_IsTimerActive                         5D4E       C      12       4   .text       
-     TMR_StartTimer                            5D5A      B3     179      14   .text       
-     TMR_StartLowPowerTimer                    5E0D      23      35       2   .text       
-     TMR_StartIntervalTimer                    5E30      21      33       4   .text       
-     TMR_StartSingleShotTimer                  5E51      21      33       4   .text       
-     TMR_StopTimer                             5E72      48      72      20   .text       
-     TMR_Task                                  5EBA     1B5     437       7   .text       
-     TMR_EnableTimer                           606F      3D      61       4   .text       
-     TMR_GetTimerStatus                        60AC       8       8      10   .text       
-     TMR_SetTimerStatus                        60B4       F      15       8   .text       
-     TMR_GetTimerType                          60C3       8       8       6   .text       
-     TMR_SetTimerType                          60CB       F      15       2   .text       
-     SPI1_Init                                 60DA       2       2       2   .text       
-     RST_GetResetStatus                        60DC       7       7       2   .text       
-     LED_Init                                  60E3       C      12       2   .text       
-     LED_TurnOffLed                            60EF      19      25       4   .text       
-     LED_TurnOffAllLeds                        6108       7       7       8   .text       
-     LED_StartFlash                            610F      1F      31       8   .text       
-     LED_StopFlash                             612E      16      22       8   .text       
-     LED_FlashTimeout                          6144      4E      78       2   .text       
-     PWRLib_Init                               6192      2B      43       2   .text       
-     PWR_DisallowDeviceToSleep                 61BD       E      14       2   .text       
-     KBD_Init                                  61CB      23      35       2   .text       
-     KBD_KeySwitchPortGet                      61EE       5       5       2   .text       
-     KBD_PortGet                               61F3      14      20       2   .text       
-     KBD_KeyCheck                              6207      2A      42       2   .text       
-     KBD_MatrixSetRows                         6231      1A      26      16   .text       
-     KBD_MatrixActivateRow                     624B      3C      60       8   .text       
-     KBD_MatrixDeactivateRow                   6287      1B      27       2   .text       
-     KBD_KeyMatrixGet                          62A2      90     144       2   .text       
-     KBD_KeyScan                               6332      86     134       2   .text       
-     KBD_FinishScan                            63B8       F      15       2   .text       
-     FLib_MemCpy                               63C7      1D      29     246   .text       
-     FLib_MemCpyDir                            63E4      1E      30       2   .text       
-     FLib_MemInPlaceCpy                        6402      49      73      12   .text       
-     FLib_MemCpyReverseOrder                   644B      2B      43      24   .text       
-     FLib_MemCmp                               6476      2D      45      38   .text       
-     FLib_MemSet                               64A3      18      24      38   .text       
-     FLib_MemSet16                             64BB      23      35       2   .text       
-     FLib_AddrModeToLength                     64DE       C      12      32   .text       
-     FLib_AddOffsetToPointer                   64EA       8       8      26   .text       
-     FLib_ArrayAddArray                        64F2      40      64      24   .text       
-     FLib_ArrayAddByte                         6532      18      24      14   .text       
-     PlatformPortInit                          654A      2A      42       2   .text       
-     Platform_Init                             6574      1C      28       2   .text       
-     Init_802_15_4                             6590      30      48       2   .text       
-     PowerManager_WaitForPowerUp               65C0      16      22       2   .text       
-     MApp_init                                 65D6      7B     123       2   .text       
-     AppTask                                   6651     24C     588      58   .text       
-     App_CommRxCallBack                        689D      1B      27       2   .text       
-     App_StartScan                             68B8      5F      95      10   .text       
-     App_HandleScanActiveConfirm               6917      95     149       2   .text       
-     App_SendAssociateRequest                  69AC      7E     126      10   .text       
-     App_HandleAssociateConfirm                6A2A      3E      62       2   .text       
-     App_HandleMlmeInput                       6A68      1D      29       2   .text       
-     App_HandleMcpsInput                       6A85      35      53       2   .text       
-     App_WaitMsg                               6ABA      10      16       6   .text       
-     App_TransmitCommData                      6ACA      DC     220       7   .text       
-     AppPollWaitTimeout                        6BA6      6E     110       4   .text       
-     App_HandleGenericKey                      6C14      3B      59       2   .text       
-     App_HandleKeys                            6C4F       5       5       2   .text       
-     MLME_NWK_SapHandler                       6C54      1E      30       8   .text       
-     MCPS_NWK_SapHandler                       6C72      1E      30      12   .text       
-     ASP_APP_SapHandler                        6C90       6       6       2   .text       
-     genericDataTransfer                       6C96      A9     169       6   .text       
-     MyNewTask                                 6D3F      95     149       2   .text       
-     MyNewTaskInit                             6DD4      27      39       2   .text       
-     myTaskTimerCallback                       6DFB       B      11       4   .text       
-     MyTaskButtonPress                         6E06      78     120      10   .text       
-     main                                      6E7E      42      66       2   .text       
-     IdleTask                                  6EC0       1       1       2   .text       
-     Init_MacExtendedAddress                   6EC1      38      56       2   .text       
-     BeeAppAssert                              6EF9       8       8       2   .text       
-     MacInit                                   6F01       5       5       2   .text       
-     TS_PlaceHolderTaskInit                    6F06       1       1       2   .text       
-     MacTaskInit                               6F07      6B     107       2   .text       
-     MM_InitMsgTracking                        6F72       1       1       2   .text       
-     MM_AddMsgToTrackingArray                  6F73       1       1       2   .text       
-     MM_UpdateMsgTracking                      6F74       2       2       6   .text       
-     MM_Init                                   6F76      8E     142       2   .text       
-     List_ClearAnchor                          7004       4       4      26   .text       
-     List_AddTail                              7008      45      69      24   .text       
-     List_AddHead                              704D      3F      63      14   .text       
-     List_RemoveHead                           708C      2B      43      24   .text       
-     List_Remove                               70B7      53      83       8   .text       
-     List_GetFirst                             710A      1B      27      16   .text       
-     List_GetNext                              7125      20      32      10   .text       
-     MM_AddToPool                              7145      20      32       2   .text       
-     MM_AllocPool                              7165      4A      74       2   .text       
-     MM_Alloc                                  71AF       8       8      48   .text       
-     MM_Free                                   71B7      5B      91     104   .text       
-     MM_AllocFast                              7212      58      88       8   .text       
-     MM_SetPrivatePool                         726A      13      19       8   .text       
-     SmApi_UndefState                          727D       1       1       6   .text       
-     CCM_XorN                                  727E      1E      30       6   .text       
-     CCM_CreateAB0                             729C      24      36       6   .text       
-     CCM_GetBlockLength                        72C0       7       7       4   .text       
-     SecLib_CcmStar                            72C7     273     627      11   .text       
-     Sec_TraverseBeacon                        753A      2E      46       2   .text       
-     Sec_LookupKeyDescriptor                   7568     10F     271      10   .text       
-     Sec_BeaconRetrieveKeyTxFrame              7677      EF     239       3   .text       
-     Sec_RetrieveKeyTxFrame                    7766     12A     298       3   .text       
-     Sec_DetermineNonPayloadLen                7890      2B      43       4   .text       
-     Sec_SecureTxFrame                         78BB     18C     396      11   .text       
-     Sec_CreateSecurityHeader                  7A47      9D     157       6   .text       
-     Sec_UnsecureRxFrame                       7AE4     270     624      10   .text       
-     Sec_RetrieveRxSecurityMaterial            7D54     216     534      10   .text       
+     STRING....28                              56BF       3       3       1   .rodata1    
+     STRING.Counter.1.1                        56C2       A      10       1   .rodata1    
+     STRING.Counter.2.2                        56CC       A      10       1   .rodata1    
+     STRING.Counter.3.3                        56D6       A      10       1   .rodata1    
+     STRING.Counter.4.4                        56E0       A      10       1   .rodata1    
+     STRING.Switch.1.Pressed.5                 56EA      11      17       1   .rodata1    
+     STRING.Switch.2.Pressed.6                 56FB      11      17       1   .rodata1    
+     STRING.Switch.3.Pressed.7                 570C      11      17       1   .rodata1    
+     STRING.Switch.4.Pressed.8                 571D      11      17       1   .rodata1    
+     Reset_vector                              572E       2       2       1   RESET_VECTOR_SECTION
+     loadByte                                  5730       E      14       5   .init       
+     Init                                      573E      40      64       1   .init       
+     Copy_Down                                 577E      3F      63       1   .init       
+     Finish                                    57BD      2B      43       1   .init       
+     _Startup                                  57E8      36      54       1   .init       
+     ZTC_TaskEventMonitor                      581E       1       1       6   .text       
+     TS_CreateTask                             581F      B6     182      13   .text       
+     TS_Init                                   58D5      32      50       2   .text       
+     TS_SendEvent                              5907      28      40      78   .text       
+     TS_Scheduler                              592F      7B     123       2   .text       
+     CommUtil_Tx                               59AA      23      35       4   .text       
+     CommUtil_Print                            59CD      41      65      12   .text       
+     HexToAscii                                5A0E      10      16       4   .text       
+     CommUtil_PrintHex                         5A1E      E4     228      16   .text       
+     Uart_ClearErrors                          5B02       A      10       2   .text       
+     Uart1_GetByteFromRxBuffer                 5B0C      61      97       4   .text       
+     Uart1_IsTxActive                          5B6D      10      16       6   .text       
+     Uart_ModuleInit                           5B7D      20      32       2   .text       
+     Uart1_SetRxCallBack                       5B9D      29      41       2   .text       
+     Uart1_SetBaud                             5BC6      4C      76       4   .text       
+     Uart1_Transmit                            5C12      76     118       6   .text       
+     Uart_Task                                 5C88      66     102       2   .text       
+     Uart_TaskInit                             5CEE      15      21       2   .text       
+     Uart1_EnableFlow                          5D03      11      17       4   .text       
+     Uart1_DisableFlow                         5D14       7       7       2   .text       
+     TMR_Init                                  5D1B      18      24       2   .text       
+     TMR_AllocateTimer                         5D33      1E      30      12   .text       
+     TMR_IsTimerActive                         5D51       C      12       4   .text       
+     TMR_StartTimer                            5D5D      B3     179      14   .text       
+     TMR_StartLowPowerTimer                    5E10      23      35       2   .text       
+     TMR_StartIntervalTimer                    5E33      21      33       4   .text       
+     TMR_StartSingleShotTimer                  5E54      21      33       4   .text       
+     TMR_StopTimer                             5E75      48      72      20   .text       
+     TMR_Task                                  5EBD     1B5     437       7   .text       
+     TMR_EnableTimer                           6072      3D      61       4   .text       
+     TMR_GetTimerStatus                        60AF       8       8      10   .text       
+     TMR_SetTimerStatus                        60B7       F      15       8   .text       
+     TMR_GetTimerType                          60C6       8       8       6   .text       
+     TMR_SetTimerType                          60CE       F      15       2   .text       
+     SPI1_Init                                 60DD       2       2       2   .text       
+     RST_GetResetStatus                        60DF       7       7       2   .text       
+     LED_Init                                  60E6       C      12       2   .text       
+     LED_TurnOffLed                            60F2      19      25       4   .text       
+     LED_TurnOffAllLeds                        610B       7       7       8   .text       
+     LED_StartFlash                            6112      1F      31       8   .text       
+     LED_StopFlash                             6131      16      22       8   .text       
+     LED_FlashTimeout                          6147      4E      78       2   .text       
+     PWRLib_Init                               6195      2B      43       2   .text       
+     PWR_DisallowDeviceToSleep                 61C0       E      14       2   .text       
+     KBD_Init                                  61CE      23      35       2   .text       
+     KBD_KeySwitchPortGet                      61F1       5       5       2   .text       
+     KBD_PortGet                               61F6      14      20       2   .text       
+     KBD_KeyCheck                              620A      2A      42       2   .text       
+     KBD_MatrixSetRows                         6234      1A      26      16   .text       
+     KBD_MatrixActivateRow                     624E      3C      60       8   .text       
+     KBD_MatrixDeactivateRow                   628A      1B      27       2   .text       
+     KBD_KeyMatrixGet                          62A5      90     144       2   .text       
+     KBD_KeyScan                               6335      86     134       2   .text       
+     KBD_FinishScan                            63BB       F      15       2   .text       
+     FLib_MemCpy                               63CA      1D      29     246   .text       
+     FLib_MemCpyDir                            63E7      1E      30       2   .text       
+     FLib_MemInPlaceCpy                        6405      49      73      12   .text       
+     FLib_MemCpyReverseOrder                   644E      2B      43      24   .text       
+     FLib_MemCmp                               6479      2D      45      38   .text       
+     FLib_MemSet                               64A6      18      24      38   .text       
+     FLib_MemSet16                             64BE      23      35       2   .text       
+     FLib_AddrModeToLength                     64E1       C      12      32   .text       
+     FLib_AddOffsetToPointer                   64ED       8       8      26   .text       
+     FLib_ArrayAddArray                        64F5      40      64      24   .text       
+     FLib_ArrayAddByte                         6535      18      24      14   .text       
+     PlatformPortInit                          654D      2A      42       2   .text       
+     Platform_Init                             6577      1C      28       2   .text       
+     Init_802_15_4                             6593      30      48       2   .text       
+     PowerManager_WaitForPowerUp               65C3      16      22       2   .text       
+     MApp_init                                 65D9      7B     123       2   .text       
+     AppTask                                   6654     24C     588      58   .text       
+     App_CommRxCallBack                        68A0      1B      27       2   .text       
+     App_StartScan                             68BB      5F      95      10   .text       
+     App_HandleScanActiveConfirm               691A      95     149       2   .text       
+     App_SendAssociateRequest                  69AF      7F     127      10   .text       
+     App_HandleAssociateConfirm                6A2E      3E      62       2   .text       
+     App_HandleMlmeInput                       6A6C      1D      29       2   .text       
+     App_HandleMcpsInput                       6A89      3E      62       2   .text       
+     App_WaitMsg                               6AC7      10      16       6   .text       
+     App_TransmitCommData                      6AD7      DC     220       7   .text       
+     AppPollWaitTimeout                        6BB3      6E     110       4   .text       
+     App_HandleGenericKey                      6C21      3B      59       2   .text       
+     App_HandleKeys                            6C5C       5       5       2   .text       
+     MLME_NWK_SapHandler                       6C61      1E      30       8   .text       
+     MCPS_NWK_SapHandler                       6C7F      1E      30      12   .text       
+     ASP_APP_SapHandler                        6C9D       6       6       2   .text       
+     genericDataTransfer                       6CA3      A9     169       6   .text       
+     MyNewTask                                 6D4C      95     149       2   .text       
+     MyNewTaskInit                             6DE1      27      39       2   .text       
+     myTaskTimerCallback                       6E08       B      11       4   .text       
+     MyTaskButtonPress                         6E13      78     120      10   .text       
+     main                                      6E8B      42      66       2   .text       
+     IdleTask                                  6ECD       1       1       2   .text       
+     Init_MacExtendedAddress                   6ECE      38      56       2   .text       
+     BeeAppAssert                              6F06       8       8       2   .text       
+     MacInit                                   6F0E       5       5       2   .text       
+     TS_PlaceHolderTaskInit                    6F13       1       1       2   .text       
+     MacTaskInit                               6F14      6B     107       2   .text       
+     MM_InitMsgTracking                        6F7F       1       1       2   .text       
+     MM_AddMsgToTrackingArray                  6F80       1       1       2   .text       
+     MM_UpdateMsgTracking                      6F81       2       2       6   .text       
+     MM_Init                                   6F83      8E     142       2   .text       
+     List_ClearAnchor                          7011       4       4      26   .text       
+     List_AddTail                              7015      45      69      24   .text       
+     List_AddHead                              705A      3F      63      14   .text       
+     List_RemoveHead                           7099      2B      43      24   .text       
+     List_Remove                               70C4      53      83       8   .text       
+     List_GetFirst                             7117      1B      27      16   .text       
+     List_GetNext                              7132      20      32      10   .text       
+     MM_AddToPool                              7152      20      32       2   .text       
+     MM_AllocPool                              7172      4A      74       2   .text       
+     MM_Alloc                                  71BC       8       8      48   .text       
+     MM_Free                                   71C4      5B      91     104   .text       
+     MM_AllocFast                              721F      58      88       8   .text       
+     MM_SetPrivatePool                         7277      13      19       8   .text       
+     SmApi_UndefState                          728A       1       1       6   .text       
+     CCM_XorN                                  728B      1E      30       6   .text       
+     CCM_CreateAB0                             72A9      24      36       6   .text       
+     CCM_GetBlockLength                        72CD       7       7       4   .text       
+     SecLib_CcmStar                            72D4     273     627      11   .text       
+     Sec_TraverseBeacon                        7547      2E      46       2   .text       
+     Sec_LookupKeyDescriptor                   7575     10F     271      10   .text       
+     Sec_BeaconRetrieveKeyTxFrame              7684      EF     239       3   .text       
+     Sec_RetrieveKeyTxFrame                    7773     12A     298       3   .text       
+     Sec_DetermineNonPayloadLen                789D      2B      43       4   .text       
+     Sec_SecureTxFrame                         78C8     18C     396      11   .text       
+     Sec_CreateSecurityHeader                  7A54      9D     157       6   .text       
+     Sec_UnsecureRxFrame                       7AF1     270     624      10   .text       
+     Sec_RetrieveRxSecurityMaterial            7D61     216     534      10   .text       
      MlmeOh_CreateCommandFrame                 8000     3C5     965      22   PPAGE_0_1   
      MlmeSm_Init                               83C5      11      17       2   PPAGE_0_1   
      MlmeOrphan_SendNotification               83D6      58      88       2   PPAGE_0_1   
@@ -2551,14 +2556,14 @@ NV_Data_c.obj:
 icg_c.obj:
   init_mode gPowerSaveMode 
 MApp_c.obj:
-  gaNvAppDataSet keysReceived.29 keysReceived.31 keysReceived.33 
-  keysReceived.35 keysReceived.37 keysReceived.39 keysReceived.41 
-  keysReceived.43 keysReceived.45 keysReceived.47 keysReceived.49 
-  keysReceived.51 keysReceived.53 keysReceived.55 keysReceived.57 
-  keysReceived.59 keysBuffer.28 keysBuffer.30 keysBuffer.32 keysBuffer.34 
-  keysBuffer.36 keysBuffer.38 keysBuffer.40 keysBuffer.42 keysBuffer.44 
-  keysBuffer.46 keysBuffer.48 keysBuffer.50 keysBuffer.52 keysBuffer.54 
-  keysBuffer.56 keysBuffer.58 
+  gaNvAppDataSet keysReceived.30 keysReceived.32 keysReceived.34 
+  keysReceived.36 keysReceived.38 keysReceived.40 keysReceived.42 
+  keysReceived.44 keysReceived.46 keysReceived.48 keysReceived.50 
+  keysReceived.52 keysReceived.54 keysReceived.56 keysReceived.58 
+  keysReceived.60 keysBuffer.29 keysBuffer.31 keysBuffer.33 keysBuffer.35 
+  keysBuffer.37 keysBuffer.39 keysBuffer.41 keysBuffer.43 keysBuffer.45 
+  keysBuffer.47 keysBuffer.49 keysBuffer.51 keysBuffer.53 keysBuffer.55 
+  keysBuffer.57 keysBuffer.59 
 rtshc08.o (ansibim.lib):
   _PowOfTwo_8 _PowOfTwo_16 _PowOfTwo_32 errno 
 PhyMacMsg_c.obj (802.15.4_MAC2006_FFD_S08MC1323x.Lib):
@@ -2575,112 +2580,115 @@ Telec_c.obj (802.15.4_MAC2006_FFD_S08MC1323x.Lib):
 *********************************************************************************************
 COPYDOWN SECTION
 ---------------------------------------------------------------------------------------------
-------- ROM-ADDRESS: 0x7F6A ---- SIZE       4 ---
+------- ROM-ADDRESS: 0x7F77 ---- SIZE       4 ---
 Filling bytes inserted
- 00700300
-------- ROM-ADDRESS: 0x7F6E ---- RAM-ADDRESS: 0x300 ---- SIZE       1 ---
+ 00710300
+------- ROM-ADDRESS: 0x7F7B ---- RAM-ADDRESS: 0x300 ---- SIZE       1 ---
 Name of initialized Object : mLEDTimerID
  FF
-------- ROM-ADDRESS: 0x7F6F ---- SIZE       1 ---
+------- ROM-ADDRESS: 0x7F7C ---- SIZE       1 ---
 Filling bytes inserted
  00
-------- ROM-ADDRESS: 0x7F70 ---- RAM-ADDRESS: 0x302 ---- SIZE       9 ---
+------- ROM-ADDRESS: 0x7F7D ---- RAM-ADDRESS: 0x302 ---- SIZE       9 ---
 Name of initialized Object : mKeyRowPorts:1
  0400050100 04000502
-------- ROM-ADDRESS: 0x7F79 ---- RAM-ADDRESS: 0x30B ---- SIZE       1 ---
+------- ROM-ADDRESS: 0x7F86 ---- RAM-ADDRESS: 0x30B ---- SIZE       1 ---
 Name of initialized Object : mKeyScanTimerID
  FF
-------- ROM-ADDRESS: 0x7F7A ---- SIZE       1 ---
+------- ROM-ADDRESS: 0x7F87 ---- SIZE       1 ---
 Filling bytes inserted
  00
-------- ROM-ADDRESS: 0x7F7B ---- RAM-ADDRESS: 0x30D ---- SIZE       2 ---
+------- ROM-ADDRESS: 0x7F88 ---- RAM-ADDRESS: 0x30D ---- SIZE       2 ---
 Name of initialized Object : pTimer1Isr:1
  4182
-------- ROM-ADDRESS: 0x7F7D ---- RAM-ADDRESS: 0x30F ---- SIZE       1 ---
+------- ROM-ADDRESS: 0x7F8A ---- RAM-ADDRESS: 0x30F ---- SIZE       1 ---
 Name of initialized Object : gPhyCurrentChannel
  0B
-------- ROM-ADDRESS: 0x7F7E ---- RAM-ADDRESS: 0x310 ---- SIZE      15 ---
+------- ROM-ADDRESS: 0x7F8B ---- RAM-ADDRESS: 0x310 ---- SIZE      15 ---
 Name of initialized Object : pwrOutIAR10
  2626262626 2626262626 2626262626
-------- ROM-ADDRESS: 0x7F8D ---- RAM-ADDRESS: 0x31F ---- SIZE      15 ---
+------- ROM-ADDRESS: 0x7F9A ---- RAM-ADDRESS: 0x31F ---- SIZE      15 ---
 Name of initialized Object : pwrOutIAR11
  4949494A4A 4A4E4D4E4E 4D4D4C4D4D
-------- ROM-ADDRESS: 0x7F9C ---- SIZE       1 ---
+------- ROM-ADDRESS: 0x7FA9 ---- SIZE       1 ---
 Filling bytes inserted
  00
-------- ROM-ADDRESS: 0x7F9D ---- RAM-ADDRESS: 0x32F ---- SIZE      14 ---
+------- ROM-ADDRESS: 0x7FAA ---- RAM-ADDRESS: 0x32F ---- SIZE      14 ---
 Name of initialized Object : pwrOutIAR20:1
  0101000100 0001000100 01010101
-------- ROM-ADDRESS: 0x7FAB ---- SIZE       2 ---
+------- ROM-ADDRESS: 0x7FB8 ---- SIZE       2 ---
 Filling bytes inserted
  0000
-------- ROM-ADDRESS: 0x7FAD ---- RAM-ADDRESS: 0x33F ---- SIZE      13 ---
+------- ROM-ADDRESS: 0x7FBA ---- RAM-ADDRESS: 0x33F ---- SIZE      13 ---
 Name of initialized Object : pwrOutCtrl:2
  0100000100 0001014141 424344
-------- ROM-ADDRESS: 0x7FBA ---- RAM-ADDRESS: 0x34C ---- SIZE       1 ---
+------- ROM-ADDRESS: 0x7FC7 ---- RAM-ADDRESS: 0x34C ---- SIZE       1 ---
 Name of initialized Object : mTimer_c
  FF
-------- ROM-ADDRESS: 0x7FBB ---- RAM-ADDRESS: 0x34D ---- SIZE       2 ---
+------- ROM-ADDRESS: 0x7FC8 ---- RAM-ADDRESS: 0x34D ---- SIZE       1 ---
+Name of initialized Object : EndDeviceConfig
+ 8A
+------- ROM-ADDRESS: 0x7FC9 ---- RAM-ADDRESS: 0x34E ---- SIZE       2 ---
 Name of initialized Object : strCounter1
- 56BF
-------- ROM-ADDRESS: 0x7FBD ---- RAM-ADDRESS: 0x34F ---- SIZE       2 ---
+ 56C2
+------- ROM-ADDRESS: 0x7FCB ---- RAM-ADDRESS: 0x350 ---- SIZE       2 ---
 Name of initialized Object : strCounter2
- 56C9
-------- ROM-ADDRESS: 0x7FBF ---- RAM-ADDRESS: 0x351 ---- SIZE       2 ---
+ 56CC
+------- ROM-ADDRESS: 0x7FCD ---- RAM-ADDRESS: 0x352 ---- SIZE       2 ---
 Name of initialized Object : strCounter3
- 56D3
-------- ROM-ADDRESS: 0x7FC1 ---- RAM-ADDRESS: 0x353 ---- SIZE       2 ---
+ 56D6
+------- ROM-ADDRESS: 0x7FCF ---- RAM-ADDRESS: 0x354 ---- SIZE       2 ---
 Name of initialized Object : strCounter4
- 56DD
-------- ROM-ADDRESS: 0x7FC3 ---- RAM-ADDRESS: 0x355 ---- SIZE       2 ---
+ 56E0
+------- ROM-ADDRESS: 0x7FD1 ---- RAM-ADDRESS: 0x356 ---- SIZE       2 ---
 Name of initialized Object : pLastPool
- 0A51
-------- ROM-ADDRESS: 0x7FC5 ---- RAM-ADDRESS: 0x357 ---- SIZE       2 ---
+ 0A52
+------- ROM-ADDRESS: 0x7FD3 ---- RAM-ADDRESS: 0x358 ---- SIZE       2 ---
 Name of initialized Object : pSecondLastPool
- 0A4B
-------- ROM-ADDRESS: 0x7FC7 ---- RAM-ADDRESS: 0x359 ---- SIZE       1 ---
+ 0A4C
+------- ROM-ADDRESS: 0x7FD5 ---- RAM-ADDRESS: 0x35A ---- SIZE       1 ---
 Name of initialized Object : mCMBackoff
  0A
-------- ROM-ADDRESS: 0x7FC8 ---- RAM-ADDRESS: 0x35A ---- SIZE       1 ---
+------- ROM-ADDRESS: 0x7FD6 ---- RAM-ADDRESS: 0x35B ---- SIZE       1 ---
 Name of initialized Object : gMacTimerID
  FF
-------- ROM-ADDRESS: 0x7FC9 ---- RAM-ADDRESS: 0x35B ---- SIZE       1 ---
+------- ROM-ADDRESS: 0x7FD7 ---- RAM-ADDRESS: 0x35C ---- SIZE       1 ---
 Name of initialized Object : gSequencerTimerID
  FF
-------- ROM-ADDRESS: 0x7FCA ---- RAM-ADDRESS: 0x35C ---- SIZE       1 ---
+------- ROM-ADDRESS: 0x7FD8 ---- RAM-ADDRESS: 0x35D ---- SIZE       1 ---
 Name of initialized Object : gMacRxTxPacketTimerID
  FF
-------- ROM-ADDRESS: 0x7FCB ---- SIZE       1 ---
+------- ROM-ADDRESS: 0x7FD9 ---- SIZE       1 ---
 Filling bytes inserted
  00
-------- ROM-ADDRESS: 0x7FCC ---- RAM-ADDRESS: 0x35E ---- SIZE       3 ---
+------- ROM-ADDRESS: 0x7FDA ---- RAM-ADDRESS: 0x35F ---- SIZE       3 ---
 Name of initialized Object : gMlmeSm:1
- 727D01
-------- ROM-ADDRESS: 0x7FCF ---- RAM-ADDRESS: 0x361 ---- SIZE       1 ---
+ 728A01
+------- ROM-ADDRESS: 0x7FDD ---- RAM-ADDRESS: 0x362 ---- SIZE       1 ---
 Name of initialized Object : gmBackoffPeriod
  0A
-------- ROM-ADDRESS: 0x7FD0 ---- SIZE       1 ---
+------- ROM-ADDRESS: 0x7FDE ---- SIZE       1 ---
 Filling bytes inserted
  00
-------- ROM-ADDRESS: 0x7FD1 ---- RAM-ADDRESS: 0x363 ---- SIZE       3 ---
+------- ROM-ADDRESS: 0x7FDF ---- RAM-ADDRESS: 0x364 ---- SIZE       3 ---
 Name of initialized Object : gMemCtrlSm:1
- 727D01
-------- ROM-ADDRESS: 0x7FD4 ---- SIZE       1 ---
+ 728A01
+------- ROM-ADDRESS: 0x7FE2 ---- SIZE       1 ---
 Filling bytes inserted
  00
-------- ROM-ADDRESS: 0x7FD5 ---- RAM-ADDRESS: 0x367 ---- SIZE       3 ---
+------- ROM-ADDRESS: 0x7FE3 ---- RAM-ADDRESS: 0x368 ---- SIZE       3 ---
 Name of initialized Object : gMemLwrSm:1
- 727D01
-------- ROM-ADDRESS: 0x7FD8 ---- RAM-ADDRESS: 0x36A ---- SIZE       2 ---
+ 728A01
+------- ROM-ADDRESS: 0x7FE6 ---- RAM-ADDRESS: 0x36B ---- SIZE       2 ---
 Name of initialized Object : mActionStartClock
  FFFF
-------- ROM-ADDRESS: 0x7FDA ---- SIZE       1 ---
+------- ROM-ADDRESS: 0x7FE8 ---- SIZE       1 ---
 Filling bytes inserted
  00
-------- ROM-ADDRESS: 0x7FDB ---- RAM-ADDRESS: 0x36D ---- SIZE       3 ---
+------- ROM-ADDRESS: 0x7FE9 ---- RAM-ADDRESS: 0x36E ---- SIZE       3 ---
 Name of initialized Object : mActionCompleteClock:1
  FFFFFF
-------- ROM-ADDRESS: 0x7FDE ---- SIZE       2 ---
+------- ROM-ADDRESS: 0x7FEC ---- SIZE       2 ---
 Filling bytes inserted
  0000
 
@@ -2927,14 +2935,14 @@ App_StartScan             USES STRING.Sending.the.MLME.Sca.20 App_StartScan
 App_HandleScanActiveConfirm USES mCoordInfo FLib_MemCpy MM_Free 
 App_SendAssociateRequest  USES STRING.Sending.the.MLME.Ass.24 
                                 App_SendAssociateRequest MM_Alloc mCoordInfo FLib_MemCpy 
-                                NWK_MLME_SapHandler STRING.Done...25 
+                                EndDeviceConfig NWK_MLME_SapHandler STRING.Done...25 
                                 STRING.Invalid.parameter....26 STRING.Message.allocation.f.27 CommUtil_Print 
 App_HandleAssociateConfirm USES mAddrMode maMyAddress aExtendedAddress 
                                 FLib_MemCpy 
 App_HandleMlmeInput       USES mPollInterval mWaitPollConfirm 
-App_HandleMcpsInput       USES mcPendingPackets CommUtil_Tx mPollInterval 
-                                mWaitPollConfirm 
-App_TransmitCommData      USES keysReceived.61 keysBuffer.60 
+App_HandleMcpsInput       USES mcPendingPackets CommUtil_Tx STRING....28 
+                                CommUtil_Print mPollInterval mWaitPollConfirm 
+App_TransmitCommData      USES keysReceived.62 keysBuffer.61 
                                 Uart1_GetByteFromRxBuffer mcPendingPackets mpPacket MM_Alloc 
                                 App_TransmitCommData FLib_MemCpy mCoordInfo maMyAddress mAddrMode 
                                 mMsduHandle NWK_MCPS_SapHandler gAppTaskID_c TS_SendEvent 
@@ -7192,6 +7200,8 @@ DEPENDENCY TREE
  |  |  +- App_HandleMcpsInput 
  |  |  |  | 
  |  |  |  +- CommUtil_Tx          (see above)
+ |  |  |  |  
+ |  |  |  +- CommUtil_Print       (see above)
  |  |  |     
  |  |  +- CommUtil_Print       (see above)
  |  |     
@@ -7283,6 +7293,6 @@ STATISTIC SECTION
 
 ExeFile:
 --------
-Number of blocks to be downloaded: 12
-Total size of all blocks to be downloaded: 56085
+Number of blocks to be downloaded: 13
+Total size of all blocks to be downloaded: 56099
 

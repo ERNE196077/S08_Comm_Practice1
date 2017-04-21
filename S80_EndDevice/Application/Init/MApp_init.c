@@ -56,6 +56,8 @@ tsTaskID_t gAppTaskID_c;
 extern uint8_t aExtendedAddress[8];
 extern uint8_t gState;
 
+
+
 #if gNvStorageIncluded_d
 static bool_t receiverOn;
 #endif
@@ -212,10 +214,10 @@ void IdleTask(event_t events)
 * Return value:
 * None
 *****************************************************************************/
-void Init_MacExtendedAddress( void ) 
+void Init_MacExtendedAddress(void)
 {
 
-  uint8_t tempExtAddress[8]= {mDefaultValueOfExtendedAddress_c};
+  uint8_t tempExtAddress[8] = {mDefaultValueOfExtendedAddress_c};
   /*Check if Extended address is already generated(if the Extended Address 
   is All "0xFF", it means that no extended address is genereted);If not set
   it to the value chosen by application layer*/

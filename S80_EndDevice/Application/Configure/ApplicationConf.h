@@ -42,7 +42,7 @@
 /*********************** THANKS :-) ********************************************/
 
 /* Defines the default value of the MAC extended address */
-#define mDefaultValueOfExtendedAddress_c    0xE4,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF
+#define mDefaultValueOfExtendedAddress_c    0xE6,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF
 
 /* Defines whether or not the LPM module is included in the application */
 #ifndef gLpmIncluded_d

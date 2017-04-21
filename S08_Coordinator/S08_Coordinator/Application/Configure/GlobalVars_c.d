@@ -1,5 +1,4 @@
 
-
 Application/Configure/GlobalVars_c.obj: \
 	../Application/Configure/GlobalVars.c \
 	C:/Users/ernesto/Documents/Workspace/S08_Coordinator/S08_Coordinator/PLM/Source/Common/Interface/HCS08_Prefix.h \

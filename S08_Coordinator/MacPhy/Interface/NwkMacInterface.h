@@ -607,7 +607,7 @@ typedef struct nwkOrphanInd_tag {
 
 #else
 typedef struct nwkOrphanInd_tag {
-  uint8_t  orphanAddress[8];
+  uint8_t  orphanAddress[8when];
   bool_t   securityUse;
   uint8_t  AclEntry;
 } nwkOrphanInd_t;

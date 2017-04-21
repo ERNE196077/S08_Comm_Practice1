@@ -1,5 +1,4 @@
 
-
 PLM/Source/Common/Sys/PlatformInit_c.obj: \
 	../PLM/Source/Common/Sys/PlatformInit.c \
 	C:/Users/ernesto/Documents/Workspace/S08_Coordinator/S08_Coordinator/PLM/Source/Common/Interface/HCS08_Prefix.h \

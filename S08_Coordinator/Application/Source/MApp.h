@@ -91,7 +91,7 @@ typedef struct _EndDevListItem_t_{
 ******************************************************************************/
 extern void MApp_init(void);
 extern tsTaskID_t gAppTaskID_c;
-
+static void genericDataTransfer(uint8_t *ptrPDU, uint8_t lengthPDU, EndDevListItem_t dstDevice );
 /**********************************************************************************/
 
 #endif /* _MAPP_H_ */
