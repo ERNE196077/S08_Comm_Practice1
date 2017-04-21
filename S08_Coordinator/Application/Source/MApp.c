@@ -695,7 +695,7 @@ static uint8_t App_SendAssociateResponse(nwkMessage_t *pMsgIn)
           CommUtil_Print("\n\r************************************\n\r\n\rWelcome back old friend\n\rShort Address: 0x", gAllowToBlock_d);
         else{
           CommUtil_Print("\n\r************************************\n\r\n\rI see you are new, welcome!\n\rShort Address: 0x", gAllowToBlock_d);
-          i = AssocDevCounter;
+          i = AssocDevCounter++;
         }
         CommUtil_PrintHex((uint8_t *)AssociatedDevices[i].ShortAddress, 2, 0);
         CommUtil_Print("\n\rLong Address: 0x", gAllowToBlock_d);
@@ -710,8 +710,6 @@ static uint8_t App_SendAssociateResponse(nwkMessage_t *pMsgIn)
           CommUtil_Print("\n\rDevice Type: RFD", gAllowToBlock_d);
         CommUtil_Print("\n\r\n\r************************************\n\r", gAllowToBlock_d);
         
-        /* "SAVE" the new device by incrementing the counter */
-        AssocDevCounter++;
         return errorNoError;
       }
       else
