@@ -319,7 +319,7 @@ void AppTask(event_t events)
     if (events & gAppEvtRxFromComm_c)
     {      
       /* get byte from serial terminal interface */
-      App_TransmitCommData();
+      //App_TransmitCommData();       /* Commented as only APP_ACK was requested */
     
     }  
     break;
@@ -370,9 +370,9 @@ static void App_CommRxCallBack(void)
 {
   uint8_t pressedKey;
 	if(stateListen == gState){
-    TS_SendEvent(gAppTaskID_c, gAppEvtRxFromComm_c);
+   // TS_SendEvent(gAppTaskID_c, gAppEvtRxFromComm_c);
   }else{
-	  (void)Comm_GetByteFromRxBuffer(&pressedKey);
+	 // (void)Comm_GetByteFromRxBuffer(&pressedKey);
   }
 }
 
@@ -764,6 +764,7 @@ static uint8_t App_HandleMlmeInput(nwkMessage_t *pMsg)
 ******************************************************************************/
 static void App_HandleMcpsInput(mcpsToNwkMessage_t *pMsgIn)
 {
+	uint8_t i;
 	uint8_t *btnValue;
   switch(pMsgIn->msgType)
   {
@@ -810,9 +811,17 @@ static void App_HandleMcpsInput(mcpsToNwkMessage_t *pMsgIn)
       CommUtil_Print("Data : ", gAllowToBlock_d);
       CommUtil_Tx(pMsgIn->msgData.dataInd.pMsdu, pMsgIn->msgData.dataInd.msduLength);
       CommUtil_Print("\r\n", gAllowToBlock_d);
+      
+      for (i = 0; i < AssocDevCounter; ++i)
+      {
+        if(FLib_MemCmp(AssociatedDevices[i].ShortAddress,pMsgIn->msgData.dataInd.srcAddr,2)){
+          genericDataTransfer("APP_ACK", 7,AssociatedDevices[i] );
+          CommUtil_Print("APP_ACK Sent to Device\r\n", gAllowToBlock_d);
+          CommUtil_Print("******************************\r\n", gAllowToBlock_d);
+        }
+      }
+      
 
-    }else{
-      CommUtil_Tx(pMsgIn->msgData.dataInd.pMsdu, pMsgIn->msgData.dataInd.msduLength);
     }
     /* NEWCODE: Check for Button Data */
     break;
@@ -887,6 +896,7 @@ static void App_TransmitCommData(void)
   if(mpPacket != NULL)
   {
 
+
       for (i = 0; i < AssocDevCounter; ++i)
       {
 
@@ -948,7 +958,7 @@ static void App_TransmitCommData(void)
   /* try to send it later   */
   if (keysReceived)
   {
-  TS_SendEvent(gAppTaskID_c, gAppEvtRxFromComm_c);
+  //TS_SendEvent(gAppTaskID_c, gAppEvtRxFromComm_c);
   }
 }
 
@@ -1077,10 +1087,10 @@ static void genericDataTransfer(uint8_t *ptrPDU, uint8_t lengthPDU, EndDevListIt
       mpGenericPkg->msgData.dataReq.msduLength = lengthPDU;
 
       /* Transfer Options in case of FFD / RFD */
-      if(dstDevice.DeviceType)
+      //if(dstDevice.DeviceType)
         /* Request MAC level acknowledgement of the data packet */
-        mpGenericPkg->msgData.dataReq.txOptions = gTxOptsAck_c;         /* Direct Transfer for FFD Device */
-      else
+      //  mpGenericPkg->msgData.dataReq.txOptions = gTxOptsAck_c;         /* Direct Transfer for FFD Device */
+     // else
         /* Request MAC level acknowledgement of the data packet and transmit Indirectly */
         mpGenericPkg->msgData.dataReq.txOptions = gTxOptsAck_c | gTxOptsIndirect_c;     /* Indirect Transfer for RFD device */
 
